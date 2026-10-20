@@ -77,6 +77,15 @@ function SeccionBacktest({ r }: { r: RespuestaLaboratorio }) {
   const porOps = ops.reduce((a, o) => a * (1 + o.retorno), 1) - 1;
   return (
     <Panel titulo="Motor 1 · Backtest" accion={<span className="text-[10px] text-plata-500">fuera de muestra · {num(ops.length)} operaciones</span>} cuerpo="space-y-4 p-4" >
+      <Explicacion
+        que="repetir tu estrategia sobre el pasado, barra por barra, como si hubieras operado de verdad, pagando comisiones y funding."
+        sirve="saber cuánto habría ganado o perdido y ver cada operación que habría hecho."
+        mirar="que la curva suba de forma pareja (no por una sola operación) y que el drawdown (la caída) sea algo que aguantarías."
+      />
+      <p className="text-[10.5px] text-plata-400" data-costos>
+        Costos automáticos de Binance: comisión {c ? num(c.comisionPb, 1) : '—'} pb + deslizamiento {c ? num(c.deslizamientoPb, 1) : '—'} pb por lado ·{' '}
+        {r.fundingIncluido ? 'funding incluido (cada 8 h)' : 'funding no incluido: estos datos se grabaron antes de guardar el funding'}
+      </p>
       <div data-seccion-backtest>
         <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-plata-500">Capital (empieza en 1)</p>
         <Linea datos={eq} base={1} />
@@ -128,33 +137,94 @@ function SeccionBacktest({ r }: { r: RespuestaLaboratorio }) {
           <li>Retorno neto de la barra = (1 + retorno de precio) × (1 − costo)^lados − 1. Capital = producto de (1 + retorno neto).</li>
           <li>Nunca se mantiene una posición a través de un hueco de datos, y al final de cada tramo se cierra todo.</li>
           <li>Todo es multiplicativo: el capital final cuadra exacto con el producto de las operaciones.</li>
-          <li>Pendiente: el funding de los perpetuos (cada 8 h) aún no se graba, así que no se descuenta.</li>
+          <li>Funding: si la operación sigue abierta a las 00:00, 08:00 o 16:00 UTC, se paga (largo) o cobra (corto) la tasa vigente: × (1 − posición × tasa).</li>
         </ul>
       </details>
     </Panel>
   );
 }
 
-function Fila({ k, oos, ins }: { k: string; oos: string; ins: string }) {
+const n2 = (v: number | null | undefined, d = 2) => (v === null || v === undefined ? '—' : v === Infinity ? '∞' : num(v, d));
+const pctN = (v: number | null | undefined, d = 1) => (v === undefined ? '—' : pct(v, d));
+
+/** [nombre, fuera de muestra, dentro de muestra, qué significa] */
+const filasMetricas = (o: Metricas, i: Metricas): [string, string, string, string][] => [
+  ['Retorno total', pctN(o.retornoTotal), pctN(i.retornoTotal), 'Cuánto ganó o perdió en total.'],
+  ['Retorno anual (CAGR)', pctN(o.cagr), pctN(i.cagr), 'Lo mismo, llevado a un año (necesita ≥ 3 meses de datos).'],
+  ['Sharpe', n2(o.sharpe), n2(i.sharpe), 'Ganancia frente a lo que se movió. > 1 bueno, > 2 muy bueno.'],
+  ['Sortino', n2(o.sortino), n2(i.sortino), 'Como el Sharpe, pero solo cuenta las caídas.'],
+  ['Drawdown máximo', pctN(o.maxDrawdown === undefined ? undefined : -o.maxDrawdown), pctN(i.maxDrawdown === undefined ? undefined : -i.maxDrawdown), 'La peor caída desde un máximo.'],
+  ['Calmar', n2(o.calmar), n2(i.calmar), 'Retorno anual ÷ peor caída. > 1 bueno.'],
+  ['Peor racha bajo el máximo', o.duracionDrawdown ? `${num(o.duracionDrawdown.horas, 1)} h` : '—', i.duracionDrawdown ? `${num(i.duracionDrawdown.horas, 1)} h` : '—', 'Tiempo más largo sin recuperar el máximo.'],
+  ['Operaciones', num(o.operaciones), num(i.operaciones), 'Cuántas veces entró y salió.'],
+  ['% de aciertos', o.aciertos == null ? '—' : `${num(o.aciertos * 100, 1)} %`, i.aciertos == null ? '—' : `${num(i.aciertos * 100, 1)} %`, 'Operaciones ganadoras de cada 100.'],
+  ['Factor de beneficio', n2(o.factorBeneficio), n2(i.factorBeneficio), 'Lo ganado ÷ lo perdido. > 1,3 bueno.'],
+  ['Esperanza por operación', pctN(o.retornoMedioOperacion, 3), pctN(i.retornoMedioOperacion, 3), 'Lo que deja de media cada operación. Debe ser > 0.'],
+  ['Ganancia media / pérdida media', `${pctN(o.gananciaMedia, 2)} / ${pctN(o.perdidaMedia, 2)}`, `${pctN(i.gananciaMedia, 2)} / ${pctN(i.perdidaMedia, 2)}`, 'Cuánto deja una ganadora y cuánto quita una perdedora.'],
+  ['Racha perdedora máxima', o.rachaPerdedora === undefined ? '—' : num(o.rachaPerdedora), i.rachaPerdedora === undefined ? '—' : num(i.rachaPerdedora), 'Pérdidas seguidas: prepárate para aguantarlas.'],
+  ['Tiempo en mercado', `${num(o.exposicion * 100, 0)} %`, `${num(i.exposicion * 100, 0)} %`, 'Parte del tiempo con una operación abierta.'],
+];
+
+/** Recuadro en lenguaje simple: qué es, para qué sirve y qué mirar. */
+function Explicacion({ que, sirve, mirar }: { que: string; sirve: string; mirar: string }) {
   return (
-    <tr className="border-t border-borde-suave">
-      <td className="py-1.5 text-plata-300">{k}</td>
-      <td className="cifra py-1.5 text-right text-white">{oos}</td>
-      <td className="cifra py-1.5 text-right text-plata-500">{ins}</td>
-    </tr>
+    <div className="rounded-lg border border-borde-suave bg-white/[0.03] px-3 py-2 text-[11.5px] leading-relaxed text-plata-200" data-explicacion>
+      <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-plata-500">Explicación simple</p>
+      <p><span className="text-white">Qué es:</span> {que}</p>
+      <p><span className="text-white">Para qué te sirve:</span> {sirve}</p>
+      <p><span className="text-white">Qué mirar:</span> {mirar}</p>
+    </div>
   );
 }
 
-const filasMetricas = (o: Metricas, i: Metricas): [string, string, string][] => [
-  ['Retorno total', pct(o.retornoTotal), pct(i.retornoTotal)],
-  ['Sharpe anualizado', o.sharpe === null ? '—' : num(o.sharpe, 2), i.sharpe === null ? '—' : num(i.sharpe, 2)],
-  ['Drawdown máximo', pct(-o.maxDrawdown), pct(-i.maxDrawdown)],
-  ['% de aciertos', o.aciertos === null ? '—' : `${num(o.aciertos * 100, 1)} %`, i.aciertos === null ? '—' : `${num(i.aciertos * 100, 1)} %`],
-  ['Factor de beneficio', o.factorBeneficio === null ? '—' : num(o.factorBeneficio, 2), i.factorBeneficio === null ? '—' : num(i.factorBeneficio, 2)],
-  ['Operaciones', num(o.operaciones), num(i.operaciones)],
-  ['Retorno medio por operación', pct(o.retornoMedioOperacion, 3), pct(i.retornoMedioOperacion, 3)],
-  ['Tiempo en mercado', `${num(o.exposicion * 100, 0)} %`, `${num(i.exposicion * 100, 0)} %`],
-];
+/** Motor 2 · Métricas: fuera de muestra (lo que cuenta) frente a dentro (optimista). */
+function SeccionMetricas({ r }: { r: RespuestaLaboratorio }) {
+  const j = r.resultado;
+  return (
+    <Panel titulo="Motor 2 · Métricas" cuerpo="space-y-3 p-4">
+      <Explicacion
+        que="los números que resumen cómo fue el Backtest: cuánto ganó, cuánto sufrió y qué tan seguido acertó."
+        sirve="comparar estrategias con la misma vara y saber qué esperar: por ejemplo, cuántas pérdidas seguidas te tocará aguantar."
+        mirar="la columna «Fuera de muestra» (datos que la estrategia no vio). Esperanza > 0, Sharpe > 1 y un drawdown que puedas soportar."
+      />
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-left text-xs" data-metricas>
+          <thead>
+            <tr className="text-[9.5px] uppercase tracking-[0.12em] text-plata-500">
+              <th className="py-1 font-normal">Métrica</th>
+              <th className="py-1 text-right font-normal">Fuera de muestra</th>
+              <th className="py-1 text-right font-normal">Dentro</th>
+              <th className="py-1 pl-4 font-normal">Qué significa</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filasMetricas(j.oos, j.dentroMuestra).map(([k, a, b, q]) => (
+              <tr key={k} className="border-t border-borde-suave">
+                <td className="py-1.5 text-plata-300">{k}</td>
+                <td className="cifra py-1.5 text-right text-white">{a}</td>
+                <td className="cifra py-1.5 text-right text-plata-500">{b}</td>
+                <td className="py-1.5 pl-4 text-[10.5px] text-plata-500">{q}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10.5px] text-plata-500">«Dentro» usa la mejor variante con toda la historia: siempre sale mejor de lo que es. Solo cuenta «fuera de muestra».</p>
+      <details className="rounded-lg border border-borde-suave px-3 py-2 text-[11px] text-plata-300">
+        <summary className="cursor-pointer text-plata-100">Cómo se calcula</summary>
+        <ul className="mt-2 list-disc space-y-1 pl-4">
+          <li>Barras por año = 365,25 días ÷ tiempo típico (mediana) entre barras. Los días sin grabar no lo cambian.</li>
+          <li>Retorno anual (CAGR) = (1 + retorno total)^(1 / años) − 1, con años = barras ÷ barras por año. Solo con 3 meses o más de datos: con menos, llevarlo a un año da cifras sin sentido.</li>
+          <li>Sharpe = media de los retornos por barra ÷ su desviación × √(barras por año).</li>
+          <li>Sortino = media ÷ √(media de las caídas al cuadrado) × √(barras por año).</li>
+          <li>Drawdown = caída desde el máximo anterior; Calmar = CAGR ÷ drawdown máximo.</li>
+          <li>Factor de beneficio = suma de ganancias ÷ suma de pérdidas (∞ si no hubo pérdidas).</li>
+          <li>Esperanza = retorno medio por operación. Racha = máximo de perdedoras seguidas.</li>
+        </ul>
+      </details>
+    </Panel>
+  );
+}
 
 export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
   const j = r.resultado;
@@ -171,6 +241,7 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
       </div>
 
       <SeccionBacktest r={r} />
+      <SeccionMetricas r={r} />
 
       <Panel titulo="Reglas del Juez" cuerpo="overflow-x-auto px-4 py-2">
         <table className="w-full min-w-[720px] text-left text-xs">
@@ -188,7 +259,7 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
         </table>
       </Panel>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+      <div className="grid gap-4">
         <Panel titulo="Capital fuera de muestra (Walk-Forward)" accion={<span className="text-[10px] text-plata-500">solo tramos que la estrategia no vio</span>}>
           <Linea datos={j.equityOos} base={1} />
           <table className="mt-3 w-full text-left text-[11px]">
@@ -211,23 +282,6 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
               ))}
             </tbody>
           </table>
-        </Panel>
-        <Panel titulo="Métricas" cuerpo="px-4 py-2">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="text-[9.5px] uppercase tracking-[0.12em] text-plata-500">
-                <th className="py-1 font-normal" />
-                <th className="py-1 text-right font-normal">Fuera de muestra</th>
-                <th className="py-1 text-right font-normal">Dentro (optimista)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filasMetricas(j.oos, j.dentroMuestra).map(([k, a, b]) => (
-                <Fila key={k} k={k} oos={a} ins={b} />
-              ))}
-            </tbody>
-          </table>
-          <p className="py-2 text-[10.5px] text-plata-500">«Dentro» usa la mejor variante con toda la historia: siempre sale mejor de lo que es. Solo cuenta «fuera de muestra».</p>
         </Panel>
       </div>
 

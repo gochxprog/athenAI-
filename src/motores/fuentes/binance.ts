@@ -96,6 +96,16 @@ interface Conexion {
   backoff: Backoff;
 }
 
+interface MarkPriceBinance {
+  e: 'markPriceUpdate';
+  E: number;
+  s: string;
+  /** Tasa de funding vigente. */
+  r: string;
+  /** Próxima hora de cobro. */
+  T: number;
+}
+
 interface AggTradeBinance {
   e: 'aggTrade';
   s: string;
@@ -138,6 +148,7 @@ export class FuenteBinance {
   private detenida = false;
   private libros = new Map<string, EstadoLibro>();
   private lotes = new Map<string, AggTrade[]>();
+  private funding = new Map<string, { tasa: number; t: number }>();
   private timers: ReturnType<typeof setInterval>[] = [];
   private readonly backoffInfo = new Backoff({ baseMs: 1_000, maxMs: 30_000, jitter: 'equal', floorMs: 500 });
   private readonly conexiones: Record<Canal, Conexion> = {
@@ -296,7 +307,7 @@ export class FuenteBinance {
   private url(canal: Canal): string | null {
     const validos = [...this.libros.keys()].map((s) => s.toLowerCase());
     if (!validos.length) return null;
-    const streams = canal === 'libro' ? validos.map((s) => `${s}@depth@100ms`) : validos.flatMap((s) => [`${s}@aggTrade`, `${s}@forceOrder`]);
+    const streams = canal === 'libro' ? validos.map((s) => `${s}@depth@100ms`) : validos.flatMap((s) => [`${s}@aggTrade`, `${s}@forceOrder`, `${s}@markPrice@1s`]);
     const x = this.conexiones[canal];
     const ruta = x.legado ? '/stream' : canal === 'libro' ? '/public/stream' : '/market/stream';
     return `${this.ws}${ruta}?streams=${streams.join('/')}`;
@@ -367,7 +378,7 @@ export class FuenteBinance {
 
   /** Procesa un frame del stream combinado. Público para pruebas. */
   alMensaje(bruto: unknown): void {
-    let env: { stream?: string; data?: AggTradeBinance | DiffBinance | LiquidacionBinance };
+    let env: { stream?: string; data?: AggTradeBinance | DiffBinance | LiquidacionBinance | MarkPriceBinance };
     try {
       env = typeof bruto === 'string' ? JSON.parse(bruto) : (bruto as typeof env);
     } catch {
@@ -381,6 +392,14 @@ export class FuenteBinance {
       this.lotes.get(t.symbol)?.push(t);
     } else if (d.e === 'depthUpdate') {
       this.aplicarDiff(d);
+    } else if (d.e === 'markPriceUpdate') {
+      // Llega cada segundo; se reenvía solo cuando cambia la tasa (o cada minuto).
+      const tasa = Number(d.r);
+      const previo = this.funding.get(d.s);
+      if (!Number.isFinite(tasa) || !this.libros.has(d.s)) return;
+      if (previo && previo.tasa === tasa && d.E - previo.t < 60_000) return;
+      this.funding.set(d.s, { tasa, t: d.E });
+      this.o.onMensaje(d.s, { tipo: 'funding', tasa, t: d.E });
     } else if (d.e === 'forceOrder') {
       const liq = convertirLiquidacion(d);
       if (liq && this.libros.has(liq.simbolo)) this.o.onMensaje(liq.simbolo, { tipo: 'liquidacion', liq });

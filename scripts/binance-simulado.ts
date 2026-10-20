@@ -87,6 +87,15 @@ setInterval(() => {
   antes = ahora;
 }, 100);
 
+// Funding (markPrice cada 1 s): tasa que oscila alrededor de +0,01 %, cobro cada 8 h.
+setInterval(() => {
+  const ahora = Date.now();
+  for (const m of mercados.values()) {
+    const r = 0.0001 + 0.00005 * Math.sin(ahora / 3_600_000);
+    enviar(`${m.simbolo.toLowerCase()}@markPrice@1s`, { e: 'markPriceUpdate', E: ahora, s: m.simbolo, p: String(m.ultimo), r: r.toFixed(8), T: Math.ceil(ahora / 28_800_000) * 28_800_000 });
+  }
+}, 1_000);
+
 const servidor = http.createServer((req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${PUERTO}`);
   res.setHeader('access-control-allow-origin', '*');

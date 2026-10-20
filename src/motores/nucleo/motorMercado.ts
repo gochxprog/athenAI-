@@ -43,6 +43,8 @@ export class MotorMercado {
   cvdSesion = 0;
   /** VWAP de la sesión UTC en curso. */
   vwapSesion: number | null = null;
+  /** Última tasa de funding conocida (perpetuos; null si la fuente no la da). */
+  fundingTasa: number | null = null;
 
   private cintaIceberg: IcebergTrade[] = [];
   private loteStopRun: StopRunTrade[] = [];
@@ -211,6 +213,11 @@ export class MotorMercado {
       if (e.disponibleEn <= hasta) out.push(e);
     }
     return out;
+  }
+
+  /** Tasa de funding vigente publicada por el exchange (Binance markPrice). */
+  funding(tasa: number): void {
+    if (Number.isFinite(tasa)) this.fundingTasa = tasa;
   }
 
   /** Liquidación forzada publicada por el exchange (Binance forceOrder). */

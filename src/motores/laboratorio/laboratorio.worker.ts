@@ -81,11 +81,15 @@ ctx.onmessage = async (e) => {
     } catch (err) {
       throw new Error(`Error en tu código:\n${mensajeError(err)}`);
     }
+    // Funding grabado por la fuente (perpetuos de Binance). Datos antiguos no lo tienen: se avisa en pantalla.
+    const funding = filas.map((f) => f.valores.funding_tasa ?? null);
+    const fundingIncluido = funding.some((x) => x !== null);
     progreso('El Juez está probando: Walk-Forward, Monte Carlo, Luck test, robustez…');
     const entrada = {
       cierres: filas.map((f) => f.close),
       tiempos: filas.map((f) => f.cierre),
       huecos: huecosDe(filas),
+      funding: fundingIncluido ? funding : undefined,
       combos: ejec.combos,
       posiciones: ejec.posiciones,
       costos: p.costos,
@@ -118,6 +122,7 @@ ctx.onmessage = async (e) => {
         })(),
         resultado,
         costos: p.costos,
+        fundingIncluido,
         operaciones: resultado.operacionesOos.map((o) => ({ entradaT: filas[o.entrada].cierre, salidaT: filas[o.salida].cierre, lado: o.lado, retorno: o.retorno, barras: o.barras })),
         combos: ejec.combos, filas: filas.length, desde: filas[0].cierre, hasta: filas[filas.length - 1].cierre, inicioOosT: filas[resultado.inicioOos]?.cierre ?? 0, segundos: (performance.now() - t0) / 1000 },
     });

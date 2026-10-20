@@ -11,6 +11,7 @@
 //   6. PBO (CSCV): probabilidad de que la mejor variante dentro de muestra sea peor que la mediana fuera.
 import { crearAleatorio } from '@/lib/random';
 import { normalInversa } from '@/lib/backtest';
+import { costoPorLado } from './costos';
 import { aplicarHuecos, backtest, COSTOS_POR_DEFECTO, maxDrawdown, metricas, sharpeBarras, type Costos, type Metricas, type Operacion } from './backtest';
 
 export type Combo = Record<string, number | string | boolean>;
@@ -20,6 +21,8 @@ export interface EntradaJuez {
   tiempos: number[];
   /** Barras marcadas como hueco (corte de datos): no se mantiene posición a través de ellas. */
   huecos?: boolean[];
+  /** Tasa de funding conocida al cierre de cada barra (perpetuos). Si falta, no se descuenta. */
+  funding?: (number | null)[];
   combos: Combo[];
   /** Posición por barra para cada combo (−1, 0, 1), sobre toda la serie. */
   posiciones: number[][];
@@ -161,9 +164,10 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
   // Regla de huecos (motor Backtest): sin posición en la barra anterior a un corte de datos.
   const posiciones = e.posiciones.map((p) => aplicarHuecos(p, e.huecos));
   const r = crearAleatorio(e.semilla ?? 12_345);
+  const fx = e.funding ? { funding: { tiempos: e.tiempos, tasas: e.funding } } : {};
 
   // Referencia dentro de muestra (optimista): cada variante sobre toda la serie.
-  const completos = posiciones.map((p) => backtest(e.cierres, p, costos));
+  const completos = posiciones.map((p) => backtest(e.cierres, p, costos, 0, n, fx));
   const metCompletas = completos.map((b) => metricas(b, e.tiempos));
   const srCompletos = completos.map((b) => sharpeBarras(b.retornos) ?? -Infinity);
   const mejor = srCompletos.indexOf(Math.max(...srCompletos));
@@ -183,15 +187,15 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
     let elegido = 0;
     let mejorSr = -Infinity;
     posiciones.forEach((p, ci) => {
-      const b = backtest(e.cierres, p, costos, 0, finIs);
+      const b = backtest(e.cierres, p, costos, 0, finIs, fx);
       const s = sharpeBarras(b.retornos.slice(0, finIs)) ?? -Infinity;
       if (s > mejorSr) {
         mejorSr = s;
         elegido = ci;
       }
     });
-    const b = backtest(e.cierres, posiciones[elegido], costos, desde, hasta);
-    const bDoble = backtest(e.cierres, posiciones[elegido], { comisionPb: costos.comisionPb * 2, deslizamientoPb: costos.deslizamientoPb * 2 }, desde, hasta);
+    const b = backtest(e.cierres, posiciones[elegido], costos, desde, hasta, fx);
+    const bDoble = backtest(e.cierres, posiciones[elegido], { comisionPb: costos.comisionPb * 2, deslizamientoPb: costos.deslizamientoPb * 2 }, desde, hasta, fx);
     for (let i = desde; i < hasta; i += 1) {
       retOos[i] = b.retornos[i];
       retDobles[i] = bDoble.retornos[i];
@@ -256,7 +260,7 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
     const pos = posOos.slice(inicioOos);
     const rb = new Array(largoOos).fill(0);
     for (let i = 0; i + 1 < largoOos; i += 1) rb[i] = e.cierres[inicioOos + i] > 0 ? e.cierres[inicioOos + i + 1] / e.cierres[inicioOos + i] - 1 : 0;
-    const coste = (costos.comisionPb + costos.deslizamientoPb) / 10_000;
+    const coste = costoPorLado(costos);
     const total = (despl: number) => {
       let cap = 1;
       let previa = 0;

@@ -69,7 +69,7 @@ describe('FuenteBinance (protocolo de Binance USD-M Futures)', () => {
     // Desde abr-2026: libro por /public y trades + liquidaciones por /market.
     expect(sockets.map((x) => x.url)).toEqual([
       'wss://fstream.binance.com/public/stream?streams=btcusdt@depth@100ms',
-      'wss://fstream.binance.com/market/stream?streams=btcusdt@aggTrade/btcusdt@forceOrder',
+      'wss://fstream.binance.com/market/stream?streams=btcusdt@aggTrade/btcusdt@forceOrder/btcusdt@markPrice@1s',
     ]);
     expect(mensajes.some((x) => x.s === 'NOEXISTE' && x.m.tipo === 'conexion' && x.m.estado === 'error')).toBe(true);
     fuente.detener();
@@ -145,6 +145,21 @@ describe('FuenteBinance (protocolo de Binance USD-M Futures)', () => {
     expect(grupoParaPrecio(150, 0.01)).toBe(1);
   });
 
+  it('lee el funding (markPrice) y solo lo reenvía cuando cambia', async () => {
+    const { fuente, sockets, mensajes } = montar();
+    await fuente.iniciar();
+    const mp = (r: string, E: number) => sockets[1].emitir({ stream: 'btcusdt@markPrice@1s', data: { e: 'markPriceUpdate', E, s: 'BTCUSDT', p: '84700', r, T: 28_800_000 } });
+    mp('0.00010000', 1_000);
+    mp('0.00010000', 2_000);
+    mp('0.00012000', 3_000);
+    const f = mensajes.filter((x) => x.m.tipo === 'funding').map((x) => x.m);
+    expect(f).toEqual([
+      { tipo: 'funding', tasa: 0.0001, t: 1_000 },
+      { tipo: 'funding', tasa: 0.00012, t: 3_000 },
+    ]);
+    fuente.detener();
+  });
+
   it('convierte liquidaciones (forceOrder) del canal /market', async () => {
     const { fuente, sockets, mensajes } = montar();
     await fuente.iniciar();
@@ -190,7 +205,7 @@ describe('FuenteBinance · rutas /public y /market', () => {
     await fuente.iniciar();
     expect(sockets.map((x) => x.url)).toEqual([
       'wss://fstream.binance.com/public/stream?streams=btcusdt@depth@100ms/noexiste@depth@100ms',
-      'wss://fstream.binance.com/market/stream?streams=btcusdt@aggTrade/btcusdt@forceOrder/noexiste@aggTrade/noexiste@forceOrder',
+      'wss://fstream.binance.com/market/stream?streams=btcusdt@aggTrade/btcusdt@forceOrder/btcusdt@markPrice@1s/noexiste@aggTrade/noexiste@forceOrder/noexiste@markPrice@1s',
     ]);
     sockets[0].onopen?.({});
     sockets[0].emitir(diff(1, 2, 0));

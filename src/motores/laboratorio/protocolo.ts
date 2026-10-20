@@ -28,6 +28,8 @@ export interface RespuestaLaboratorio {
   lados: { largos: number; cortos: number };
   /** Costos usados en el backtest. */
   costos: Costos;
+  /** Se descontó el funding (hay tasas grabadas en estos datos). */
+  fundingIncluido: boolean;
   /** Operaciones fuera de muestra con sus horas reales (motor Backtest). */
   operaciones: OperacionConHora[];
 }

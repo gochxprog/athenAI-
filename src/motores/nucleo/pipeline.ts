@@ -194,6 +194,9 @@ export class Pipeline {
       case 'liquidacion':
         this.mercado.liquidacion(m.liq);
         break;
+      case 'funding':
+        this.mercado.funding(m.tasa);
+        break;
       case 'conexion':
         if (this.conexion === 'en-vivo' && m.estado !== 'en-vivo') this.huecoPendiente = true;
         this.conexion = m.estado;

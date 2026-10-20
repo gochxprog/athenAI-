@@ -12,6 +12,8 @@ export type MensajeMercado =
   | { tipo: 'libro'; vista: OrderBookView }
   | { tipo: 'oi'; snapshot: OpenInterestSnapshot }
   | { tipo: 'liquidacion'; liq: Liquidacion }
+  /** Tasa de funding vigente (perpetuos): se cobra o paga cada 8 h. `t` = hora del dato. */
+  | { tipo: 'funding'; tasa: number; t: number }
   | { tipo: 'conexion'; estado: EstadoConexion; detalle?: string };
 
 /** Liquidación forzada publicada por el exchange. `lado` es el lado de la ORDEN de liquidación:

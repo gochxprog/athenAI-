@@ -13,14 +13,22 @@ Camino de una estrategia: **Juez (motores 1–10) → APROBADA → bot en Paper 
 → dinero real con tamaño pequeño y Guardián.** Las estrategias que encuentre la propia plataforma (patrones,
 machine learning) pasan por el mismo Juez.
 
+## Reglas para todo el trabajo
+1. **Un cálculo existe una sola vez.** Si hay otra función que hace lo mismo, se elimina y se usa la única.
+2. **Una sola entrada al Juez:** `juzgar()`. Las estrategias, las tuyas o las que encuentre la máquina, solo
+   entregan posiciones; los costos y las reglas los pone el Juez.
+3. **Nada manual.** Los costos y el funding salen de los datos de la fuente. Si falta un dato, se avisa; no se
+   inventa.
+4. **Solo Binance por ahora.** El diseño no se cierra a otros mercados.
+
 Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el proceso · ⬜ por hacer.
 
 ## Laboratorio · el Juez (en curso)
 
 | # | Motor | Qué mide | Archivo | Estado |
 |---|---|---|---|---|
-| 1 | Backtest | Retorno por barra, operaciones y capital, con costos y sin cruzar huecos | `src/motores/juez/backtest.ts` | ✅ |
-| 2 | Métricas | Sharpe, drawdown, aciertos, factor de beneficio, exposición | `backtest.ts` | 🔍 |
+| 1 | Backtest | Retorno por barra, operaciones y capital, con costos, funding y sin cruzar huecos | `backtest.ts` + `costos.ts` | ✅ |
+| 2 | Métricas | Retorno, CAGR, Sharpe, Sortino, drawdown, Calmar, aciertos, factor de beneficio, esperanza, rachas | `backtest.ts` | ✅ |
 | 3 | Walk-Forward | Resultado en tramos que la estrategia no vio, con purga y embargo | `juez.ts` | 🔍 |
 | 4 | Monte Carlo | Rango de resultados y riesgo de ruina, barajando las operaciones | `juez.ts` | 🔍 |
 | 5 | Luck test | Si el resultado es suerte (p-valor) | `juez.ts` | 🔍 |
@@ -59,5 +67,9 @@ Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el p
 | Máquinas | Telemetría | ⬜ |
 
 ## Pendientes conocidos
-- **Backtest:** funding de los perpetuos (cada 8 h). Hace falta grabarlo como dato.
+- **Backtest:** el funding solo se descuenta en datos grabados desde que se guarda (Feature `funding_tasa`).
 - **Luck test:** hoy recalcula el capital por su cuenta, de forma aditiva. En el motor 5 pasará a usar el Backtest.
+
+## Para después (no se construye ahora)
+- Fuente de datos de calidad (Databento o Rithmic): añadirla como fuente, con una función que **descargue datos
+  históricos**. Así se hace backtesting con años de historia sin esperar a grabar.

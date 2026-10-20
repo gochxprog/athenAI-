@@ -44,6 +44,7 @@ export const DEFINICIONES_FEATURES: DefinicionFeature[] = [
   { clave: 'stoprun_bajo', nombre: 'Stop run de mínimos', grupo: 'Icebergs / Stop runs', motor: 'StopRunSeries (Urus)', descripcion: 'Barridos de mínimos confirmados durante la barra' },
   { clave: 'liq_largos_usd', nombre: 'Liquidaciones de largos', grupo: 'Open Interest', motor: 'Binance forceOrder', descripcion: 'Nocional (USD) de largos liquidados durante la barra (presión vendedora forzada)' },
   { clave: 'liq_cortos_usd', nombre: 'Liquidaciones de cortos', grupo: 'Open Interest', motor: 'Binance forceOrder', descripcion: 'Nocional (USD) de cortos liquidados durante la barra (presión compradora forzada)' },
+  { clave: 'funding_tasa', nombre: 'Funding', grupo: 'Open Interest', motor: 'Binance markPrice', descripcion: 'Tasa de funding vigente al cierre de la barra (se cobra o paga cada 8 h; positiva = los largos pagan a los cortos)' },
   { clave: 'oi_delta_pct', nombre: 'ΔOI %', grupo: 'Open Interest', motor: 'OpenInterest (Urus)', descripcion: 'Cambio porcentual del interés abierto en la barra' },
   { clave: 'oi_delta_z', nombre: 'ΔOI z robusto', grupo: 'Open Interest', motor: 'OpenInterest (Urus)', descripcion: 'z-score robusto (mediana/MAD) del ΔOI' },
   { clave: 'oi_cuadrante', nombre: 'Cuadrante precio/OI', grupo: 'Open Interest', motor: 'OpenInterest (Urus)', descripcion: '1 longs nuevos · 2 cobertura shorts · 3 shorts nuevos · 4 liquidación longs · 0 neutral' },
@@ -136,6 +137,7 @@ export function construirFila(b: BarraAnalizada, previas: readonly BarraAnalizad
   v.pools_barridos = eventos.filter((e) => e.tipo === 'pool-barrido').length;
   v.liq_largos_usd = sumar('liquidacion', 'venta', 'magnitud');
   v.liq_cortos_usd = sumar('liquidacion', 'compra', 'magnitud');
+  v.funding_tasa = mercado.fundingTasa;
 
   // Open Interest: motor de Urus sobre una ventana ACOTADA de barras (Urus recalculaba toda la historia).
   let puntoOi: OpenInterestCandlePoint | null = null;
