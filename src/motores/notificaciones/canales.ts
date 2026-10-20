@@ -85,3 +85,29 @@ export function canalesActivos(c: ConfigNotificaciones): Canal[] {
   if (c.ntfy.activo && c.ntfy.tema.trim()) out.push('ntfy');
   return out;
 }
+
+/** Petición para enviar un archivo (papers): adjunto en Discord y Telegram, enlace descargable en ntfy. */
+export function peticionArchivo(canal: Canal, c: ConfigNotificaciones, nombre: string, contenido: string, texto: string): { url: string; init: RequestInit } {
+  // Sin tipo: el navegador no añade cabeceras especiales y la petición sigue siendo "simple".
+  const archivo = new Blob([contenido]);
+  switch (canal) {
+    case 'discord': {
+      const form = new FormData();
+      form.append('payload_json', JSON.stringify({ username: 'athenAI', content: texto.slice(0, 1900) }));
+      form.append('files[0]', archivo, nombre);
+      return { url: c.discord.webhook.trim(), init: { method: 'POST', body: form } };
+    }
+    case 'telegram': {
+      const form = new FormData();
+      form.append('chat_id', c.telegram.chatId.trim());
+      form.append('caption', texto.slice(0, 1000));
+      form.append('document', archivo, nombre);
+      return { url: `https://api.telegram.org/bot${c.telegram.token.trim()}/sendDocument`, init: { method: 'POST', body: form } };
+    }
+    case 'ntfy': {
+      const base = `${(c.ntfy.servidor.trim() || 'https://ntfy.sh').replace(/\/+$/, '')}/${encodeURIComponent(c.ntfy.tema.trim())}`;
+      const q = new URLSearchParams({ filename: nombre, title: 'athenAI · paper', message: texto.slice(0, 900) });
+      return { url: `${base}?${q}`, init: { method: 'POST', body: archivo } };
+    }
+  }
+}

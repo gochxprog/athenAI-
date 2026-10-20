@@ -77,7 +77,13 @@ ctx.onmessage = async (e) => {
     ctx.postMessage({
       tipo: 'resultado',
       id: p.id,
-      respuesta: { resultado, combos: ejec.combos, filas: filas.length, desde: filas[0].cierre, hasta: filas[filas.length - 1].cierre, inicioOosT: filas[resultado.inicioOos]?.cierre ?? 0, segundos: (performance.now() - t0) / 1000 },
+      respuesta: {
+        lados: (() => {
+          const pos = ejec.posiciones[resultado.dentroMuestra.combo] ?? [];
+          return { largos: pos.filter((x) => x > 0).length, cortos: pos.filter((x) => x < 0).length };
+        })(),
+        resultado,
+        combos: ejec.combos, filas: filas.length, desde: filas[0].cierre, hasta: filas[filas.length - 1].cierre, inicioOosT: filas[resultado.inicioOos]?.cierre ?? 0, segundos: (performance.now() - t0) / 1000 },
     });
   } catch (err) {
     ctx.postMessage({ tipo: 'error', id: p.id, mensaje: err instanceof Error ? err.message : String(err) });

@@ -4,6 +4,7 @@ import { RotateCcw } from 'lucide-react';
 import { crearAleatorio, percentil } from '@/lib/random';
 import { drawdown, type SimulacionEstrategia } from '@/lib/backtest';
 import useProgreso from '@/hooks/useProgreso';
+import AbanicoTrayectorias from './AbanicoTrayectorias';
 import { num, pct } from '@/lib/format';
 
 const TOTAL = 2000;
@@ -96,6 +97,12 @@ export default function MonteCarloAnimado({ sim, clave }: { sim: SimulacionEstra
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+        {terminado ? (
+          <div>
+            <AbanicoTrayectorias datos={{ caminos: datos.caminos, bandas: { p5: datos.bandas.p5, p50: datos.bandas.p50, p95: datos.bandas.p95 } }} opacidad={0.07} alto={H} />
+            <p className="mt-1 text-[10px] text-plata-500">Toca o pasa el ratón por una línea para ver sus métricas.</p>
+          </div>
+        ) : (
         <div className="relative h-[280px]">
           <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-full w-full overflow-visible">
             <line x1={0} x2={W} y1={y(1)} y2={y(1)} stroke="rgba(255,255,255,0.25)" strokeDasharray="4 6" vectorEffect="non-scaling-stroke" />
@@ -124,6 +131,7 @@ export default function MonteCarloAnimado({ sim, clave }: { sim: SimulacionEstra
             </div>
           )}
         </div>
+        )}
 
         {/* Distribución del resultado final */}
         <div>

@@ -13,6 +13,8 @@ import { DEFINICIONES_FEATURES } from '@/motores/nucleo/features';
 import { num } from '@/lib/format';
 import { guardarEstrategias, leerEstrategias, PLANTILLAS, type EstrategiaGuardada } from './plantillas';
 import ResultadoJuezVista from './ResultadoJuez';
+import BibliotecaPapers, { AccionesPaper, VisorPaper } from './BibliotecaPapers';
+import { crearPaper, guardarPaper, type Paper } from '@/motores/papers/paper';
 
 type Fuente = { proveedor: Proveedor; simbolo: string; filas: number };
 
@@ -32,6 +34,9 @@ export default function EstrategiasPython() {
   const [progreso, setProgreso] = useState<string[]>([]);
   const [resultado, setResultado] = useState<RespuestaLaboratorio | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [paper, setPaper] = useState<Paper | null>(null);
+  const [viendo, setViendo] = useState<Paper | null>(null);
+  const [versionPapers, setVersionPapers] = useState(0);
   const editor = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => guardarEstrategias(estrategias), [estrategias]);
@@ -84,6 +89,11 @@ export default function EstrategiasPython() {
         (t) => setProgreso((p) => [...p.slice(-6), t]),
       );
       setResultado(r);
+      // Cada prueba del Juez queda como paper en la biblioteca.
+      const paper = crearPaper({ estrategia: sel.nombre, codigo: sel.codigo, simbolo: f.simbolo, proveedor: NOMBRE_PROVEEDOR[f.proveedor], costos: { comisionPb: comision, deslizamientoPb: deslizamiento }, respuesta: r });
+      guardarPaper(paper);
+      setPaper(paper);
+      setVersionPapers((v) => v + 1);
       notificador.juez(sel.nombre, f.simbolo, r.resultado.veredicto, r.resultado.resumen);
       cambiar({ ensayos: sel.ensayos + r.combos.length, ultimoVeredicto: r.resultado.veredicto });
     } catch (e) {
@@ -235,7 +245,15 @@ export default function EstrategiasPython() {
         )}
       </Panel>
 
+      {resultado && paper && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-borde p-3" data-paper-generado>
+          <span className="text-xs text-white">Paper generado</span>
+          <AccionesPaper p={paper} alVer={setViendo} />
+        </div>
+      )}
       {resultado && <ResultadoJuezVista r={resultado} />}
+      <BibliotecaPapers version={versionPapers} />
+      <VisorPaper p={viendo} alCerrar={() => setViendo(null)} />
     </div>
   );
 }

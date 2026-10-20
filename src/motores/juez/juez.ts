@@ -63,7 +63,18 @@ export interface ResultadoJuez {
   equityOos: number[];
   /** Índice de la barra donde empieza la parte fuera de muestra. */
   inicioOos: number;
-  monteCarlo: { p5: number; p50: number; p95: number; ddP95: number; probDd25: number; muestras: number[] } | null;
+  monteCarlo: {
+    p5: number;
+    p50: number;
+    p95: number;
+    ddP95: number;
+    probDd25: number;
+    muestras: number[];
+    /** 60 trayectorias de capital de ejemplo (máx. 120 puntos cada una) para dibujarlas. */
+    caminos: number[][];
+    /** Bandas por paso (mismos puntos que los caminos). */
+    bandas: { p5: number[]; p50: number[]; p95: number[] };
+  } | null;
   suerte: { p: number; real: number; simulaciones: number[] } | null;
   robustez: { costosDobles: number; vecinosPositivos: number | null; tramosPositivos: number; otroMercado: (Metricas & { simbolo: string }) | null };
   deflatedSharpe: number | null;
@@ -205,6 +216,11 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
   if (opsOos.length >= 5) {
     const finales: number[] = [];
     const dds: number[] = [];
+    // Puntos que se guardan de cada curva (máx. 120) para dibujar trayectorias y bandas.
+    const pasos = opsOos.length + 1;
+    const idx = Array.from({ length: Math.min(120, pasos) }, (_, k) => Math.round((k / (Math.min(120, pasos) - 1 || 1)) * (pasos - 1)));
+    const columnas: number[][] = idx.map(() => []);
+    const caminos: number[][] = [];
     for (let s = 0; s < 2_000; s += 1) {
       let cap = 1;
       const curva = [1];
@@ -214,7 +230,14 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
       }
       finales.push(cap - 1);
       dds.push(maxDrawdown(curva));
+      idx.forEach((k, j) => columnas[j].push(curva[k]));
+      if (s < 60) caminos.push(idx.map((k) => curva[k]));
     }
+    const pctl = (xs: number[], q: number) => {
+      const o = [...xs].sort((a, b) => a - b);
+      return o[Math.min(o.length - 1, Math.floor(o.length * q))];
+    };
+    const bandas = { p5: columnas.map((c) => pctl(c, 0.05)), p50: columnas.map((c) => pctl(c, 0.5)), p95: columnas.map((c) => pctl(c, 0.95)) };
     const ord = [...finales].sort((a, b) => a - b);
     const ordDd = [...dds].sort((a, b) => a - b);
     monteCarlo = {
@@ -224,6 +247,8 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
       ddP95: ordDd[Math.floor(ordDd.length * 0.95)],
       probDd25: dds.filter((d) => d > 0.25).length / dds.length,
       muestras: ord.filter((_, i) => i % 10 === 0),
+      caminos,
+      bandas,
     };
   }
 

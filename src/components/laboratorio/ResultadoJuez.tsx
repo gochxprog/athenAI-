@@ -1,5 +1,6 @@
 import { Check, Minus, X } from 'lucide-react';
 import Panel from '@/components/ui/Panel';
+import AbanicoTrayectorias from '@/components/charts/AbanicoTrayectorias';
 import type { RespuestaLaboratorio } from '@/motores/laboratorio/protocolo';
 import type { Metricas } from '@/motores/juez/backtest';
 import { conSigno, num } from '@/lib/format';
@@ -151,6 +152,12 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
         <Panel titulo="Monte Carlo · 2.000 órdenes de las operaciones" accion={<span className="text-[10px] text-plata-500">retorno final</span>}>
           {j.monteCarlo ? (
             <>
+              {j.monteCarlo.caminos?.length > 0 && (
+                <div className="mb-3">
+                  <AbanicoTrayectorias datos={{ caminos: j.monteCarlo.caminos, bandas: j.monteCarlo.bandas }} alto={200} />
+                  <p className="mt-1 text-[10px] text-plata-500">Toca o pasa el ratón por una línea para ver sus métricas.</p>
+                </div>
+              )}
               <Histograma
                 valores={j.monteCarlo.muestras}
                 marcas={[

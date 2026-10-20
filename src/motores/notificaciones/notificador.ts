@@ -2,7 +2,7 @@
 // Vigila los feeds (fallos y recuperación), la memoria del mercado ("hoy es distinto", régimen), el calendario
 // (eventos fuertes) y el Juez. Anti-spam por aviso. Mientras la plataforma corra en el navegador, los avisos
 // solo salen con la pestaña abierta (24/7 requiere el VPS, Bloque F).
-import { canalesActivos, CONFIG_NOTIF_POR_DEFECTO, peticion, type Aviso, type Canal, type ConfigNotificaciones } from './canales';
+import { canalesActivos, CONFIG_NOTIF_POR_DEFECTO, peticion, peticionArchivo, type Aviso, type Canal, type ConfigNotificaciones } from './canales';
 import type { EstadoFeed } from '../worker/protocolo';
 import type { EventoCalendario } from '../nucleo/calendario';
 
@@ -100,6 +100,27 @@ export class Notificador {
           e = { t: this.reloj(), aviso: a, canal, ok: r.ok, detalle: r.ok ? 'Enviado' : `HTTP ${r.status}` };
         } catch (err) {
           e = { t: this.reloj(), aviso: a, canal, ok: false, detalle: err instanceof Error ? err.message : String(err) };
+        }
+        this.registrar(e);
+        return e;
+      }),
+    );
+  }
+
+  /** Envía un archivo (un paper) a todos los canales activos. No usa anti-spam: lo pide el usuario. */
+  async enviarArchivo(nombre: string, contenido: string, texto: string): Promise<EnvioRegistrado[]> {
+    const aviso: Aviso = { tipo: 'juez', clave: `archivo:${nombre}`, titulo: `Paper: ${nombre}`, texto, prioridad: 'normal' };
+    const canales = canalesActivos(this.config);
+    if (!canales.length) return [{ t: this.reloj(), aviso, canal: null, ok: false, detalle: 'Sin canales configurados (Centro de datos → Notificaciones)' }];
+    return Promise.all(
+      canales.map(async (canal) => {
+        let e: EnvioRegistrado;
+        try {
+          const { url, init } = peticionArchivo(canal, this.config, nombre, contenido, texto);
+          const r = await this.fetchImpl(url, init);
+          e = { t: this.reloj(), aviso, canal, ok: r.ok, detalle: r.ok ? 'Enviado' : `HTTP ${r.status}` };
+        } catch (err) {
+          e = { t: this.reloj(), aviso, canal, ok: false, detalle: err instanceof Error ? err.message : String(err) };
         }
         this.registrar(e);
         return e;

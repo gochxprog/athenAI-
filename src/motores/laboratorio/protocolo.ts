@@ -23,6 +23,8 @@ export interface RespuestaLaboratorio {
   /** Cierre (ms) de la primera barra fuera de muestra. */
   inicioOosT: number;
   segundos: number;
+  /** Si la variante elegida abre largos y/o cortos (para describir la lógica). */
+  lados: { largos: number; cortos: number };
 }
 
 export type MensajeLaboratorio =

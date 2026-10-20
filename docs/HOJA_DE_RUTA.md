@@ -151,7 +151,7 @@ Dónde verlo: **Laboratorio → «Mis estrategias (Python) · real»** (lo de an
   - Avisos: mercado sin datos más de 30 s y su recuperación, «hoy es distinto», eventos fuertes (30 min antes y al entrar en la ventana), cambio de régimen, errores del motor o del guardado, y cada decisión del Juez.
   - Botón de prueba por canal, anti-spam e historial.
   - Mientras la plataforma corra en el navegador, los avisos solo salen con la pestaña abierta (24/7 → VPS, Bloque F).
-- ✅ **Cerebro orgánico** en el Panel General: la red se arruga y se aplasta despacio. Cada dato que entra lo golpea hacia dentro, cada señal que sale lo empuja hacia fuera, y rebota como una gelatina.
+- ✅ **Cerebro orgánico** en el Panel General: la red se arruga y se aplasta (deformación exagerada, con lóbulos). Cada dato que entra lo golpea hacia dentro, cada señal que sale lo empuja hacia fuera, y rebota como una gelatina.
 - ✅ **Panel General con datos reales**: tarjetas pequeñas.
   - «Lo que entra»: mercados, grabación, memoria del mercado, próximo evento.
   - «Lo que sale»: Laboratorio/Juez, agentes, notificaciones, salud del motor.
@@ -159,8 +159,8 @@ Dónde verlo: **Laboratorio → «Mis estrategias (Python) · real»** (lo de an
 
 ### Próximo (antes de los motores de IA) ⬜
 
-- ⬜ **Papers descargables**: cada prueba del Juez genera un documento (idea, lógica, código, parámetros, métricas, gráficos y veredicto) para leerlo, descargarlo (PDF/HTML) y enviarlo a Discord.
-- ⬜ **Monte Carlo con cartelitos**: al tocar una trayectoria, sus métricas.
+- ✅ **Papers**: cada prueba del Juez genera un paper (idea en texto plano, lógica, código, parámetros por tramo, métricas, reglas, Monte Carlo, Luck test, robustez y conclusión). Laboratorio → «Papers»: ver, descargar (HTML), PDF (imprimir) y enviar como archivo a Discord / Telegram / ntfy. Se guardan los últimos 50 en este navegador.
+- ✅ **Monte Carlo con cartelitos**: al tocar o pasar el ratón por una trayectoria, sus métricas (resultado final, peor caída, máximo y mínimo). En el Juez real y en los ejemplos DEMO.
 - ⬜ **Red de hipótesis** (Investigación) real: estrategias y papers como nodos, unidos por las Features que usan.
 - ⬜ **Bots en Paper** con estrategias aprobadas por el Juez + Guardián + avisos de operaciones (Bloque E sin IA).
 - ⬜ **VPS 24/7** (Bloque F).
