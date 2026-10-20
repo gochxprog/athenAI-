@@ -1,22 +1,21 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
-import { Activity, BarChart3, Brain, CheckCheck, Database, FlaskConical, Gavel, Lightbulb, Radio } from 'lucide-react';
+import { Activity, BellRing, Bot as IconoBot, Brain, CalendarClock, Cpu, Gavel, HardDrive, Radio, ScanSearch } from 'lucide-react';
 import EsferaCerebro from '@/components/three/EsferaCerebro';
 import Panel from '@/components/ui/Panel';
-import { Estado } from '@/components/ui/Punto';
-import ContadorAnimado from '@/components/ui/ContadorAnimado';
+import Punto, { Estado } from '@/components/ui/Punto';
 import Consola from '@/components/ui/Consola';
-import Sparkline from '@/components/charts/Sparkline';
-import Barra from '@/components/ui/Barra';
 import ResumenMercados from '@/components/orderflow/ResumenMercados';
-import { useSistema, usePulso } from '@/hooks/SistemaDemo';
+import { NOMBRE_PROVEEDOR, useEstadoMotor, useFeeds } from '@/components/orderflow/OrderFlowChart';
+import { NOMBRE_REGIMEN } from '@/components/orderflow/ResumenMercados';
+import { faltaPara, useCalendario } from '@/hooks/useCalendario';
+import { leerEstrategias } from '@/components/laboratorio/plantillas';
+import { notificador } from '@/motores/notificaciones/notificador';
+import { canalesActivos } from '@/motores/notificaciones/canales';
 import { useNavegar } from '@/hooks/Navegacion';
 import type { Modulo } from '@/types/nav';
-import { BOTS, ESTRATEGIAS, MODELOS } from '@/data/mock';
-import { conSigno, num, pct } from '@/lib/format';
-import type { BarraFlujo, TipoEvento } from '@/lib/simulacion';
+import { AGENTES } from '@/data/mock';
+import { decimalesDe, hora, num } from '@/lib/format';
 
-const ETIQUETA_TIPO: Record<TipoEvento, string> = { datos: 'Datos', modelo: 'Modelo', juez: 'Juez', bot: 'Bot', patron: 'Patrón' };
 
 /** Mide el centro vertical de cada tarjeta respecto al viewport 3D (−1 abajo … 1 arriba). */
 function useAnclas(centro: React.RefObject<HTMLDivElement>, tarjetas: React.MutableRefObject<(HTMLElement | null)[]>) {
@@ -52,8 +51,25 @@ function useAnclas(centro: React.RefObject<HTMLDivElement>, tarjetas: React.Muta
   return anclas;
 }
 
+/** Estrategias del Laboratorio (guardadas en este navegador), releídas cada pocos segundos. */
+function useEstrategias() {
+  const [xs, setXs] = useState(leerEstrategias);
+  useEffect(() => {
+    const id = setInterval(() => setXs(leerEstrategias()), 5_000);
+    return () => clearInterval(id);
+  }, []);
+  return xs;
+}
+
+function useNotificador() {
+  const [, setN] = useState(0);
+  useEffect(() => notificador.suscribir(() => setN((x) => x + 1)), []);
+  return notificador;
+}
+
 export default function DashboardView() {
-  const { mercado, motor, eventos } = useSistema();
+  const { feeds, registro } = useFeeds();
+  const estrategias = useEstrategias();
   const centroRef = useRef<HTMLDivElement>(null);
   const izqRefs = useRef<(HTMLElement | null)[]>([]);
   const derRefs = useRef<(HTMLElement | null)[]>([]);
@@ -61,82 +77,60 @@ export default function DashboardView() {
   const anclasDer = useAnclas(centroRef, derRefs);
   const [red, setRed] = useState({ nodos: 0, sinapsis: 0 });
   const navegar = useNavegar();
-  const dl = MODELOS[0];
+  const vivos = feeds.feeds.filter((f) => f.conexion === 'en-vivo').length;
+
+  // Registro del día: solo cosas reales (motor, conexiones, memoria y veredictos del Juez).
+  const lineas = [
+    ...registro.slice(0, 40).map((e, i) => ({ id: `r-${e.t}-${i}`, hora: new Date(e.t), etiqueta: 'Datos', texto: e.texto })),
+    ...estrategias.filter((e) => e.ultimoVeredicto).map((e) => ({ id: `j-${e.id}`, hora: new Date(e.actualizada), etiqueta: 'Juez', texto: `«${e.nombre}»: ${e.ultimoVeredicto}` })),
+  ].sort((a, b) => b.hora.getTime() - a.hora.getTime());
+
+  const izquierda = [<TarjetaMercados key="m" />, <TarjetaGrabacion key="g" />, <TarjetaMemoria key="r" />, <TarjetaEvento key="e" />];
+  const derecha = [<TarjetaLaboratorio key="l" />, <TarjetaAgentes key="a" />, <TarjetaAvisos key="n" />, <TarjetaMotor key="s" />];
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)_280px] xl:gap-0">
-        {/* IZQUIERDA — Fuentes de datos */}
-        <div className="order-2 flex flex-col gap-3 xl:order-1">
-          <TituloColumna>Fuentes de Datos</TituloColumna>
-          <div className="flex flex-1 flex-col justify-between gap-3">
-            <div ref={(el) => (izqRefs.current[0] = el)}>
-              <MercadoVivo />
-            </div>
-            <div ref={(el) => (izqRefs.current[1] = el)}>
-              <FlujoOrderFlow barras={mercado.barras} />
-            </div>
-            <div ref={(el) => (izqRefs.current[2] = el)}>
-              <MetricasEntrada />
-            </div>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[236px_minmax(0,1fr)_236px] xl:gap-0">
+        {/* IZQUIERDA — lo que entra */}
+        <div className="order-2 flex flex-col gap-2 xl:order-1">
+          <TituloColumna>Lo que entra</TituloColumna>
+          <div className="flex flex-1 flex-col justify-between gap-2">
+            {izquierda.map((t, i) => (
+              <div key={i} ref={(el) => (izqRefs.current[i] = el)}>
+                {t}
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* CENTRO — Cerebro de Deep Learning */}
-        <div ref={centroRef} className="relative order-1 h-[440px] sm:h-[520px] xl:order-2 xl:h-auto xl:min-h-[640px]">
+        {/* CENTRO — Cerebro */}
+        <div ref={centroRef} className="relative order-1 h-[440px] sm:h-[520px] xl:order-2 xl:h-auto xl:min-h-[600px]">
           <div className="pointer-events-none absolute inset-x-0 top-0 z-10 text-center">
             <p className="etiqueta flex items-center justify-center gap-2">
-              <Brain size={12} /> Cerebro · Deep Learning
+              <Brain size={12} /> Cerebro · {vivos ? `${vivos} ${vivos === 1 ? 'mercado' : 'mercados'} en vivo` : 'sin datos'}
             </p>
-            <p className="mt-1 text-[11px] text-plata-500">
-              {dl.id} · {dl.familia} · {dl.detalle}
-            </p>
+            <p className="mt-1 text-[11px] text-plata-500">Cada golpe es un dato que entra o una señal que sale · la red neuronal real llega en el Bloque D</p>
           </div>
-          <EsferaCerebro anclasIzq={anclasIzq ?? undefined} anclasDer={anclasDer ?? undefined} onListo={setRed} />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 hidden flex-wrap items-center sm:flex justify-center gap-x-5 gap-y-1 font-mono text-[10px] uppercase tracking-[0.14em] text-plata-500">
-            <span>Neuronas {num(red.nodos)}</span>
+          <EsferaCerebro anclasIzq={anclasIzq ?? undefined} anclasDer={anclasDer ?? undefined} actividad={vivos ? 1 : 0.25} onListo={setRed} />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 hidden flex-wrap items-center justify-center gap-x-5 gap-y-1 font-mono text-[10px] uppercase tracking-[0.14em] text-plata-500 sm:flex">
+            <span>Nodos {num(red.nodos)}</span>
             <span>Sinapsis {num(red.sinapsis)}</span>
-            <span>Época {Math.floor(motor.epoca)}/120</span>
-            <span>Loss {num(motor.loss, 3)}</span>
+            <span>{num(feeds.feeds.reduce((a, f) => a + f.filas, 0))} filas de Features hoy</span>
             <span className="flex items-center gap-1.5 text-plata-300">
-              <span className="h-1.5 w-1.5 animate-latido rounded-full bg-white" /> Aprendiendo
+              <Punto estado={vivos ? 'activo' : 'detenido'} /> {vivos ? 'Grabando' : 'En espera'}
             </span>
           </div>
         </div>
 
-        {/* DERECHA — Métricas del motor */}
-        <div className="order-3 flex flex-col gap-3">
-          <TituloColumna derecha>Métricas del Motor</TituloColumna>
-          <div className="flex flex-1 flex-col justify-between gap-3">
-            <div ref={(el) => (derRefs.current[0] = el)}>
-              <Panel titulo="Hipótesis Generadas" icono={Lightbulb} conector="izq" onClick={() => navegar('investigacion')}>
-                <ContadorAnimado valor={motor.hipotesis} className="text-[34px] font-light leading-none text-white" />
-                <p className="mt-2 text-[11px] text-plata-500">Propuestas por los modelos desde datos de Order Flow</p>
-                <div className="mt-3 grid grid-cols-2 gap-2 border-t border-borde-suave pt-3 text-[10px]">
-                  <MiniDato etiqueta="En cola" valor={num(motor.cola)} />
-                  <MiniDato etiqueta="Rechazadas" valor={num(motor.rechazadas)} />
-                </div>
-              </Panel>
-            </div>
-            <div ref={(el) => (derRefs.current[1] = el)}>
-              <Panel titulo="Pruebas en Proceso" icono={FlaskConical} conector="izq" onClick={() => navegar('laboratorio')}>
-                <ContadorAnimado valor={motor.pruebas} className="text-[34px] font-light leading-none text-white" />
-                <p className="mt-2 text-[11px] text-plata-500">Backtest · Walk-Forward · Monte Carlo</p>
-                <PruebasEnCurso />
-              </Panel>
-            </div>
-            <div ref={(el) => (derRefs.current[2] = el)}>
-              <Panel titulo="Aprobadas por el Juez" icono={Gavel} conector="izq" onClick={() => navegar('estrategias')}>
-                <div className="flex items-baseline justify-between">
-                  <ContadorAnimado valor={motor.aprobadas} className="text-[34px] font-light leading-none text-white" />
-                  <span className="cifra text-[11px] text-plata-400">{pct(motor.aprobadas / (motor.aprobadas + motor.rechazadas), 1)} de lo evaluado</span>
-                </div>
-                <p className="mt-2 text-[11px] text-plata-500">Reglas del Juez bloqueadas · sin intervención de los modelos</p>
-                <div className="mt-3 border-t border-borde-suave pt-3">
-                  <Barra valor={motor.aprobadas} max={motor.aprobadas + motor.rechazadas} marca={(motor.aprobadas / (motor.aprobadas + motor.rechazadas)) * 100} />
-                </div>
-              </Panel>
-            </div>
+        {/* DERECHA — lo que sale */}
+        <div className="order-3 flex flex-col gap-2">
+          <TituloColumna derecha>Lo que sale</TituloColumna>
+          <div className="flex flex-1 flex-col justify-between gap-2">
+            {derecha.map((t, i) => (
+              <div key={i} ref={(el) => (derRefs.current[i] = el)}>
+                {t}
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -146,14 +140,8 @@ export default function DashboardView() {
         <ResumenMercados alElegir={() => navegar('orderflow')} />
       </section>
 
-      <CadenaFlujo />
-
-      <Panel
-        titulo="Registro de Eventos · Log del día"
-        icono={Activity}
-        accion={<Estado estado="activo" texto={`${eventos.length} eventos`} />}
-      >
-        <Consola lineas={eventos.map((e) => ({ id: e.id, hora: e.hora, etiqueta: ETIQUETA_TIPO[e.tipo], texto: e.texto }))} alto="h-64" />
+      <Panel titulo="Registro del día" icono={Activity} accion={<Estado estado={vivos ? 'activo' : 'detenido'} texto={`${lineas.length} entradas`} />}>
+        <Consola lineas={lineas} alto="h-64" />
       </Panel>
     </div>
   );
@@ -163,176 +151,136 @@ function TituloColumna({ children, derecha = false }: { children: string; derech
   return <h2 className={`text-[11px] font-semibold uppercase tracking-[0.2em] text-white ${derecha ? 'xl:text-right' : ''}`}>{children}</h2>;
 }
 
-function MiniDato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
+/** Tarjeta compacta: título, dato principal y unas pocas líneas. */
+function Mini({ titulo, icono: Icono, destino, conector, principal, nota, children }: { titulo: string; icono: typeof Radio; destino: Modulo; conector: 'izq' | 'der'; principal: React.ReactNode; nota?: React.ReactNode; children?: React.ReactNode }) {
+  const navegar = useNavegar();
   return (
-    <div>
-      <p className="uppercase tracking-[0.12em] text-plata-600">{etiqueta}</p>
-      <p className="cifra mt-0.5 text-plata-200">{valor}</p>
+    <Panel titulo={titulo} icono={Icono} conector={conector} onClick={() => navegar(destino)} cuerpo="px-3 py-2.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="cifra text-lg font-light leading-none text-white">{principal}</span>
+        {nota && <span className="truncate text-right text-[9.5px] text-plata-500">{nota}</span>}
+      </div>
+      {children && <div className="mt-2 space-y-0.5 text-[10px]">{children}</div>}
+    </Panel>
+  );
+}
+
+function Linea({ k, v }: { k: React.ReactNode; v: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="truncate text-plata-400">{k}</span>
+      <span className="cifra shrink-0 text-plata-100">{v}</span>
     </div>
   );
 }
 
-function MercadoVivo() {
-  const navegar = useNavegar();
-  const { mercado } = useSistema();
-  const previo = useRef(mercado.precio);
-  const dir = mercado.precio > previo.current ? 1 : mercado.precio < previo.current ? -1 : 0;
-  useEffect(() => {
-    previo.current = mercado.precio;
-  });
-  const cambio = mercado.apertura24h ? (mercado.precio - mercado.apertura24h) / mercado.apertura24h : 0;
-  const dp = mercado.decimales;
-
+function TarjetaMercados() {
+  const { feeds } = useFeeds();
+  const vivos = feeds.feeds.filter((f) => f.conexion === 'en-vivo').length;
   return (
-    <Panel titulo={`Mercado Vivo · ${mercado.fuente ?? 'sin fuente'}`} icono={Radio} conector="der" onClick={() => navegar('datos')}>
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-[11px] text-plata-400">{mercado.simbolo}</span>
-        <Estado estado={mercado.conectado ? 'activo' : 'detenido'} texto={mercado.conectado ? 'Conectado' : 'Desconectado'} />
-      </div>
-      <div className="mt-2 flex items-baseline gap-2">
-        <motion.span key={mercado.precio} initial={{ opacity: 0.55 }} animate={{ opacity: 1 }} className="cifra text-[26px] font-light text-white">
-          {mercado.precio ? num(mercado.precio, dp) : '—'}
-        </motion.span>
-        <span className="font-mono text-xs text-plata-400">{dir > 0 ? '▲' : dir < 0 ? '▼' : '·'}</span>
-      </div>
-      <div className="mt-1 flex items-center gap-3 font-mono text-[10px] text-plata-400">
-        <span>{conSigno(cambio * 100, 2, '%')} hoy (UTC)</span>
-        <span>Spread {mercado.spread === null ? '—' : num(mercado.spread, dp)}</span>
-        <span>{mercado.latenciaMs} ms</span>
-      </div>
-      <Sparkline datos={mercado.historial.slice(-120)} alto={36} className="mt-2" base={mercado.vwap} />
-    </Panel>
+    <Mini titulo="Mercados" icono={Radio} destino="datos" conector="der" principal={`${vivos}/${feeds.feeds.length}`} nota="en vivo">
+      {feeds.feeds.slice(0, 4).map((f) => (
+        <Linea
+          key={f.simbolo}
+          k={
+            <span className="flex items-center gap-1.5">
+              <Punto estado={f.conexion === 'en-vivo' ? 'activo' : f.conexion === 'error' || f.conexion === 'detenido' ? 'detenido' : 'espera'} />
+              <span className="font-mono">{f.simbolo}</span>
+            </span>
+          }
+          v={f.resumen.precio === null ? '—' : num(f.resumen.precio, decimalesDe(f.tickSize))}
+        />
+      ))}
+      {!feeds.feeds.length && <p className="text-plata-500">Configúralos en el Centro de datos.</p>}
+    </Mini>
   );
 }
 
-function FlujoOrderFlow({ barras }: { barras: BarraFlujo[] }) {
-  const navegar = useNavegar();
-  const { mercado } = useSistema();
-  const deltas = barras.map((b) => b.compra - b.venta);
-  const ordenados = deltas.map(Math.abs).sort((a, b) => a - b);
-  const max = Math.max(ordenados[Math.floor(ordenados.length * 0.85)] * 1.25, 0.5);
-  const ultima = deltas[deltas.length - 1];
-
+function TarjetaGrabacion() {
+  const { feeds } = useFeeds();
+  const filas = feeds.feeds.reduce((a, f) => a + f.filas, 0);
+  const ritmo = feeds.feeds.reduce((a, f) => a + (f.ritmo[f.ritmo.length - 1] ?? 0), 0);
+  const cortes = feeds.feeds.reduce((a, f) => a + f.cortes, 0);
+  const guardando = feeds.feeds.filter((f) => f.guardando).length;
   return (
-    <Panel titulo="Flujo Order Flow · Recorder" icono={BarChart3} conector="der" onClick={() => navegar('datos')}>
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-[11px] text-plata-400">Delta por dollar bar</span>
-        <Estado estado={mercado.grabando ? 'activo' : 'detenido'} texto={mercado.grabando ? 'Grabando' : 'Detenido'} />
-      </div>
-      <div className="relative mt-3 flex h-14 items-center gap-[2px]">
-        <span className="absolute inset-x-0 top-1/2 h-px bg-white/10" />
-        {deltas.map((d, i) => {
-          const h = `${Math.min(100, Math.max((Math.abs(d) / max) * 100, 4))}%`;
-          const enCurso = i === deltas.length - 1 ? 'animate-latido' : '';
-          return (
-            <div key={i} className="relative flex h-full flex-1 flex-col">
-              <div className="flex flex-1 items-end">
-                {d >= 0 && <motion.div className={`w-full rounded-t-[1px] bg-plata-200 ${enCurso}`} animate={{ height: h }} transition={{ duration: 0.4 }} />}
-              </div>
-              <div className="flex flex-1 items-start">
-                {d < 0 && <motion.div className={`w-full rounded-b-[1px] border border-plata-400 ${enCurso}`} animate={{ height: h }} transition={{ duration: 0.4 }} />}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-2 flex items-center justify-between font-mono text-[10px] text-plata-400">
-        <span>Última barra {conSigno(ultima, 2)} {mercado.base}</span>
-        <span>{num(mercado.ritmo[mercado.ritmo.length - 1], 0)} barras/min</span>
-      </div>
-    </Panel>
+    <Mini titulo="Grabación" icono={HardDrive} destino="datos" conector="der" principal={num(filas)} nota="filas en esta sesión">
+      <Linea k="Ritmo" v={`${num(ritmo, 0)} barras/min`} />
+      <Linea k="Guardando" v={`${guardando}/${feeds.feeds.length} mercados`} />
+      <Linea k="Cortes" v={num(cortes)} />
+      <Linea k="Carpetas" v={feeds.proveedores.map((p) => NOMBRE_PROVEEDOR[p].split(' ')[0]).join(' · ') || '—'} />
+    </Mini>
   );
 }
 
-function MetricasEntrada() {
-  const navegar = useNavegar();
-  const { mercado } = useSistema();
-  const distancia = mercado.atr ? (mercado.precio - mercado.vwap) / mercado.atr : 0;
-  const dp = mercado.decimales;
-  const filas = [
-    { k: 'VWAP', v: mercado.vwap ? num(mercado.vwap, dp) : '—', n: `${conSigno(distancia, 2)} ATR` },
-    { k: 'CVD Delta', v: `${conSigno(mercado.cvd, 2)} ${mercado.base}`, n: 'sesión' },
-    { k: 'ATR', v: mercado.atr ? num(mercado.atr, dp) : '—', n: '14 dollar bars' },
-    { k: 'Open Interest', v: mercado.oi ? `${num(mercado.oi, 0)} ${mercado.base}` : '—', n: 'perpetuo' },
-  ];
+function TarjetaMemoria() {
+  const { feeds } = useFeeds();
+  const distintos = feeds.feeds.filter((f) => f.memoria?.memoria?.distinto.aviso);
   return (
-    <Panel titulo="Métricas de Entrada" icono={Database} conector="der" onClick={() => navegar('datos')} cuerpo="px-4 py-2" accion={<span className="font-mono text-[9.5px] text-plata-500">Features</span>}>
-      <dl className="divide-y divide-borde-suave">
-        {filas.map((f) => (
-          <div key={f.k} className="flex items-baseline justify-between gap-2 py-2">
-            <dt className="text-xs text-plata-300">{f.k}</dt>
-            <dd className="text-right">
-              <span className="cifra text-[13px] text-white">{f.v}</span>
-              <span className="ml-2 font-mono text-[9.5px] text-plata-500">{f.n}</span>
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </Panel>
-  );
-}
-
-const TRABAJOS = [
-  { id: 'Walk-Forward', ritmo: 0.9 },
-  { id: 'Monte Carlo', ritmo: 1.6 },
-  { id: 'Luck test', ritmo: 2.3 },
-];
-
-function PruebasEnCurso() {
-  const n = usePulso(700);
-  return (
-    <div className="mt-3 space-y-2 border-t border-borde-suave pt-3">
-      {TRABAJOS.map((t, i) => {
-        const avance = ((n * t.ritmo + i * 31) % 100) + 0.0;
-        return (
-          <div key={t.id} className="flex items-center gap-2 text-[10px]">
-            <span className="w-[74px] shrink-0 font-mono text-plata-400">{t.id}</span>
-            <Barra valor={avance} tenue={i > 0} />
-            <span className="cifra w-8 shrink-0 text-right text-plata-300">{Math.floor(avance)}%</span>
-          </div>
-        );
+    <Mini titulo="Memoria del mercado" icono={ScanSearch} destino="orderflow" conector="der" principal={distintos.length ? 'Hoy es distinto' : 'Normal'} nota={distintos.map((f) => f.simbolo).join(', ')}>
+      {feeds.feeds.slice(0, 4).map((f) => {
+        const r = f.memoria?.regimen;
+        return <Linea key={f.simbolo} k={<span className="font-mono">{f.simbolo}</span>} v={r ? `${NOMBRE_REGIMEN[r.actual]} ${num(r.probabilidades[r.actual] * 100, 0)} %` : f.memoria?.faltan ? 'faltan datos' : '…'} />;
       })}
-    </div>
+    </Mini>
   );
 }
 
-function CadenaFlujo() {
-  const { motor, mercado } = useSistema();
-  const pasos = [
-    { titulo: 'Fuentes de datos', dato: `${num(mercado.dollarBars)} dollar bars`, icono: Database, destino: 'datos' as Modulo },
-    { titulo: 'Cerebro ML / DL', dato: `${num(motor.hipotesis)} hipótesis`, icono: Brain, destino: 'investigacion' as Modulo },
-    { titulo: 'Juez', dato: `${motor.pruebas} en prueba · reglas bloqueadas`, icono: Gavel, destino: 'laboratorio' as Modulo },
-    { titulo: 'Estrategias', dato: `${ESTRATEGIAS.filter((e) => e.veredicto === 'Aprobada').length} aprobadas en biblioteca`, icono: CheckCheck, destino: 'estrategias' as Modulo },
-    { titulo: 'Bots', dato: `${BOTS.filter((b) => b.estado === 'Ejecutando').length} ejecutando · Paper`, icono: Activity, destino: 'paper' as Modulo },
-  ];
-  const navegar = useNavegar();
+function TarjetaEvento() {
+  const { proximo, enCurso, ahora } = useCalendario();
+  const e = enCurso ?? proximo;
   return (
-    <Panel cuerpo="px-4 py-4">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-5 sm:gap-0">
-        {pasos.map((p, i) => {
-          const Icono = p.icono;
-          return (
-            <button key={p.titulo} onClick={() => navegar(p.destino)} className="group relative flex items-center gap-3 rounded-lg text-left transition-colors hover:bg-white/[0.03] sm:pr-6">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-borde bg-white/[0.03]">
-                <Icono size={15} strokeWidth={1.5} className="text-plata-200" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-white group-hover:underline group-hover:underline-offset-4">{p.titulo}</p>
-                <p className="cifra truncate text-[10px] text-plata-500">{p.dato}</p>
-              </div>
-              {i < pasos.length - 1 && (
-                <div className="absolute right-1 top-1/2 hidden h-px w-5 -translate-y-1/2 overflow-hidden bg-white/10 sm:block">
-                  <motion.span
-                    className="absolute top-0 h-px w-2 bg-white"
-                    animate={{ x: [-8, 20] }}
-                    transition={{ duration: 1.2, repeat: Infinity, ease: 'linear', delay: i * 0.25 }}
-                  />
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </Panel>
+    <Mini titulo="Próximo evento" icono={CalendarClock} destino="datos" conector="der" principal={enCurso ? 'No operar' : e ? faltaPara(e.t, ahora).replace(/^en /, '') : '—'} nota={enCurso ? 'ventana activa' : e ? 'para' : 'sin eventos'}>
+      {e && <Linea k={e.nombre} v={new Date(e.t).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} />}
+      {e && <Linea k="Ventana" v={`−${e.antesMin} / +${e.despuesMin} min`} />}
+    </Mini>
+  );
+}
+
+function TarjetaLaboratorio() {
+  const xs = useEstrategias();
+  const juzgadas = xs.filter((x) => x.ultimoVeredicto);
+  const aprobadas = juzgadas.filter((x) => x.ultimoVeredicto === 'APROBADA').length;
+  const ultima = [...juzgadas].sort((a, b) => b.actualizada - a.actualizada)[0];
+  return (
+    <Mini titulo="Laboratorio · Juez" icono={Gavel} destino="laboratorio" conector="izq" principal={`${aprobadas}/${juzgadas.length}`} nota="aprobadas / juzgadas">
+      <Linea k="Estrategias" v={num(xs.length)} />
+      <Linea k="Variantes probadas" v={num(xs.reduce((a, x) => a + x.ensayos, 0))} />
+      {ultima && <Linea k={`«${ultima.nombre}»`} v={ultima.ultimoVeredicto} />}
+    </Mini>
+  );
+}
+
+function TarjetaAgentes() {
+  const reales = AGENTES.filter((a) => a.real);
+  return (
+    <Mini titulo="Agentes" icono={IconoBot} destino="agentes" conector="izq" principal={`${reales.length}/${AGENTES.length}`} nota="con motor real">
+      <p className="text-plata-300">{reales.map((a) => a.nombre).join(' · ')}</p>
+      <p className="text-plata-500">Pendientes: {AGENTES.filter((a) => !a.real).map((a) => `${a.nombre} (${a.bloque})`).join(' · ')}</p>
+    </Mini>
+  );
+}
+
+function TarjetaAvisos() {
+  const n = useNotificador();
+  const canales = canalesActivos(n.config);
+  const ultimo = n.historial[0];
+  return (
+    <Mini titulo="Notificaciones" icono={BellRing} destino="datos" conector="izq" principal={canales.length ? canales.length : 'Off'} nota={canales.length ? canales.join(' · ') : 'configura Discord / Telegram'}>
+      {ultimo ? <Linea k={ultimo.aviso.titulo} v={`${ultimo.ok ? '✓' : '✗'} ${hora(new Date(ultimo.t))}`} /> : <p className="text-plata-500">Sin envíos todavía.</p>}
+      <Linea k="Enviados" v={num(n.historial.filter((x) => x.ok).length)} />
+    </Mini>
+  );
+}
+
+function TarjetaMotor() {
+  const { estado, msProceso } = useEstadoMotor();
+  const { feeds } = useFeeds();
+  const lat = feeds.feeds.map((f) => f.latenciaMs).filter((x): x is number => x !== null);
+  return (
+    <Mini titulo="Salud del motor" icono={Cpu} destino="orderflow" conector="izq" principal={`${num(msProceso, 1)} ms`} nota="de cálculo cada 200 ms">
+      <Linea k="Latencia media" v={lat.length ? `${num(lat.reduce((a, b) => a + b, 0) / lat.length)} ms` : '—'} />
+      <Linea k="Trades en cinta" v={estado ? num(estado.memoria.cinta ?? 0) : '—'} />
+      <Linea k="Filas por escribir" v={num(feeds.enCola)} />
+    </Mini>
   );
 }

@@ -223,6 +223,9 @@ async function iniciarFuente(proveedor: Proveedor, simbolos: string[], c: Config
         const precarga = (i === 0 ? 60 : 15) * 60_000;
         const g = new GeneradorDemo((Date.now() + i * 7919) % 1_000_000, Date.now() - precarga);
         for (const m of g.avanzar(precarga, true)) procesar(s, m, gen);
+        // La precarga no cuenta para el ritmo de barras por minuto.
+        const act = activos.get(s);
+        if (act) act.filasVentana = 0;
         procesar(s, { tipo: 'conexion', estado: 'en-vivo', detalle: 'Datos sintéticos (solo pruebas)' }, gen);
         return g;
       });

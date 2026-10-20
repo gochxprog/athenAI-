@@ -145,6 +145,26 @@ Dónde verlo: **Laboratorio → «Mis estrategias (Python) · real»** (lo de an
 - ✅ Agentes **Programador** y **Juez** con motor real.
 - ⬜ Opcional: describir la estrategia en español y que una IA (Claude) escriba el código en Python. Necesita una API key de Anthropic, con costo por uso.
 
+### Extras hechos después del Bloque C ✅
+
+- ✅ **Notificaciones** (Centro de datos → «Notificaciones»): Discord (webhook), Telegram (bot) y ntfy (push al teléfono).
+  - Avisos: mercado sin datos más de 30 s y su recuperación, «hoy es distinto», eventos fuertes (30 min antes y al entrar en la ventana), cambio de régimen, errores del motor o del guardado, y cada decisión del Juez.
+  - Botón de prueba por canal, anti-spam e historial.
+  - Mientras la plataforma corra en el navegador, los avisos solo salen con la pestaña abierta (24/7 → VPS, Bloque F).
+- ✅ **Cerebro orgánico** en el Panel General: la red se arruga y se aplasta despacio. Cada dato que entra lo golpea hacia dentro, cada señal que sale lo empuja hacia fuera, y rebota como una gelatina.
+- ✅ **Panel General con datos reales**: tarjetas pequeñas.
+  - «Lo que entra»: mercados, grabación, memoria del mercado, próximo evento.
+  - «Lo que sale»: Laboratorio/Juez, agentes, notificaciones, salud del motor.
+  - Se quitaron las épocas, el "loss" y el registro inventados.
+
+### Próximo (antes de los motores de IA) ⬜
+
+- ⬜ **Papers descargables**: cada prueba del Juez genera un documento (idea, lógica, código, parámetros, métricas, gráficos y veredicto) para leerlo, descargarlo (PDF/HTML) y enviarlo a Discord.
+- ⬜ **Monte Carlo con cartelitos**: al tocar una trayectoria, sus métricas.
+- ⬜ **Red de hipótesis** (Investigación) real: estrategias y papers como nodos, unidos por las Features que usan.
+- ⬜ **Bots en Paper** con estrategias aprobadas por el Juez + Guardián + avisos de operaciones (Bloque E sin IA).
+- ⬜ **VPS 24/7** (Bloque F).
+
 ### Bloque D — Los motores de inteligencia artificial ⬜
 
 - ⬜ **Etiquetador (triple barrera):** toma de ganancia, stop y tiempo máximo, con el ATR del momento.
