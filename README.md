@@ -9,6 +9,8 @@ npm install
 npm run dev        # servidor local
 npm run build      # typecheck + build de producción en dist/
 npm run lint
+npm test           # 266 pruebas (motores de Urus + núcleo de athenAI)
+npm run soak       # prueba de resistencia: 8 h de mercado simulado
 ```
 
 ## Lógica del sistema
@@ -22,6 +24,7 @@ npm run lint
 
 | | Módulo | Contenido |
 |---|---|---|
+| — | Order Flow | Velas / Footprint (1m, 5m, 15m, Dollar Bars, Volume Bars), CVD, OI, absorción/agotamiento, LHM, big trades, icebergs, stop runs y DOM. Features para el ML con exportación CSV |
 | A | Panel General | Fuentes de datos → esfera 3D de Deep Learning → métricas del motor, cadena de flujo y log del día |
 | B | Investigación | Constelación 3D de hipótesis por tema, panel de evidencia y envío al Laboratorio |
 | C | Conocimiento | Patrones descubiertos (sin catálogo), espacio aprendido, firma por Feature y estadísticas del Juez |
@@ -30,6 +33,15 @@ npm run lint
 | E | Agentes | Sala 3D con Rastreador, Lector, Sintetizador y Flujo, y su consola en tiempo real |
 | F | Paper Trading · Decisiones | Bots monitorizados, posiciones en vivo, cuenta real bloqueada y bitácora de decisiones |
 | G | Máquinas · Datos | Telemetría de infraestructura, Recorder y Features |
+
+## Motores de Order Flow (Urus)
+
+Los motores de Urus viven en `src/motores/urus/` y se ejecutan en un Web Worker. La fuente puede ser:
+
+- **DEMO:** flujo sintético con la forma de Binance.
+- **Servidor de Urus:** por SSE.
+
+Detalles, hallazgos de rendimiento y garantías anti look-ahead en [`docs/AUDITORIA_URUS.md`](docs/AUDITORIA_URUS.md).
 
 ## Estructura
 
@@ -43,6 +55,11 @@ src/
 │   ├── layout/             # Sidebar, Topbar
 │   └── ui/                 # Panel, Insignia, Punto, Consola, PanelLateral…
 ├── data/mock.ts            # datos DEMO coherentes entre sí
+├── motores/
+│   ├── urus/               # motores de Urus (con sus pruebas)
+│   ├── nucleo/             # barras incrementales, pipeline, Features
+│   ├── fuentes/            # DEMO y servidor Urus (SSE)
+│   └── worker/             # Web Worker del motor
 ├── lib/simulacion.ts       # mercado BTCUSDT, contadores del motor y log en vivo
 └── hooks/SistemaDemo.tsx   # reloj único de 1 s que alimenta toda la app
 ```

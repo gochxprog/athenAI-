@@ -1,4 +1,7 @@
 import { motion } from 'framer-motion';
+import { ArrowRight } from 'lucide-react';
+import { useNavegar } from '@/hooks/Navegacion';
+import { DEFINICIONES_FEATURES } from '@/motores/nucleo/features';
 import { Database, HardDrive, Radio, Rows3, Timer, Waves } from 'lucide-react';
 import Encabezado from '@/components/ui/Encabezado';
 import Panel from '@/components/ui/Panel';
@@ -41,6 +44,7 @@ function valorFeature(nombre: string, m: EstadoMercado) {
 
 export default function DatosView() {
   const { mercado } = useSistema();
+  const navegar = useNavegar();
   const ritmo = mercado.ritmo[mercado.ritmo.length - 1];
 
   const etapas = [
@@ -142,7 +146,25 @@ export default function DatosView() {
         </Panel>
       </div>
 
-      <Panel titulo="Features · importancia y valor actual" icono={Waves} accion={<Insignia variante="tenue">Importancia SHAP media</Insignia>} cuerpo="overflow-x-auto px-4 py-2">
+      <Panel titulo="Pipeline de Features de los motores de Urus" icono={Waves} accion={<Insignia variante="contorno">{DEFINICIONES_FEATURES.length} Features</Insignia>}>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <p className="max-w-3xl text-xs leading-relaxed text-plata-300">
+            Absorción, agotamiento, imbalances, big trades, CVD de sesión, Open Interest, pools de liquidez (LHM), icebergs y stop runs se calculan con los motores de Urus por cada dollar bar de 10 M USD, sin mirar al futuro. Es la tabla que aprenderán los modelos.
+          </p>
+          <button onClick={() => navegar('orderflow')} className="flex items-center gap-2 rounded-lg bg-white px-3.5 py-2 text-xs font-medium text-black">
+            Ver en Order Flow <ArrowRight size={13} />
+          </button>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-1.5">
+          {[...new Set(DEFINICIONES_FEATURES.map((d) => d.grupo))].map((g) => (
+            <Insignia key={g} variante="tenue">
+              {g} · {DEFINICIONES_FEATURES.filter((d) => d.grupo === g).length}
+            </Insignia>
+          ))}
+        </div>
+      </Panel>
+
+      <Panel titulo="Features base · importancia DEMO y valor actual" icono={Waves} accion={<Insignia variante="tenue">Importancia SHAP media · DEMO</Insignia>} cuerpo="overflow-x-auto px-4 py-2">
         <table className="w-full min-w-[760px] text-left text-xs">
           <thead>
             <tr className="text-[9.5px] uppercase tracking-[0.14em] text-plata-500">

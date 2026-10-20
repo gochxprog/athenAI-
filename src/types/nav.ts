@@ -1,5 +1,6 @@
 export type Modulo =
   | 'panel'
+  | 'orderflow'
   | 'laboratorio'
   | 'investigacion'
   | 'estrategias'

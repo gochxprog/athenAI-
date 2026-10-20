@@ -2,6 +2,7 @@ import type { Modulo } from '@/types/nav';
 
 export const META_MODULO: Record<Modulo, { titulo: string; seccion: string }> = {
   panel: { titulo: 'Panel General', seccion: 'Dashboard' },
+  orderflow: { titulo: 'Order Flow', seccion: 'Dashboard' },
   laboratorio: { titulo: 'Laboratorio', seccion: 'Cerebro' },
   investigacion: { titulo: 'Investigación', seccion: 'Cerebro' },
   estrategias: { titulo: 'Estrategias', seccion: 'Cerebro' },

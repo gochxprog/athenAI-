@@ -18,6 +18,7 @@ export default function Sidebar({ activo, onSeleccion }: Props) {
 
   const info: Partial<Record<Modulo, { n?: number; e: EstadoPunto }>> = {
     panel: { e: 'activo' },
+    orderflow: { e: 'activo' },
     laboratorio: { n: motor.pruebas, e: 'activo' },
     investigacion: { n: HIPOTESIS.length, e: 'activo' },
     estrategias: { n: ESTRATEGIAS.length, e: 'espera' },
