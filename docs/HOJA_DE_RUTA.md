@@ -18,14 +18,16 @@ Marca de progreso: ✅ hecho · 🔶 en curso · ⬜ pendiente.
   - big trades, icebergs y stop runs;
   - pools de liquidez (LHM), Open Interest y DOM.
 - ✅ **Features para el ML**:
-  - 34 datos por cada dollar bar, sin mirar al futuro;
+  - 37 datos por cada dollar bar, sin mirar al futuro;
   - se guardan en una "carpeta" por fuente: `athenai-binance`, `athenai-rithmic`, `athenai-urus` y `athenai-simulacion`;
   - se exportan a CSV.
 - ✅ **Gráfico de Order Flow**: velas o Footprint, 1m/5m/15m/Dollar/Volume, CVD, OI, LHM y DOM.
+- ✅ **Bloque A completo**: toda la plataforma lee del mismo chorro, panel de mercados, liquidaciones, huecos, fuentes mezcladas, Vigía y Flujo con motor real.
 
 **Todavía es DEMO (pantallas sin motor detrás)**
 
-- Agentes 3D, bots, Juez, Walk-Forward, Monte Carlo, Luck test y modelos (LightGBM, red neuronal).
+- Bots, Juez, Walk-Forward, Monte Carlo, Luck test y modelos (LightGBM, red neuronal). Los contadores de hipótesis/épocas del Panel General y del Laboratorio siguen siendo DEMO hasta los bloques C y D.
+- De los agentes 3D, solo Vigía y Flujo tienen motor; los otros 8 dicen «Sin motor · Bloque X».
 
 **Regla:** ningún agente aparece "trabajando" si no tiene un motor real detrás. Mientras su motor no exista, se muestra como «Sin motor · próximamente».
 
@@ -82,25 +84,25 @@ No hay un agente por cada detector, porque un solo motor ya calcula todos a la v
 
 ## 4. Bloques de trabajo (en orden)
 
-### Bloque A — Todo conectado y los mercados de un vistazo 🔶
+### Bloque A — Todo conectado y los mercados de un vistazo ✅
 
-- ⬜ **Un solo "chorro" de datos.** Toda la plataforma lee de la fuente elegida en el Centro de datos:
+- ✅ **Un solo "chorro" de datos.** Toda la plataforma lee de la fuente elegida en el Centro de datos:
   - Panel General, Paper, Agentes, Laboratorio, barra lateral y barra superior;
   - al cerrar una fuente se limpia todo; al abrir otra, todo vuelve a fluir hacia su carpeta.
-- ⬜ **Binance resistente.** Si las peticiones iniciales (REST) fallan, el flujo en vivo (WebSocket) se abre igual. Botón «Probar conexión» con diagnóstico.
-- ⬜ **Panel Multi-Asset Overview.** Una tarjeta por mercado con:
+- ✅ **Binance arreglado y resistente.** Desde el 23-abr-2026 Binance separó sus WebSockets de futuros: el libro va por `/public` y los trades y liquidaciones por `/market`. La ruta antigua `/stream` solo entrega el libro: por eso "conectaba" pero los gráficos no se llenaban. Ahora se usan las dos rutas nuevas, se vuelve sola a la antigua si un servidor propio no las tiene, y avisa si llega el libro pero no los trades. Botón «Probar conexión» con diagnóstico (REST, libro y trades por separado).
+- ✅ **Panel Multi-Asset Overview** (Panel General y Order Flow). Una tarjeta por mercado con:
   - estado y precio;
   - CVD y ΔOI;
   - absorción, agotamiento e imbalances;
   - big trades, pools cercanos y filas;
   - régimen y veredicto del Juez.
   
-  Al tocar una tarjeta, el gráfico muestra ese mercado.
-- ⬜ **Widgets:** CVD Velocity, Delta Ratio, Absorption Spike.
-- ⬜ **Liquidaciones** de Binance (stream `forceOrder`) como dato nuevo.
-- ⬜ **Huecos marcados.** Las filas de datos tras un corte quedan marcadas para no aprender de datos rotos.
-- ⬜ **Fuentes mezcladas por activo:** BTC/ETH de Binance + NQ/XAU de Rithmic a la vez. Cada fuente guarda en su carpeta.
-- ⬜ **Todo el equipo de agentes en el 3D.** Vigía y Flujo trabajando de verdad; el resto «Sin motor · se activa en el Bloque X».
+  Al tocar una tarjeta, el gráfico muestra ese mercado. Régimen y veredicto dicen «Sin motor» hasta los bloques B y C.
+- ✅ **Widgets:** CVD Velocity, Delta Ratio, Absorption Spike (dentro de cada tarjeta).
+- ✅ **Liquidaciones** de Binance (stream `forceOrder`): evento y Features `liq_largos_usd` / `liq_cortos_usd`.
+- ✅ **Huecos marcados** (Feature `hueco`). Las filas de datos tras un corte quedan marcadas para no aprender de datos rotos.
+- ✅ **Fuentes mezcladas por activo:** BTC/ETH de Binance + NQ/XAU de Rithmic a la vez. Cada fuente guarda en su carpeta.
+- ✅ **Todo el equipo de agentes en el 3D** (10 agentes en 3 filas, una por capa). Vigía y Flujo trabajando de verdad; el resto «Sin motor · se activa en el Bloque X».
 
 ### Bloque B — Memoria del mercado (no predice: recuerda) ⬜
 

@@ -79,7 +79,7 @@ La fuente ya no se elige en el gráfico: se configura en **Datos → Centro de d
 
 | Fuente | Qué necesita | Notas |
 |---|---|---|
-| **Binance Futures** (por defecto) | Nada: datos públicos | aggTrades + libro L2 sincronizado (snapshot + diffs encadenados por `pu`) + Open Interest cada 5 s |
+| **Binance Futures** (por defecto) | Nada: datos públicos | aggTrades y liquidaciones por `wss://fstream.binance.com/market/stream`, libro L2 por `/public/stream` (snapshot + diffs encadenados por `pu`), Open Interest cada 5 s. La ruta antigua `/stream` desde el 23-abr-2026 solo entrega el libro |
 | **Rithmic** | Usuario, contraseña, sistema, gateway y la URL de un **puente R\|Protocol** | Rithmic no acepta conexiones desde un navegador. athenAI hace `POST {puente}/api/rithmic/login` y luego lee el mercado con el protocolo de Urus. Sin puente, el feed muestra el error |
 | **Servidor Urus** | URL del servidor | `GET /api/realtime/stream`, `POST /api/realtime/subscriptions`, `GET /api/oi` (CORS para el origen de athenAI) |
 | **Simulación** | Nada | Solo pruebas; nunca se mezcla con datos reales |
@@ -97,6 +97,8 @@ Al pulsar **Aplicar y empezar a aprender**:
 La configuración se guarda en el navegador. La contraseña de Rithmic **no** se guarda salvo que se marque «Recordar la contraseña».
 
 ### Dónde quedan los datos
+
+Se pueden **mezclar fuentes por activo** (por ejemplo BTC y ETH de Binance y NQ de Rithmic). Al aplicar se cierran todas las fuentes y todo vuelve a fluir; toda la plataforma (Panel General, Order Flow, Agentes, barra superior) lee de ese mismo chorro.
 
 Cada fuente tiene su propia base IndexedDB (su "carpeta"): `athenai-binance`, `athenai-rithmic`, `athenai-urus`, `athenai-simulacion`.
 

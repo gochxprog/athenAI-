@@ -72,6 +72,42 @@ export interface EstadoGrafico {
   memoria: Record<string, number>;
 }
 
+/** Resumen compacto de un mercado: alimenta las tarjetas Multi-Asset y el resto de módulos de la plataforma. */
+export interface ResumenFlujo {
+  precio: number | null;
+  spread: number | null;
+  aperturaSesion: number | null;
+  vwap: number | null;
+  cvdSesion: number;
+  /** ATR(14) de la serie canónica (dollar bars), en unidades de precio. */
+  atr: number | null;
+  oi: number | null;
+  /** Cambio del OI en los últimos ~15 min (%). */
+  oiDeltaPct: number | null;
+  absorcion: { lado: 'ask' | 'bid'; score: number; t: number } | null;
+  agotamiento: { lado: 'bullish' | 'bearish'; score: number; t: number } | null;
+  /** Imbalances y stacked de las últimas 5 dollar bars. */
+  imbCompra: number;
+  imbVenta: number;
+  stackedCompra: number;
+  stackedVenta: number;
+  /** Últimos 5 min de mercado. */
+  bigCompraUsd: number;
+  bigVentaUsd: number;
+  liqLargosUsd: number;
+  liqCortosUsd: number;
+  icebergs: number;
+  stopRuns: number;
+  poolArriba: { p: number; v: number } | null;
+  poolAbajo: { p: number; v: number } | null;
+  /** Delta / volumen de la última dollar bar. */
+  deltaRatio: number | null;
+  /** Absorción máxima de la última barra frente a la media de las 20 previas (× veces). */
+  absorcionSpike: number | null;
+  /** Compras y ventas agresivas de las últimas 28 dollar bars. */
+  barrasFlujo: { compra: number; venta: number }[];
+}
+
 const CAPACIDAD_FEATURES = 20_000;
 
 export class Pipeline {
@@ -88,6 +124,8 @@ export class Pipeline {
   private cvdAcum = 0;
   private diaCvd = -1;
   private golpes = new Anillo<{ t: number; p: number; q: number; compra: boolean }>(20_000);
+  /** Hubo un corte (reconexión, resincronización, error) desde la última fila: la próxima se marca con hueco = 1. */
+  private huecoPendiente = false;
   conexion: EstadoConexion = 'detenido';
   detalleConexion = '';
 
@@ -132,7 +170,11 @@ export class Pipeline {
       case 'oi':
         this.mercado.oiNuevo(m.snapshot);
         break;
+      case 'liquidacion':
+        this.mercado.liquidacion(m.liq);
+        break;
       case 'conexion':
+        if (this.conexion === 'en-vivo' && m.estado !== 'en-vivo') this.huecoPendiente = true;
         this.conexion = m.estado;
         this.detalleConexion = m.detalle ?? '';
         break;
@@ -179,6 +221,8 @@ export class Pipeline {
   private filaCanonica(b: BarraAnalizada): FilaFeatures {
     const previas = this.canonica.barras.ultimos(121).slice(0, -1);
     const { fila } = construirFila(b, previas, this.mercado, this.cvdCanonico);
+    fila.valores.hueco = this.huecoPendiente ? 1 : 0;
+    this.huecoPendiente = false;
     this.cvdCanonico.push(this.mercado.cvdSesion);
     if (this.cvdCanonico.length > 64) this.cvdCanonico = this.cvdCanonico.slice(-32);
     this.features.push(fila);
@@ -279,6 +323,100 @@ export class Pipeline {
       metricas: { ...this.mercado.metricas(), barrasCanonicas: this.totalFilas, cvdSesion: this.mercado.cvdSesion, oiActual: oiUltimo?.oiContracts ?? null, vwapSesion: this.mercado.vwapSesion },
       features: { ultimas: this.features.ultimos(40).reverse(), total: this.totalFilas },
       memoria: { ...this.mercado.memoria(), cinta: this.cinta.tamaño, barrasVista: this.vista.barras.tamaño, barrasCanonicas: this.canonica.barras.tamaño, filasFeatures: this.features.tamaño, cvdVista: this.cvdVista.size },
+    };
+  }
+
+  resumen(): ResumenFlujo {
+    const m = this.mercado;
+    const ahora = m.ahora;
+    const canon = this.canonica.barras.ultimos(30);
+    const ultimas5 = canon.slice(-5);
+    const suma = (f: (b: BarraAnalizada) => number) => ultimas5.reduce((a, b) => a + f(b), 0);
+
+    // ATR(14) de la serie canónica.
+    let atr: number | null = null;
+    if (canon.length >= 2) {
+      const desde = Math.max(1, canon.length - 14);
+      let tot = 0;
+      for (let i = desde; i < canon.length; i += 1) {
+        const b = canon[i].ohlc;
+        const prev = canon[i - 1].ohlc.close;
+        tot += Math.max(b.high - b.low, Math.abs(b.high - prev), Math.abs(b.low - prev));
+      }
+      atr = tot / (canon.length - desde);
+    }
+
+    let absorcion: ResumenFlujo['absorcion'] = null;
+    let agotamiento: ResumenFlujo['agotamiento'] = null;
+    for (let i = canon.length - 1; i >= Math.max(0, canon.length - 10); i -= 1) {
+      const b = canon[i];
+      if (!absorcion && b.absorcion.length) {
+        const x = b.absorcion.reduce((a, c) => (c.absorptionScore > a.absorptionScore ? c : a));
+        absorcion = { lado: x.side, score: x.absorptionScore, t: b.cierre };
+      }
+      if (!agotamiento && b.agotamiento?.length) {
+        const x = b.agotamiento.reduce((a, c) => (c.exhaustionScore > a.exhaustionScore ? c : a));
+        agotamiento = { lado: x.side, score: x.exhaustionScore, t: b.cierre };
+      }
+    }
+
+    const ev = m.eventosDisponibles(ahora, ahora - 300_000);
+    const usd = (tipo: EventoMotor['tipo'], lado: EventoMotor['lado']) => ev.filter((e) => e.tipo === tipo && e.lado === lado).reduce((a, e) => a + e.magnitud, 0);
+
+    const oiUlt = m.oi.ultimo();
+    let oiDeltaPct: number | null = null;
+    if (oiUlt) {
+      for (let i = m.oi.tamaño - 1; i >= 0; i -= 1) {
+        const x = m.oi.get(i)!;
+        if (x.time <= oiUlt.time - 900_000 || i === 0) {
+          oiDeltaPct = x.oiContracts > 0 && x !== oiUlt ? (oiUlt.oiContracts / x.oiContracts - 1) * 100 : null;
+          break;
+        }
+      }
+    }
+
+    const precio = m.ultimoPrecio;
+    const pools = m.poolsVivos();
+    let poolArriba: ResumenFlujo['poolArriba'] = null;
+    let poolAbajo: ResumenFlujo['poolAbajo'] = null;
+    if (precio !== null) {
+      for (const p of pools) {
+        if (p.side === 'ask' && p.price > precio && (!poolArriba || p.price < poolArriba.p)) poolArriba = { p: p.price, v: p.volume };
+        if (p.side === 'bid' && p.price < precio && (!poolAbajo || p.price > poolAbajo.p)) poolAbajo = { p: p.price, v: p.volume };
+      }
+    }
+
+    const ultima = canon[canon.length - 1];
+    const maxAbs = (b: BarraAnalizada) => (b.absorcion.length ? Math.max(...b.absorcion.map((x) => x.absorptionScore)) : 0);
+    const previas = canon.slice(-21, -1);
+    const mediaAbs = previas.length ? previas.reduce((a, b) => a + maxAbs(b), 0) / previas.length : 0;
+
+    return {
+      precio,
+      spread: m.libro?.spread ?? null,
+      aperturaSesion: m.aperturaSesion,
+      vwap: m.vwapSesion,
+      cvdSesion: m.cvdSesion,
+      atr,
+      oi: oiUlt?.oiContracts ?? null,
+      oiDeltaPct,
+      absorcion,
+      agotamiento,
+      imbCompra: suma((b) => b.senales.levels.filter((l) => l.buyingImbalance).length),
+      imbVenta: suma((b) => b.senales.levels.filter((l) => l.sellingImbalance).length),
+      stackedCompra: suma((b) => b.senales.stackedImbalances.filter((x) => x.direction === 'buying').length),
+      stackedVenta: suma((b) => b.senales.stackedImbalances.filter((x) => x.direction === 'selling').length),
+      bigCompraUsd: usd('bigtrade', 'compra'),
+      bigVentaUsd: usd('bigtrade', 'venta'),
+      liqLargosUsd: usd('liquidacion', 'venta'),
+      liqCortosUsd: usd('liquidacion', 'compra'),
+      icebergs: ev.filter((e) => e.tipo === 'iceberg').length,
+      stopRuns: ev.filter((e) => e.tipo === 'stoprun').length,
+      poolArriba,
+      poolAbajo,
+      deltaRatio: ultima && ultima.volumen > 0 ? ultima.delta / ultima.volumen : null,
+      absorcionSpike: ultima && mediaAbs > 0 ? maxAbs(ultima) / mediaAbs : null,
+      barrasFlujo: canon.slice(-28).map((b) => ({ compra: (b.volumen + b.delta) / 2, venta: (b.volumen - b.delta) / 2 })),
     };
   }
 

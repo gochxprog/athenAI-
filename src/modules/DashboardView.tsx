@@ -8,6 +8,7 @@ import ContadorAnimado from '@/components/ui/ContadorAnimado';
 import Consola from '@/components/ui/Consola';
 import Sparkline from '@/components/charts/Sparkline';
 import Barra from '@/components/ui/Barra';
+import ResumenMercados from '@/components/orderflow/ResumenMercados';
 import { useSistema, usePulso } from '@/hooks/SistemaDemo';
 import { useNavegar } from '@/hooks/Navegacion';
 import type { Modulo } from '@/types/nav';
@@ -140,6 +141,11 @@ export default function DashboardView() {
         </div>
       </div>
 
+      <section className="space-y-2">
+        <TituloColumna>Mercados · de un vistazo</TituloColumna>
+        <ResumenMercados alElegir={() => navegar('orderflow')} />
+      </section>
+
       <CadenaFlujo />
 
       <Panel
@@ -174,24 +180,24 @@ function MercadoVivo() {
   useEffect(() => {
     previo.current = mercado.precio;
   });
-  const cambio24 = (mercado.precio - mercado.apertura24h) / mercado.apertura24h;
-  const spread = 0.1;
+  const cambio = mercado.apertura24h ? (mercado.precio - mercado.apertura24h) / mercado.apertura24h : 0;
+  const dp = mercado.decimales;
 
   return (
-    <Panel titulo="Mercado Vivo · Binance USD-M" icono={Radio} conector="der" onClick={() => navegar('datos')}>
+    <Panel titulo={`Mercado Vivo · ${mercado.fuente ?? 'sin fuente'}`} icono={Radio} conector="der" onClick={() => navegar('datos')}>
       <div className="flex items-center justify-between">
-        <span className="font-mono text-[11px] text-plata-400">BTCUSDT · Perpetuo</span>
+        <span className="font-mono text-[11px] text-plata-400">{mercado.simbolo}</span>
         <Estado estado={mercado.conectado ? 'activo' : 'detenido'} texto={mercado.conectado ? 'Conectado' : 'Desconectado'} />
       </div>
       <div className="mt-2 flex items-baseline gap-2">
         <motion.span key={mercado.precio} initial={{ opacity: 0.55 }} animate={{ opacity: 1 }} className="cifra text-[26px] font-light text-white">
-          {num(mercado.precio, 1)}
+          {mercado.precio ? num(mercado.precio, dp) : '—'}
         </motion.span>
         <span className="font-mono text-xs text-plata-400">{dir > 0 ? '▲' : dir < 0 ? '▼' : '·'}</span>
       </div>
       <div className="mt-1 flex items-center gap-3 font-mono text-[10px] text-plata-400">
-        <span>{conSigno(cambio24 * 100, 2, '%')} 24 h</span>
-        <span>Spread {num(spread, 1)}</span>
+        <span>{conSigno(cambio * 100, 2, '%')} hoy (UTC)</span>
+        <span>Spread {mercado.spread === null ? '—' : num(mercado.spread, dp)}</span>
         <span>{mercado.latenciaMs} ms</span>
       </div>
       <Sparkline datos={mercado.historial.slice(-120)} alto={36} className="mt-2" base={mercado.vwap} />
@@ -231,7 +237,7 @@ function FlujoOrderFlow({ barras }: { barras: BarraFlujo[] }) {
         })}
       </div>
       <div className="mt-2 flex items-center justify-between font-mono text-[10px] text-plata-400">
-        <span>Barra en curso {conSigno(ultima, 1)} BTC</span>
+        <span>Última barra {conSigno(ultima, 2)} {mercado.base}</span>
         <span>{num(mercado.ritmo[mercado.ritmo.length - 1], 0)} barras/min</span>
       </div>
     </Panel>
@@ -241,12 +247,13 @@ function FlujoOrderFlow({ barras }: { barras: BarraFlujo[] }) {
 function MetricasEntrada() {
   const navegar = useNavegar();
   const { mercado } = useSistema();
-  const distancia = (mercado.precio - mercado.vwap) / mercado.atr;
+  const distancia = mercado.atr ? (mercado.precio - mercado.vwap) / mercado.atr : 0;
+  const dp = mercado.decimales;
   const filas = [
-    { k: 'VWAP', v: num(mercado.vwap, 1), n: `${conSigno(distancia, 2)} ATR` },
-    { k: 'CVD Delta', v: `${conSigno(mercado.cvd, 0)} BTC`, n: 'sesión' },
-    { k: 'ATR (5m)', v: `${num(mercado.atr, 1)} USD`, n: '14 periodos' },
-    { k: 'Open Interest', v: `${num(mercado.oi, 0)} BTC`, n: 'perpetuo' },
+    { k: 'VWAP', v: mercado.vwap ? num(mercado.vwap, dp) : '—', n: `${conSigno(distancia, 2)} ATR` },
+    { k: 'CVD Delta', v: `${conSigno(mercado.cvd, 2)} ${mercado.base}`, n: 'sesión' },
+    { k: 'ATR', v: mercado.atr ? num(mercado.atr, dp) : '—', n: '14 dollar bars' },
+    { k: 'Open Interest', v: mercado.oi ? `${num(mercado.oi, 0)} ${mercado.base}` : '—', n: 'perpetuo' },
   ];
   return (
     <Panel titulo="Métricas de Entrada" icono={Database} conector="der" onClick={() => navegar('datos')} cuerpo="px-4 py-2" accion={<span className="font-mono text-[9.5px] text-plata-500">Features</span>}>

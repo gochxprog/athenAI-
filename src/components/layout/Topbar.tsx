@@ -15,7 +15,7 @@ export default function Topbar({ titulo, seccion }: { titulo: string; seccion: s
   const conError = feeds.feeds.some((f) => f.conexion === 'error');
   const detenido = !total || feeds.feeds.every((f) => f.conexion === 'detenido');
   const texto = detenido ? 'Sin conexión' : vivos === total ? 'En vivo' : vivos > 0 ? `En vivo ${vivos}/${total}` : conError ? 'Error de conexión' : 'Conectando';
-  const fuente = feeds.proveedor ? NOMBRE_PROVEEDOR[feeds.proveedor] : '';
+  const fuente = feeds.proveedores.map((p) => NOMBRE_PROVEEDOR[p]).join(' + ');
 
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-borde-suave bg-black/85 pl-16 pr-4 backdrop-blur-xl md:px-6">

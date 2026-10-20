@@ -9,7 +9,8 @@ import type { ConfigCentro, EntradaRegistro, EstadoFeed, MensajeAlMotor, Mensaje
 type Oyente = (estado: EstadoGrafico, msProceso: number) => void;
 
 export interface EstadoFeeds {
-  proveedor: Proveedor | null;
+  /** Fuentes en uso (una por cada tipo de activo asignado). */
+  proveedores: Proveedor[];
   visible: string | null;
   feeds: EstadoFeed[];
   enCola: number;
@@ -20,8 +21,7 @@ type OyenteFeeds = (f: EstadoFeeds, registro: readonly EntradaRegistro[]) => voi
 const CLAVE = 'athenai.centro-de-datos';
 
 export const CONFIG_POR_DEFECTO: ConfigCentro = {
-  proveedor: 'binance',
-  simbolos: ['BTCUSDT'],
+  activos: [{ simbolo: 'BTCUSDT', proveedor: 'binance' }],
   guardar: true,
   binance: { rest: BINANCE_REST, ws: BINANCE_WS },
   urus: { baseUrl: 'http://localhost:3000' },
@@ -36,8 +36,13 @@ export interface ConfigGuardada {
 function leerConfig(): ConfigGuardada {
   try {
     const x = JSON.parse(localStorage.getItem(CLAVE) ?? 'null') as ConfigGuardada | null;
-    if (x?.config?.proveedor) {
-      const c = x.config;
+    if (x?.config) {
+      // Configuraciones antiguas: una sola fuente para todos los activos.
+      const viejo = x.config as unknown as { proveedor?: Proveedor; simbolos?: string[] };
+      const activos = x.config.activos ?? (viejo.proveedor && viejo.simbolos ? viejo.simbolos.map((simbolo) => ({ simbolo, proveedor: viejo.proveedor! })) : CONFIG_POR_DEFECTO.activos);
+      const c = { ...x.config, activos };
+      delete (c as { proveedor?: unknown }).proveedor;
+      delete (c as { simbolos?: unknown }).simbolos;
       return {
         recordarContrasena: !!x.recordarContrasena,
         config: { ...CONFIG_POR_DEFECTO, ...c, binance: { ...CONFIG_POR_DEFECTO.binance, ...c.binance }, urus: { ...CONFIG_POR_DEFECTO.urus, ...c.urus }, rithmic: { ...CONFIG_POR_DEFECTO.rithmic, ...c.rithmic } },
@@ -65,7 +70,7 @@ class MotorCliente {
   private ultimo: { estado: EstadoGrafico; ms: number } | null = null;
   private pendientes = new Map<number, { ok: (x: unknown) => void; mal: (e: Error) => void }>();
   private siguienteId = 1;
-  feeds: EstadoFeeds = { proveedor: null, visible: null, feeds: [], enCola: 0 };
+  feeds: EstadoFeeds = { proveedores: [], visible: null, feeds: [], enCola: 0 };
   registro: EntradaRegistro[] = [];
   guardada: ConfigGuardada = leerConfig();
   error: string | null = null;
@@ -85,7 +90,7 @@ class MotorCliente {
           for (const o of this.oyentes) o(m.estado, m.msProceso);
           break;
         case 'feeds':
-          this.feeds = { proveedor: m.proveedor, visible: m.visible, feeds: m.feeds, enCola: m.enCola };
+          this.feeds = { proveedores: m.proveedores, visible: m.visible, feeds: m.feeds, enCola: m.enCola };
           this.avisarFeeds();
           break;
         case 'registro':

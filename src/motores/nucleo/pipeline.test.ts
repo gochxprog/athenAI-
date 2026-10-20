@@ -88,3 +88,55 @@ describe('Pipeline de Order Flow con la fuente DEMO', () => {
     expect(pipeline.todasLasFilas().length).toBe(antes);
   });
 });
+
+describe('Pipeline · calidad de datos, liquidaciones y resumen', () => {
+  it('marca con hueco = 1 la primera fila tras un corte de conexión, y solo esa', () => {
+    const p = new Pipeline();
+    const gen = new GeneradorDemo(21);
+    const filas: FilaFeatures[] = [];
+    const correrMin = (min: number) => {
+      for (const m of gen.avanzar(min * 60_000, true)) filas.push(...p.procesar(m));
+    };
+    p.procesar({ tipo: 'conexion', estado: 'en-vivo' });
+    correrMin(10);
+    const antes = filas.length;
+    expect(filas.every((f) => f.valores.hueco === 0)).toBe(true);
+    p.procesar({ tipo: 'conexion', estado: 'reconectando', detalle: 'prueba' });
+    p.procesar({ tipo: 'conexion', estado: 'en-vivo' });
+    correrMin(10);
+    const despues = filas.slice(antes);
+    expect(despues.length).toBeGreaterThan(1);
+    expect(despues[0].valores.hueco).toBe(1);
+    expect(despues.slice(1).every((f) => f.valores.hueco === 0)).toBe(true);
+  });
+
+  it('las liquidaciones entran como evento y en las Features de su barra', () => {
+    const p = new Pipeline();
+    const gen = new GeneradorDemo(22);
+    const filas: FilaFeatures[] = [];
+    let liquidada = false;
+    for (let min = 0; min < 20; min += 1) {
+      for (const m of gen.avanzar(60_000, true)) {
+        filas.push(...p.procesar(m));
+        if (!liquidada && min === 5 && m.tipo === 'trades') {
+          p.procesar({ tipo: 'liquidacion', liq: { simbolo: 'BTCUSDT', t: p.mercado.ahora, precio: 84_000, cantidad: 2, lado: 'venta' } });
+          liquidada = true;
+        }
+      }
+    }
+    expect(p.mercado.eventos.ultimos(600).some((e) => e.tipo === 'liquidacion' && e.magnitud === 168_000)).toBe(true);
+    expect(filas.filter((f) => (f.valores.liq_largos_usd ?? 0) > 0).map((f) => f.valores.liq_largos_usd)).toEqual([168_000]);
+    expect(filas.every((f) => (f.valores.liq_cortos_usd ?? 0) === 0)).toBe(true);
+  });
+
+  it('el resumen por mercado tiene precio, ATR, flujo de barras y pools', () => {
+    const { pipeline } = correr(30, 23);
+    const r = pipeline.resumen();
+    expect(r.precio).toBeGreaterThan(0);
+    expect(r.atr).toBeGreaterThan(0);
+    expect(r.vwap).toBeGreaterThan(0);
+    expect(r.barrasFlujo.length).toBeGreaterThan(5);
+    for (const b of r.barrasFlujo) expect(b.compra + b.venta).toBeGreaterThan(0);
+    expect(r.aperturaSesion).toBeGreaterThan(0);
+  });
+});

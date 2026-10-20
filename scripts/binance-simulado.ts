@@ -30,11 +30,18 @@ const mercados = new Map<string, Mercado>(
   ].map(([s, tick, escala], i) => [s as string, { simbolo: s as string, tick: tick as number, escala: escala as number, gen: new GeneradorDemo(100 + i, Date.now()), bids: new Map(), asks: new Map(), u: 1_000, aggId: 1, ultimo: 0, oi: 80_000 }]),
 );
 
-const clientes = new Map<WebSocket, Set<string>>();
+// Igual que Binance desde abr-2026: /public = libro; /market = trades y liquidaciones; /stream (ruta antigua) solo /public.
+type Ruta = 'public' | 'market' | 'legado';
+const clientes = new Map<WebSocket, { ruta: Ruta; streams: Set<string> }>();
+const esPublico = (stream: string) => stream.includes('@depth');
 
 function enviar(stream: string, data: unknown) {
   const txt = JSON.stringify({ stream, data });
-  for (const [ws, streams] of clientes) if (streams.has(stream) && ws.readyState === ws.OPEN) ws.send(txt);
+  for (const [ws, c] of clientes) {
+    if (!c.streams.has(stream) || ws.readyState !== ws.OPEN) continue;
+    const permitido = c.ruta === 'market' ? !esPublico(stream) : esPublico(stream);
+    if (permitido) ws.send(txt);
+  }
 }
 
 function paso(m: Mercado, ms: number) {
@@ -44,6 +51,12 @@ function paso(m: Mercado, ms: number) {
         const p = redondear(t.price * m.escala, m.tick);
         m.ultimo = p;
         enviar(`${m.simbolo.toLowerCase()}@aggTrade`, { e: 'aggTrade', E: t.timestamp, s: m.simbolo, a: m.aggId++, p: String(p), q: (t.quantity / m.escala).toFixed(3), T: t.timestamp, m: t.buyerIsMaker });
+        // Liquidaciones ocasionales en el sentido del trade agresor.
+        if (Math.random() < 0.002) {
+          const lado = t.buyerIsMaker ? 'SELL' : 'BUY';
+          const q = ((0.2 + Math.random() * 3) / m.escala).toFixed(3);
+          enviar(`${m.simbolo.toLowerCase()}@forceOrder`, { e: 'forceOrder', E: t.timestamp, o: { s: m.simbolo, S: lado, o: 'LIMIT', f: 'IOC', q, p: String(p), ap: String(p), X: 'FILLED', l: q, z: q, T: t.timestamp } });
+        }
       }
     } else if (msg.tipo === 'libro') {
       // Diff entre el libro anterior y el nuevo (formato depthUpdate con U/u/pu).
@@ -108,11 +121,15 @@ const servidor = http.createServer((req, res) => {
   }
 });
 
-const wss = new WebSocketServer({ server: servidor, path: '/stream' });
-wss.on('connection', (ws, req) => {
-  const streams = new URL(req.url ?? '', 'http://x').searchParams.get('streams') ?? '';
-  clientes.set(ws, new Set(streams.split('/').filter(Boolean)));
-  ws.on('close', () => clientes.delete(ws));
+const wss = new WebSocketServer({ noServer: true });
+servidor.on('upgrade', (req, socket, head) => {
+  const url = new URL(req.url ?? '', 'http://x');
+  const ruta: Ruta | null = url.pathname === '/public/stream' ? 'public' : url.pathname === '/market/stream' ? 'market' : url.pathname === '/stream' ? 'legado' : null;
+  if (!ruta) return socket.destroy();
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    clientes.set(ws, { ruta, streams: new Set((url.searchParams.get('streams') ?? '').split('/').filter(Boolean)) });
+    ws.on('close', () => clientes.delete(ws));
+  });
 });
 
 servidor.listen(PUERTO, () => console.log(`Binance simulado en http://localhost:${PUERTO} (BTCUSDT, ETHUSDT)`));

@@ -5,6 +5,7 @@ import Encabezado from '@/components/ui/Encabezado';
 import Panel from '@/components/ui/Panel';
 import Insignia from '@/components/ui/Insignia';
 import OrderFlowChart, { NOMBRE_PROVEEDOR, useEstadoMotor, useFeeds } from '@/components/orderflow/OrderFlowChart';
+import ResumenMercados from '@/components/orderflow/ResumenMercados';
 import { descargarCsv, motorOrderFlow } from '@/motores/worker/motorCliente';
 import { DEFINICIONES_FEATURES } from '@/motores/nucleo/features';
 import type { EstadoGrafico } from '@/motores/nucleo/pipeline';
@@ -20,23 +21,27 @@ const NOMBRE_EVENTO: Record<TipoEvento, string> = {
   stoprun: 'Stop run',
   bigtrade: 'Big trade',
   'pool-barrido': 'Pool barrido',
+  liquidacion: 'Liquidación',
 };
 
 export default function OrderFlowView() {
   const { estado, msProceso } = useEstadoMotor();
   const [pestana, setPestana] = useState<Pestana>('eventos');
   const { feeds } = useFeeds();
+  const visibleFeed = feeds.feeds.find((f) => f.simbolo === feeds.visible) ?? feeds.feeds[0];
 
   return (
     <div className="space-y-4">
       <Encabezado
         modulo="Order Flow"
         titulo="Gráficos de Order Flow"
-        fuente={feeds.proveedor ? `${NOMBRE_PROVEEDOR[feeds.proveedor].toUpperCase()}${estado ? ` · ${estado.simbolo}` : ''}` : 'SIN FUENTE'}
+        fuente={visibleFeed ? `${NOMBRE_PROVEEDOR[visibleFeed.proveedor].toUpperCase()} · ${visibleFeed.simbolo}` : 'SIN FUENTE'}
         descripcion="Velas o Footprint, CVD, Open Interest, absorción, agotamiento, pools de liquidez (LHM), big trades, icebergs y stop runs, con el DOM al lado. Calculado por los motores de Urus en un proceso aparte; lo mismo que ves es lo que aprenden los modelos."
       >
         <Insignia variante="contorno">{estado ? `${num(estado.metricas.barrasCanonicas)} filas de Features` : 'Arrancando motor…'}</Insignia>
       </Encabezado>
+
+      <ResumenMercados />
 
       <Panel cuerpo="p-0" className="overflow-hidden">
         <div className="h-auto lg:h-[680px]">

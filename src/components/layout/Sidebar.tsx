@@ -23,7 +23,7 @@ export default function Sidebar({ activo, onSeleccion }: Props) {
     investigacion: { n: HIPOTESIS.length, e: 'activo' },
     estrategias: { n: ESTRATEGIAS.length, e: 'espera' },
     conocimiento: { n: PATRONES.length, e: 'activo' },
-    agentes: { n: AGENTES.length, e: 'activo' },
+    agentes: { n: AGENTES.filter((a) => a.real).length, e: 'activo' },
     paper: { n: BOTS.filter((b) => b.estado === 'Ejecutando').length, e: 'activo' },
     decisiones: { e: 'espera' },
     maquinas: { n: MAQUINAS.filter((m) => m.estado === 'Operativa').length, e: 'activo' },

@@ -1,14 +1,19 @@
-import type { EstadoGrafico } from '../nucleo/pipeline';
+import type { EstadoGrafico, ResumenFlujo } from '../nucleo/pipeline';
 import type { EstadoConexion, IdTemporalidad } from '../nucleo/tipos';
 import type { Proveedor, ResumenSimbolo } from '../almacen/almacen';
 import type { CredencialesRithmic } from '../fuentes/rithmicPuente';
 
 export type { Proveedor, ResumenSimbolo };
 
-/** Configuración del Centro de datos: UNA fuente activa y los activos que aprende. */
-export interface ConfigCentro {
+/** Configuración del Centro de datos: activos que aprende, cada uno con su fuente. */
+export interface ActivoConfig {
+  simbolo: string;
   proveedor: Proveedor;
-  simbolos: string[];
+}
+
+export interface ConfigCentro {
+  /** Activos que aprende, cada uno con su fuente (se pueden mezclar: BTC de Binance + NQ de Rithmic). */
+  activos: ActivoConfig[];
   /** Guardar las Features en la "carpeta" (base IndexedDB) de la fuente. */
   guardar: boolean;
   binance: { rest: string; ws: string };
@@ -18,6 +23,7 @@ export interface ConfigCentro {
 
 export interface EstadoFeed {
   simbolo: string;
+  proveedor: Proveedor;
   conexion: EstadoConexion;
   detalle: string;
   tradesPorSeg: number;
@@ -28,6 +34,17 @@ export interface EstadoFeed {
   tickSize: number;
   dollarBarUsd: number;
   calibrado: boolean;
+  /** Las Features de este activo se están guardando en su carpeta. */
+  guardando: boolean;
+  /** Cortes de conexión desde que se aplicó la configuración. */
+  cortes: number;
+  /** Precio muestreado cada segundo (últimos 5 min). */
+  historial: number[];
+  /** Dollar bars por minuto, ventanas de 10 s (últimos 5 min). */
+  ritmo: number[];
+  /** Cambio del CVD en el último minuto. */
+  cvdVelocidad: number | null;
+  resumen: ResumenFlujo;
 }
 
 export interface EntradaRegistro {
@@ -50,7 +67,7 @@ export type MensajeAlMotor =
 /** Worker → UI */
 export type MensajeDelMotor =
   | { tipo: 'estado'; estado: EstadoGrafico; msProceso: number }
-  | { tipo: 'feeds'; proveedor: Proveedor | null; visible: string | null; feeds: EstadoFeed[]; enCola: number }
+  | { tipo: 'feeds'; proveedores: Proveedor[]; visible: string | null; feeds: EstadoFeed[]; enCola: number }
   | { tipo: 'registro'; entrada: EntradaRegistro }
   | { tipo: 'respuesta'; id: number; ok: boolean; datos?: unknown; error?: string }
   | { tipo: 'error'; mensaje: string };

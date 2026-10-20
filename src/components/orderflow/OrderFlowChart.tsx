@@ -73,6 +73,7 @@ export default function OrderFlowChart({ estado }: { estado: EstadoGrafico | nul
   const [capas, setCapas] = useState<CapasGrafico>({ footprint: false, cvd: true, oi: true, absorcion: true, lhm: true, eventos: true });
   const { feeds } = useFeeds();
   const navegar = useNavegar();
+  const visibleFeed = feeds.feeds.find((f) => f.simbolo === feeds.visible) ?? feeds.feeds[0];
 
   useEffect(() => {
     motorOrderFlow.vista(capas.footprint ? 140 : 260, capas.footprint, capas.footprint ? 70 : 0);
@@ -130,7 +131,7 @@ export default function OrderFlowChart({ estado }: { estado: EstadoGrafico | nul
             </div>
           )}
           <button onClick={() => navegar('datos')} className="flex items-center gap-1.5 rounded-lg border border-borde px-2.5 py-1 text-[10.5px] text-plata-200 hover:border-plata-400 hover:text-white" title="Cambiar fuente y activos en el Centro de datos">
-            <Database size={11} /> {feeds.proveedor ? NOMBRE_PROVEEDOR[feeds.proveedor] : 'Centro de datos'}
+            <Database size={11} /> {visibleFeed ? NOMBRE_PROVEEDOR[visibleFeed.proveedor] : 'Centro de datos'}
             {feeds.feeds.length === 1 && <span className="font-mono text-plata-400">· {feeds.feeds[0].simbolo}</span>}
           </button>
         </div>

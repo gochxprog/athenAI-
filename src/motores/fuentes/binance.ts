@@ -4,14 +4,20 @@
 //   REST  {rest}/fapi/v1/ticker/24hr?symbol=S   → volumen 24 h (calibra el tamaño de las dollar bars)
 //   REST  {rest}/fapi/v1/depth?symbol=S&limit=1000 → snapshot del libro
 //   REST  {rest}/fapi/v1/openInterest?symbol=S  → Open Interest (cada 5 s)
-//   WS    {ws}/stream?streams=s@aggTrade/s@depth@100ms/…
+//   WS    {ws}/public/stream?streams=s@depth@100ms/…          → libro (datos de alta frecuencia)
+//   WS    {ws}/market/stream?streams=s@aggTrade/s@forceOrder/… → trades y liquidaciones
+//
+// Desde el 23-abr-2026 Binance separa los WebSockets de futuros en rutas /public, /market y /private.
+// La ruta antigua ({ws}/stream) solo entrega los streams de /public: el libro llega pero los trades NO.
+// Por eso se abren dos conexiones. Si un endpoint propio (simulador, proxy) no tiene las rutas nuevas,
+// cada conexión vuelve sola a la ruta antigua cuando no recibe nada.
 //
 // Libro sincronizado con el procedimiento oficial de Binance Futures: se guardan los diffs mientras llega el
 // snapshot, se descartan los que tienen u < lastUpdateId, el primero debe cumplir U ≤ lastUpdateId ≤ u y cada
 // diff siguiente debe encadenar (pu === u anterior). Si se rompe la cadena se resincroniza.
 import { OrderBookEngine } from '../urus/order-flow/order-book';
 import { Backoff } from '../urus/realtime/backoff';
-import type { AggTrade, MensajeMercado } from '../nucleo/tipos';
+import type { AggTrade, Liquidacion, MensajeMercado } from '../nucleo/tipos';
 
 export const BINANCE_REST = 'https://fapi.binance.com';
 export const BINANCE_WS = 'wss://fstream.binance.com';
@@ -56,6 +62,34 @@ interface DiffBinance {
   a: [string, string][];
 }
 
+interface LiquidacionBinance {
+  e: 'forceOrder';
+  E: number;
+  o: { s: string; S: 'BUY' | 'SELL'; q: string; p: string; ap: string; z: string; T: number };
+}
+
+export function convertirLiquidacion(d: LiquidacionBinance): Liquidacion | null {
+  const precio = Number(d.o?.ap) || Number(d.o?.p);
+  const cantidad = Number(d.o?.z) || Number(d.o?.q);
+  if (!Number.isFinite(precio) || !Number.isFinite(cantidad) || precio <= 0 || cantidad <= 0) return null;
+  return { simbolo: d.o.s, t: d.o.T || d.E, precio, cantidad, lado: d.o.S === 'BUY' ? 'compra' : 'venta' };
+}
+
+/** Canal de WebSocket: el libro va por /public; trades y liquidaciones por /market. */
+export type Canal = 'libro' | 'trades';
+
+interface Conexion {
+  sock: SocketMinimo | null;
+  /** Ruta antigua ({ws}/stream) en lugar de /public o /market. */
+  legado: boolean;
+  abiertoEn: number;
+  ultimo: number;
+  /** Mensajes recibidos por esta conexión (si es 0 tras abrir, se prueba la otra ruta). */
+  mensajes: number;
+  reintento: ReturnType<typeof setTimeout> | null;
+  backoff: Backoff;
+}
+
 interface AggTradeBinance {
   e: 'aggTrade';
   s: string;
@@ -95,14 +129,18 @@ export function convertirAggTrade(d: AggTradeBinance): AggTrade | null {
 const aTuplas = (xs: [string, string][]): [number, number][] => xs.map(([p, q]) => [Number(p), Number(q)]);
 
 export class FuenteBinance {
-  private socket: SocketMinimo | null = null;
   private detenida = false;
   private libros = new Map<string, EstadoLibro>();
   private lotes = new Map<string, AggTrade[]>();
   private timers: ReturnType<typeof setInterval>[] = [];
-  private reintento: ReturnType<typeof setTimeout> | null = null;
-  private ultimoMensaje = 0;
-  private readonly backoff = new Backoff({ baseMs: 1_000, maxMs: 30_000, jitter: 'equal', floorMs: 500 });
+  private reintentoInfo: ReturnType<typeof setTimeout> | null = null;
+  private readonly backoffInfo = new Backoff({ baseMs: 1_000, maxMs: 30_000, jitter: 'equal', floorMs: 500 });
+  private readonly conexiones: Record<Canal, Conexion> = {
+    libro: this.nuevaConexion(),
+    trades: this.nuevaConexion(),
+  };
+  /** Último estado anunciado por símbolo (solo se emiten cambios). */
+  private anunciado = new Map<string, string>();
   private readonly rest: string;
   private readonly ws: string;
   private readonly fetchImpl: typeof fetch;
@@ -115,32 +153,39 @@ export class FuenteBinance {
     this.simbolos = [...new Set(o.simbolos.map((s) => s.toUpperCase()))];
   }
 
+  private nuevaConexion(): Conexion {
+    return { sock: null, legado: false, abiertoEn: 0, ultimo: 0, mensajes: 0, reintento: null, backoff: new Backoff({ baseMs: 1_000, maxMs: 30_000, jitter: 'equal', floorMs: 500 }) };
+  }
+
   /** Diagnóstico de la sincronización del libro (para el Centro de datos y las pruebas). */
   estadoLibro(simbolo: string): { listo: boolean; resincronizaciones: number; ultimoU: number | null } | null {
     const l = this.libros.get(simbolo);
     return l ? { listo: l.listo, resincronizaciones: l.resincronizaciones, ultimoU: l.ultimoU } : null;
   }
 
+  /** Ruta en uso por canal (diagnóstico). */
+  rutas(): Record<Canal, string> {
+    const r = (c: Canal) => (this.conexiones[c].legado ? '/stream' : c === 'libro' ? '/public/stream' : '/market/stream');
+    return { libro: r('libro'), trades: r('trades') };
+  }
+
   async iniciar(): Promise<void> {
     this.detenida = false;
-    for (const s of this.simbolos) this.o.onMensaje(s, { tipo: 'conexion', estado: 'conectando', detalle: 'Binance USD-M Futures' });
+    for (const s of this.simbolos) this.anunciar(s, 'conectando', 'Binance USD-M Futures');
     try {
       await this.cargarInfo();
     } catch (e) {
-      for (const s of this.simbolos) this.o.onMensaje(s, { tipo: 'conexion', estado: 'error', detalle: `No se pudo leer exchangeInfo: ${e instanceof Error ? e.message : e}` });
-      this.programarReintento();
+      for (const s of this.simbolos) this.anunciar(s, 'error', `No se pudo leer exchangeInfo (REST ${this.rest}): ${e instanceof Error ? e.message : e}`);
+      this.programarInfo();
       return;
     }
-    this.abrirSocket();
+    this.abrir('libro');
+    this.abrir('trades');
     const cadaVista = this.o.cadaVistaMs ?? 250;
     this.timers.push(setInterval(() => this.vaciarLotes(), 100));
     this.timers.push(setInterval(() => this.publicarLibros(), cadaVista));
     this.timers.push(setInterval(() => void this.leerOi(), 5_000));
-    this.timers.push(
-      setInterval(() => {
-        if (this.ultimoMensaje && Date.now() - this.ultimoMensaje > 20_000) this.reconectar('Sin mensajes desde hace 20 s');
-      }, 5_000),
-    );
+    this.timers.push(setInterval(() => this.vigilar(), 5_000));
     void this.leerOi();
   }
 
@@ -148,14 +193,38 @@ export class FuenteBinance {
     this.detenida = true;
     for (const t of this.timers) clearInterval(t);
     this.timers = [];
-    if (this.reintento) clearTimeout(this.reintento);
-    this.reintento = null;
-    this.socket?.close();
-    this.socket = null;
-    for (const s of this.simbolos) this.o.onMensaje(s, { tipo: 'conexion', estado: 'detenido' });
+    if (this.reintentoInfo) clearTimeout(this.reintentoInfo);
+    this.reintentoInfo = null;
+    for (const c of ['libro', 'trades'] as Canal[]) {
+      const x = this.conexiones[c];
+      if (x.reintento) clearTimeout(x.reintento);
+      x.reintento = null;
+      const so = x.sock;
+      x.sock = null;
+      so?.close();
+    }
+    for (const s of this.simbolos) this.anunciar(s, 'detenido', '');
   }
 
   // ---------------------------------------------------------------------------
+
+  private anunciar(s: string, estado: 'conectando' | 'en-vivo' | 'reconectando' | 'sin-datos' | 'error' | 'detenido', detalle: string): void {
+    const clave = `${estado}|${detalle}`;
+    if (this.anunciado.get(s) === clave) return;
+    this.anunciado.set(s, clave);
+    this.o.onMensaje(s, { tipo: 'conexion', estado, detalle });
+  }
+
+  /** Estado combinado de los dos canales para cada símbolo válido. */
+  private actualizarEstado(): void {
+    const l = this.conexiones.libro;
+    const t = this.conexiones.trades;
+    for (const s of this.libros.keys()) {
+      if (t.mensajes > 0 && l.mensajes > 0) this.anunciar(s, 'en-vivo', `Binance USD-M Futures · libro ${this.rutas().libro} · trades ${this.rutas().trades}`);
+      else if (l.mensajes > 0 && t.sock && Date.now() - t.abiertoEn > 8_000) this.anunciar(s, 'sin-datos', `Llega el libro pero no los trades (${this.rutas().trades}). Probando otra ruta…`);
+      else if (t.mensajes > 0 && l.sock && Date.now() - l.abiertoEn > 8_000) this.anunciar(s, 'sin-datos', `Llegan los trades pero no el libro (${this.rutas().libro}). Probando otra ruta…`);
+    }
+  }
 
   private async json<T>(ruta: string): Promise<T> {
     const r = await this.fetchImpl(`${this.rest}${ruta}`);
@@ -168,7 +237,7 @@ export class FuenteBinance {
     for (const s of this.simbolos) {
       const def = info.symbols.find((x) => x.symbol === s);
       if (!def) {
-        this.o.onMensaje(s, { tipo: 'conexion', estado: 'error', detalle: `${s} no existe en Binance Futures` });
+        this.anunciar(s, 'error', `${s} no existe en Binance Futures`);
         continue;
       }
       const tick = Number(def.filters.find((f) => f.filterType === 'PRICE_FILTER')?.tickSize ?? 0.1);
@@ -196,37 +265,77 @@ export class FuenteBinance {
     }
   }
 
-  private abrirSocket(): void {
+  private url(canal: Canal): string | null {
+    const validos = [...this.libros.keys()].map((s) => s.toLowerCase());
+    if (!validos.length) return null;
+    const streams = canal === 'libro' ? validos.map((s) => `${s}@depth@100ms`) : validos.flatMap((s) => [`${s}@aggTrade`, `${s}@forceOrder`]);
+    const x = this.conexiones[canal];
+    const ruta = x.legado ? '/stream' : canal === 'libro' ? '/public/stream' : '/market/stream';
+    return `${this.ws}${ruta}?streams=${streams.join('/')}`;
+  }
+
+  private abrir(canal: Canal): void {
     if (this.detenida) return;
-    const validos = [...this.libros.keys()];
-    if (!validos.length) return;
-    const streams = validos.flatMap((s) => [`${s.toLowerCase()}@aggTrade`, `${s.toLowerCase()}@depth@100ms`]).join('/');
-    const url = `${this.ws}/stream?streams=${streams}`;
+    const url = this.url(canal);
+    if (!url) return;
+    const x = this.conexiones[canal];
     const sock = this.o.crearSocket ? this.o.crearSocket(url) : (new WebSocket(url) as unknown as SocketMinimo);
-    this.socket = sock;
+    x.sock = sock;
+    x.abiertoEn = Date.now();
+    x.ultimo = 0;
+    x.mensajes = 0;
     sock.onopen = () => {
-      this.backoff.reset();
-      for (const s of validos) {
-        const l = this.libros.get(s)!;
-        l.listo = false;
-        l.pendientes = [];
-        l.ultimoU = null;
-        l.snapshotId = null;
-        void this.pedirSnapshot(s);
+      x.abiertoEn = Date.now();
+      if (canal === 'libro') {
+        for (const [s, l] of this.libros) {
+          l.listo = false;
+          l.pendientes = [];
+          l.ultimoU = null;
+          l.snapshotId = null;
+          void this.pedirSnapshot(s);
+        }
       }
     };
-    sock.onmessage = (ev) => this.alMensaje(ev.data);
+    sock.onmessage = (ev) => {
+      if (x.sock !== sock) return;
+      x.ultimo = Date.now();
+      x.mensajes += 1;
+      if (x.mensajes === 1) {
+        x.backoff.reset();
+        this.actualizarEstado();
+      }
+      this.alMensaje(ev.data);
+    };
     sock.onclose = () => {
-      if (this.socket === sock) this.reconectar('Conexión WebSocket cerrada');
+      if (x.sock === sock) this.reconectar(canal, `Conexión ${canal === 'libro' ? 'del libro' : 'de trades'} cerrada`);
     };
     sock.onerror = () => {
-      for (const s of validos) this.o.onMensaje(s, { tipo: 'conexion', estado: 'reconectando', detalle: 'Error en el WebSocket' });
+      // onclose llega después y reconecta.
     };
+  }
+
+  /** Vigilancia cada 5 s: canales mudos, ruta equivocada, estado combinado. */
+  private vigilar(): void {
+    const ahora = Date.now();
+    for (const c of ['libro', 'trades'] as Canal[]) {
+      const x = this.conexiones[c];
+      if (!x.sock) continue;
+      // Una conexión que nunca recibió nada en 10 s: probablemente la ruta no existe en ese servidor.
+      if (x.mensajes === 0 && ahora - x.abiertoEn > 10_000) {
+        x.legado = !x.legado;
+        this.reconectar(c, `Sin datos por ${x.legado ? 'la ruta nueva' : 'la ruta antigua'}; probando ${this.rutas()[c]}`, true);
+        continue;
+      }
+      // Libro a 100 ms: 20 s sin nada es un corte. Trades: 90 s (activos poco líquidos).
+      const limite = c === 'libro' ? 20_000 : 90_000;
+      if (x.mensajes > 0 && ahora - x.ultimo > limite) this.reconectar(c, `Sin mensajes ${c === 'libro' ? 'del libro' : 'de trades'} desde hace ${Math.round((ahora - x.ultimo) / 1000)} s`);
+    }
+    this.actualizarEstado();
   }
 
   /** Procesa un frame del stream combinado. Público para pruebas. */
   alMensaje(bruto: unknown): void {
-    let env: { stream?: string; data?: AggTradeBinance | DiffBinance };
+    let env: { stream?: string; data?: AggTradeBinance | DiffBinance | LiquidacionBinance };
     try {
       env = typeof bruto === 'string' ? JSON.parse(bruto) : (bruto as typeof env);
     } catch {
@@ -234,17 +343,15 @@ export class FuenteBinance {
     }
     const d = env?.data;
     if (!d || typeof d !== 'object') return;
-    // Primer mensaje tras (re)conectar: todos los símbolos pasan a "en vivo".
-    if (this.ultimoMensaje === 0) for (const s of this.libros.keys()) this.o.onMensaje(s, { tipo: 'conexion', estado: 'en-vivo', detalle: 'Binance USD-M Futures' });
-    this.ultimoMensaje = Date.now();
     if (d.e === 'aggTrade') {
       const t = convertirAggTrade(d);
       if (!t) return;
-      const lote = this.lotes.get(t.symbol);
-      if (!lote) return;
-      lote.push(t);
+      this.lotes.get(t.symbol)?.push(t);
     } else if (d.e === 'depthUpdate') {
       this.aplicarDiff(d);
+    } else if (d.e === 'forceOrder') {
+      const liq = convertirLiquidacion(d);
+      if (liq && this.libros.has(liq.simbolo)) this.o.onMensaje(liq.simbolo, { tipo: 'liquidacion', liq });
     }
   }
 
@@ -286,7 +393,7 @@ export class FuenteBinance {
     l.ultimoU = null;
     l.snapshotId = null;
     l.resincronizaciones += 1;
-    this.o.onMensaje(s, { tipo: 'conexion', estado: 'reconectando', detalle: `Resincronizando libro: ${motivo}` });
+    this.anunciar(s, 'reconectando', `Resincronizando libro: ${motivo}`);
     void this.pedirSnapshot(s);
   }
 
@@ -319,8 +426,10 @@ export class FuenteBinance {
         l.ultimoU = x.u;
       }
       if (l.ultimoU === null) l.snapshotId = snap.lastUpdateId;
+      this.anunciado.delete(s);
+      this.actualizarEstado();
     } catch (e) {
-      this.o.onMensaje(s, { tipo: 'conexion', estado: 'error', detalle: `Snapshot del libro: ${e instanceof Error ? e.message : e}` });
+      this.anunciar(s, 'error', `Snapshot del libro: ${e instanceof Error ? e.message : e}`);
       setTimeout(() => void this.pedirSnapshot(s), 3_000);
     } finally {
       l.pidiendoSnapshot = false;
@@ -354,29 +463,90 @@ export class FuenteBinance {
     }
   }
 
-  private reconectar(motivo: string): void {
+  private reconectar(canal: Canal, motivo: string, inmediato = false): void {
     if (this.detenida) return;
-    const viejo = this.socket;
-    this.socket = null;
+    const x = this.conexiones[canal];
+    const viejo = x.sock;
+    x.sock = null;
     viejo?.close();
-    this.ultimoMensaje = 0;
-    for (const s of this.libros.keys()) this.o.onMensaje(s, { tipo: 'conexion', estado: 'reconectando', detalle: motivo });
-    this.programarReintento();
+    x.mensajes = 0;
+    for (const s of this.libros.keys()) this.anunciar(s, 'reconectando', motivo);
+    if (x.reintento) return;
+    x.reintento = setTimeout(
+      () => {
+        x.reintento = null;
+        this.abrir(canal);
+      },
+      inmediato ? 0 : x.backoff.next(),
+    );
   }
 
-  private programarReintento(): void {
-    if (this.detenida || this.reintento) return;
-    const espera = this.backoff.next();
-    this.reintento = setTimeout(() => {
-      this.reintento = null;
-      if (this.libros.size === 0) void this.iniciarDeNuevo();
-      else this.abrirSocket();
-    }, espera);
+  private programarInfo(): void {
+    if (this.detenida || this.reintentoInfo) return;
+    this.reintentoInfo = setTimeout(() => {
+      this.reintentoInfo = null;
+      for (const t of this.timers) clearInterval(t);
+      this.timers = [];
+      void this.iniciar();
+    }, this.backoffInfo.next());
+  }
+}
+
+export interface ResultadoPrueba {
+  paso: string;
+  ok: boolean;
+  detalle: string;
+}
+
+/**
+ * Diagnóstico de la conexión a Binance desde ESTE navegador: REST, libro por /public y trades por /market
+ * (y la ruta antigua como referencia). Escucha unos segundos y cuenta mensajes.
+ */
+export async function diagnosticarBinance(o: { rest?: string; ws?: string; simbolo: string; segundos?: number; crearSocket?: (url: string) => SocketMinimo; fetchImpl?: typeof fetch }): Promise<ResultadoPrueba[]> {
+  const rest = (o.rest || BINANCE_REST).replace(/\/+$/, '');
+  const ws = (o.ws || BINANCE_WS).replace(/\/+$/, '');
+  const s = o.simbolo.toLowerCase();
+  const fetchImpl = o.fetchImpl ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
+  const out: ResultadoPrueba[] = [];
+
+  const t0 = Date.now();
+  try {
+    const r = await fetchImpl(`${rest}/fapi/v1/ticker/24hr?symbol=${o.simbolo.toUpperCase()}`);
+    const j = (await r.json().catch(() => ({}))) as { lastPrice?: string; msg?: string };
+    out.push(r.ok ? { paso: 'REST (precio 24 h)', ok: true, detalle: `${Date.now() - t0} ms · último precio ${j.lastPrice}` } : { paso: 'REST (precio 24 h)', ok: false, detalle: `HTTP ${r.status} ${j.msg ?? ''}`.trim() });
+  } catch (e) {
+    out.push({ paso: 'REST (precio 24 h)', ok: false, detalle: `Sin respuesta (${e instanceof Error ? e.message : e}). Puede ser bloqueo de red, VPN o CORS.` });
   }
 
-  private async iniciarDeNuevo(): Promise<void> {
-    for (const t of this.timers) clearInterval(t);
-    this.timers = [];
-    await this.iniciar();
-  }
+  const escuchar = (nombre: string, url: string, tipo: string) =>
+    new Promise<ResultadoPrueba>((ok) => {
+      let n = 0;
+      let abierto = false;
+      let sock: SocketMinimo;
+      try {
+        sock = o.crearSocket ? o.crearSocket(url) : (new WebSocket(url) as unknown as SocketMinimo);
+      } catch (e) {
+        ok({ paso: nombre, ok: false, detalle: `No se pudo abrir: ${e instanceof Error ? e.message : e}` });
+        return;
+      }
+      sock.onopen = () => (abierto = true);
+      sock.onmessage = (ev) => {
+        if (typeof ev.data === 'string' && ev.data.includes(`"e":"${tipo}"`)) n += 1;
+      };
+      sock.onerror = () => undefined;
+      sock.onclose = () => undefined;
+      setTimeout(() => {
+        sock.close();
+        ok({ paso: nombre, ok: n > 0, detalle: n > 0 ? `${n} mensajes en ${o.segundos ?? 6} s` : abierto ? 'Conectó pero no llegó ningún dato' : 'No conectó' });
+      }, (o.segundos ?? 6) * 1000);
+    });
+
+  out.push(
+    ...(await Promise.all([
+      escuchar('Libro · /public', `${ws}/public/stream?streams=${s}@depth@100ms`, 'depthUpdate'),
+      escuchar('Trades · /market', `${ws}/market/stream?streams=${s}@aggTrade`, 'aggTrade'),
+      escuchar('Trades · ruta antigua /stream (referencia)', `${ws}/stream?streams=${s}@aggTrade`, 'aggTrade'),
+    ])),
+  );
+  return out;
 }

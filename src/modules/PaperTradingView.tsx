@@ -16,7 +16,8 @@ import { conSigno, num, usd } from '@/lib/format';
 const DIAS_REQUERIDOS = 60;
 
 export default function PaperTradingView() {
-  const { mercado } = useSistema();
+  // Las posiciones de Paper aún son DEMO (BTC): se valoran con el precio del simulador hasta el Bloque E.
+  const { mercadoDemo: mercado } = useSistema();
   const pnlAbierto = POSICIONES.reduce((a, p) => a + (mercado.precio - p.entrada) * p.tamaño * (p.lado === 'Long' ? 1 : -1), 0);
   const pnlHoyCerrado = BOTS.reduce((a, b) => a + b.pnlHoy, 0);
   const capital = CUENTA_PAPER.capitalInicial + CUENTA_PAPER.realizadoHistorico + pnlAbierto;

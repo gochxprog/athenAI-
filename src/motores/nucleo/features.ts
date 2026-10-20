@@ -11,7 +11,7 @@ import type { EventoMotor } from './tipos';
 export interface DefinicionFeature {
   clave: string;
   nombre: string;
-  grupo: 'Flujo' | 'Footprint' | 'Absorción / Agotamiento' | 'Big trades' | 'Icebergs / Stop runs' | 'Open Interest' | 'Libro (DOM)' | 'Liquidez (LHM)' | 'Precio';
+  grupo: 'Calidad de datos' | 'Flujo' | 'Footprint' | 'Absorción / Agotamiento' | 'Big trades' | 'Icebergs / Stop runs' | 'Open Interest' | 'Libro (DOM)' | 'Liquidez (LHM)' | 'Precio';
   motor: string;
   descripcion: string;
 }
@@ -42,6 +42,8 @@ export const DEFINICIONES_FEATURES: DefinicionFeature[] = [
   { clave: 'icebergs_ask', nombre: 'Icebergs en el ask', grupo: 'Icebergs / Stop runs', motor: 'IcebergTracker (Urus)', descripcion: 'Icebergs vendedores confirmados durante la barra' },
   { clave: 'stoprun_alto', nombre: 'Stop run de máximos', grupo: 'Icebergs / Stop runs', motor: 'StopRunSeries (Urus)', descripcion: 'Barridos de máximos confirmados durante la barra' },
   { clave: 'stoprun_bajo', nombre: 'Stop run de mínimos', grupo: 'Icebergs / Stop runs', motor: 'StopRunSeries (Urus)', descripcion: 'Barridos de mínimos confirmados durante la barra' },
+  { clave: 'liq_largos_usd', nombre: 'Liquidaciones de largos', grupo: 'Open Interest', motor: 'Binance forceOrder', descripcion: 'Nocional (USD) de largos liquidados durante la barra (presión vendedora forzada)' },
+  { clave: 'liq_cortos_usd', nombre: 'Liquidaciones de cortos', grupo: 'Open Interest', motor: 'Binance forceOrder', descripcion: 'Nocional (USD) de cortos liquidados durante la barra (presión compradora forzada)' },
   { clave: 'oi_delta_pct', nombre: 'ΔOI %', grupo: 'Open Interest', motor: 'OpenInterest (Urus)', descripcion: 'Cambio porcentual del interés abierto en la barra' },
   { clave: 'oi_delta_z', nombre: 'ΔOI z robusto', grupo: 'Open Interest', motor: 'OpenInterest (Urus)', descripcion: 'z-score robusto (mediana/MAD) del ΔOI' },
   { clave: 'oi_cuadrante', nombre: 'Cuadrante precio/OI', grupo: 'Open Interest', motor: 'OpenInterest (Urus)', descripcion: '1 longs nuevos · 2 cobertura shorts · 3 shorts nuevos · 4 liquidación longs · 0 neutral' },
@@ -51,6 +53,7 @@ export const DEFINICIONES_FEATURES: DefinicionFeature[] = [
   { clave: 'pool_ask_dist_atr', nombre: 'Pool ask más cercano', grupo: 'Liquidez (LHM)', motor: 'LiquidityPoolEngine (Urus)', descripcion: 'Distancia al pool vendedor más cercano / ATR' },
   { clave: 'pool_bid_dist_atr', nombre: 'Pool bid más cercano', grupo: 'Liquidez (LHM)', motor: 'LiquidityPoolEngine (Urus)', descripcion: 'Distancia al pool comprador más cercano / ATR' },
   { clave: 'pools_barridos', nombre: 'Pools barridos', grupo: 'Liquidez (LHM)', motor: 'LiquidityPoolEngine (Urus)', descripcion: 'Pools de liquidez absorbidos por el precio durante la barra' },
+  { clave: 'hueco', nombre: 'Hueco de datos', grupo: 'Calidad de datos', motor: 'Vigía', descripcion: '1 si durante la barra se cortó la conexión o se resincronizó el libro: no entrenar con esta fila sin revisarla' },
 ];
 
 export interface FilaFeatures {
@@ -130,6 +133,8 @@ export function construirFila(b: BarraAnalizada, previas: readonly BarraAnalizad
   v.stoprun_alto = sumar('stoprun', 'compra', 'n');
   v.stoprun_bajo = sumar('stoprun', 'venta', 'n');
   v.pools_barridos = eventos.filter((e) => e.tipo === 'pool-barrido').length;
+  v.liq_largos_usd = sumar('liquidacion', 'venta', 'magnitud');
+  v.liq_cortos_usd = sumar('liquidacion', 'compra', 'magnitud');
 
   // Open Interest: motor de Urus sobre una ventana ACOTADA de barras (Urus recalculaba toda la historia).
   let puntoOi: OpenInterestCandlePoint | null = null;

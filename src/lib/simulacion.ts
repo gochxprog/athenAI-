@@ -10,6 +10,18 @@ export interface BarraFlujo {
 }
 
 export interface EstadoMercado {
+  /** Activo que se muestra (el visible en el Centro de datos / Order Flow). */
+  simbolo: string;
+  /** Unidad del activo (BTC, ETH…). */
+  base: string;
+  /** Fuente de los datos ("Binance Futures", "Simulación"…) o null si no hay ninguna activa. */
+  fuente: string | null;
+  /** Decimales de precio del activo. */
+  decimales: number;
+  /** true si los datos vienen del motor real (Centro de datos); false si son del simulador DEMO. */
+  real: boolean;
+  /** Spread actual del libro (null sin libro). */
+  spread: number | null;
   precio: number;
   apertura24h: number;
   vwap: number;
@@ -102,6 +114,12 @@ export class SimuladorDemo {
     this.pruebaIds = [1229, 1228, 1227, 1225, 1224, 1223, 1221, 1220, 1218, 1216, 1215, 1214];
 
     this.mercado = {
+      simbolo: 'BTCUSDT',
+      base: 'BTC',
+      fuente: 'Simulación DEMO',
+      decimales: 1,
+      real: false,
+      spread: 0.1,
       precio: PRECIO_REFERENCIA,
       apertura24h: 84_105,
       vwap: 84_655,

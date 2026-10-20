@@ -8,7 +8,7 @@ import { StopRunSeries, type StopRunTrade } from '../urus/order-flow/stoprun-det
 import { LiquidityHistory } from '../urus/lhm/liquidity-history';
 import { DEFAULT_POOL_CONFIG, LiquidityPoolEngine, type Pool, type PoolCandle, type PoolConfig } from '../urus/lhm/liquidity-pools';
 import { Anillo } from './anillo';
-import type { AggTrade, EventoMotor, OpenInterestSnapshot, OrderBookView } from './tipos';
+import type { AggTrade, EventoMotor, Liquidacion, OpenInterestSnapshot, OrderBookView } from './tipos';
 
 /** 30 min de libro a 1 foto/s. Urus guardaba 6 h (hasta ~345 MB por símbolo en el peor caso). */
 const CAPACIDAD_LHM = 1_800;
@@ -38,6 +38,8 @@ export class MotorMercado {
   libro: OrderBookView | null = null;
   ahora = 0;
   ultimoPrecio: number | null = null;
+  /** Primer precio de la sesión UTC en curso. */
+  aperturaSesion: number | null = null;
   cvdSesion = 0;
   /** VWAP de la sesión UTC en curso. */
   vwapSesion: number | null = null;
@@ -66,6 +68,7 @@ export class MotorMercado {
     const dia = Math.floor(t.timestamp / 86_400_000);
     if (dia !== this.sesionUtc) {
       this.sesionUtc = dia;
+      this.aperturaSesion = t.price;
       this.nocionalSesion = 0;
       this.volumenSesion = 0;
     }
@@ -208,6 +211,22 @@ export class MotorMercado {
       if (e.disponibleEn <= hasta) out.push(e);
     }
     return out;
+  }
+
+  /** Liquidación forzada publicada por el exchange (Binance forceOrder). */
+  liquidacion(liq: Liquidacion): void {
+    const usd = liq.precio * liq.cantidad;
+    const disponibleEn = Math.max(this.ahora, liq.t);
+    this.registrar({
+      id: `liq:${liq.t}:${liq.precio}:${liq.cantidad}:${liq.lado}`,
+      tipo: 'liquidacion',
+      t: liq.t,
+      disponibleEn,
+      precio: liq.precio,
+      lado: liq.lado,
+      magnitud: usd,
+      detalle: `Liquidación de ${liq.lado === 'venta' ? 'largos' : 'cortos'} · ${(usd / 1e3).toFixed(0)} k USD a ${liq.precio}`,
+    });
   }
 
   private registrarBigTrade(ev: BigTradeEvent, disponibleEn: number): void {

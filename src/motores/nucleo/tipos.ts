@@ -11,7 +11,18 @@ export type MensajeMercado =
   | { tipo: 'trades'; trades: AggTrade[] }
   | { tipo: 'libro'; vista: OrderBookView }
   | { tipo: 'oi'; snapshot: OpenInterestSnapshot }
+  | { tipo: 'liquidacion'; liq: Liquidacion }
   | { tipo: 'conexion'; estado: EstadoConexion; detalle?: string };
+
+/** Liquidación forzada publicada por el exchange. `lado` es el lado de la ORDEN de liquidación:
+ * 'venta' = se liquida un largo (presión vendedora); 'compra' = se liquida un corto. */
+export interface Liquidacion {
+  simbolo: string;
+  t: number;
+  precio: number;
+  cantidad: number;
+  lado: 'compra' | 'venta';
+}
 
 export type EstadoConexion = 'conectando' | 'en-vivo' | 'reconectando' | 'sin-datos' | 'error' | 'detenido';
 
@@ -40,7 +51,7 @@ export const AGRUPACION_POR_TEMPORALIDAD: Record<IdTemporalidad, number> = {
   volume: 5,
 };
 
-export type TipoEvento = 'absorcion' | 'agotamiento' | 'iceberg' | 'stoprun' | 'bigtrade' | 'pool-barrido';
+export type TipoEvento = 'absorcion' | 'agotamiento' | 'iceberg' | 'stoprun' | 'bigtrade' | 'pool-barrido' | 'liquidacion';
 
 /**
  * Evento detectado por un motor. `t` es cuándo ocurrió en el mercado; `disponibleEn` es el instante del

@@ -64,7 +64,11 @@ describe('FuenteBinance (protocolo de Binance USD-M Futures)', () => {
     const { fuente, sockets, infos, mensajes } = montar();
     await fuente.iniciar();
     expect(infos).toEqual([{ simbolo: 'BTCUSDT', tickSize: 0.1, precio: 84700, volumen24hUsd: 18e9 }]);
-    expect(sockets[0].url).toBe('wss://fstream.binance.com/stream?streams=btcusdt@aggTrade/btcusdt@depth@100ms');
+    // Desde abr-2026: libro por /public y trades + liquidaciones por /market.
+    expect(sockets.map((x) => x.url)).toEqual([
+      'wss://fstream.binance.com/public/stream?streams=btcusdt@depth@100ms',
+      'wss://fstream.binance.com/market/stream?streams=btcusdt@aggTrade/btcusdt@forceOrder',
+    ]);
     expect(mensajes.some((x) => x.s === 'NOEXISTE' && x.m.tipo === 'conexion' && x.m.estado === 'error')).toBe(true);
     fuente.detener();
   });
@@ -72,7 +76,8 @@ describe('FuenteBinance (protocolo de Binance USD-M Futures)', () => {
   it('convierte aggTrades y los entrega en lotes ordenados', async () => {
     const { fuente, sockets, mensajes } = montar();
     await fuente.iniciar();
-    const so = sockets[0];
+    const so = sockets[1];
+    sockets[0].emitir(diff(1, 2, 0));
     so.emitir({ stream: 'btcusdt@aggTrade', data: { e: 'aggTrade', s: 'BTCUSDT', a: 11, p: '84700.1', q: '0.250', T: 1000, m: false } });
     so.emitir({ stream: 'btcusdt@aggTrade', data: { e: 'aggTrade', s: 'BTCUSDT', a: 10, p: '84700.0', q: '0.100', T: 999, m: true } });
     vi.advanceTimersByTime(100);
@@ -136,5 +141,34 @@ describe('FuenteBinance (protocolo de Binance USD-M Futures)', () => {
     expect(grupoParaPrecio(84_700, 0.1)).toBe(10);
     expect(grupoParaPrecio(3_000, 0.01)).toBe(4);
     expect(grupoParaPrecio(150, 0.01)).toBe(1);
+  });
+
+  it('convierte liquidaciones (forceOrder) del canal /market', async () => {
+    const { fuente, sockets, mensajes } = montar();
+    await fuente.iniciar();
+    sockets[1].emitir({ stream: 'btcusdt@forceOrder', data: { e: 'forceOrder', E: 5, o: { s: 'BTCUSDT', S: 'SELL', q: '0.5', p: '84000', ap: '84010', z: '0.5', T: 4 } } });
+    expect(mensajes.find((x) => x.m.tipo === 'liquidacion')?.m).toEqual({ tipo: 'liquidacion', liq: { simbolo: 'BTCUSDT', t: 4, precio: 84010, cantidad: 0.5, lado: 'venta' } });
+    fuente.detener();
+  });
+});
+
+describe('FuenteBinance · rutas /public y /market', () => {
+  beforeEach(() => vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout', 'Date'] }));
+  afterEach(() => vi.useRealTimers());
+
+  it('avisa si llega el libro pero no los trades y prueba la ruta antigua', async () => {
+    const { fuente, sockets, mensajes } = montar();
+    await fuente.iniciar();
+    sockets[0].emitir(diff(1, 2, 0));
+    vi.advanceTimersByTime(10_000);
+    expect(mensajes.some((x) => x.m.tipo === 'conexion' && x.m.estado === 'sin-datos' && /no los trades/.test(x.m.detalle ?? ''))).toBe(true);
+    vi.advanceTimersByTime(5_001);
+    const ultimo = sockets[sockets.length - 1];
+    expect(ultimo.url).toBe('wss://fstream.binance.com/stream?streams=btcusdt@aggTrade/btcusdt@forceOrder');
+    expect(fuente.rutas()).toEqual({ libro: '/public/stream', trades: '/stream' });
+    // Con trades por la ruta antigua, pasa a en vivo.
+    ultimo.emitir({ stream: 'btcusdt@aggTrade', data: { e: 'aggTrade', s: 'BTCUSDT', a: 1, p: '84700', q: '0.1', T: 1, m: false } });
+    expect(mensajes[mensajes.length - 1].m).toMatchObject({ tipo: 'conexion', estado: 'en-vivo' });
+    fuente.detener();
   });
 });

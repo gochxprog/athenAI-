@@ -1,7 +1,8 @@
 // Web Worker del motor de Order Flow: todo el cálculo vive aquí, fuera del hilo de la interfaz.
-// Un Pipeline por activo asignado; la UI recibe el estado del activo que mira (5 Hz) y un resumen de los feeds (1 Hz).
-// Al aplicar una configuración se descarta todo el estado anterior (pipeline limpio) y las Features nuevas se
-// guardan en la "carpeta" de la fuente activa, nunca mezcladas con las de otra fuente.
+// Un Pipeline por activo asignado y cada activo con su fuente (se pueden mezclar Binance, Rithmic, Urus y Simulación).
+// La UI recibe el estado del activo que mira (5 Hz) y un resumen de todos los feeds (1 Hz).
+// Al aplicar una configuración se cierran todas las fuentes y se descarta todo el estado (pipeline limpio);
+// las Features nuevas de cada activo se guardan en la "carpeta" de SU fuente, nunca mezcladas.
 import { Pipeline } from '../nucleo/pipeline';
 import { filasACsv } from '../nucleo/features';
 import { inferirTick, parametrosParaSimbolo, parametrosPorDefecto, type ParametrosSimbolo } from '../nucleo/parametros';
@@ -18,31 +19,40 @@ const ctx = self as unknown as { postMessage: (m: MensajeDelMotor) => void; onme
 const HZ_ESTADO = 5;
 
 interface Activo {
+  proveedor: Proveedor;
   pipeline: Pipeline;
   calibrado: boolean;
   sesion: Promise<number> | null;
   trades: number;
   latenciaMs: number | null;
   filas: number;
+  cortes: number;
+  historial: number[];
+  cvdHist: number[];
+  ritmo: number[];
+  filasVentana: number;
+  segVentana: number;
 }
 
 let activos = new Map<string, Activo>();
 let config: ConfigCentro | null = null;
-let almacen: AlmacenFeatures | null = null;
+/** Una carpeta (base IndexedDB) por fuente en uso. */
+let almacenes = new Map<Proveedor, AlmacenFeatures>();
 let visible: string | null = null;
 let temporalidad: IdTemporalidad = '1m';
 let opcionesVista = { nBarras: 160, footprint: false, nivelesFootprint: 70 };
-let detenerFuente: (() => void) | null = null;
+let detenerFuentes: (() => void)[] = [];
 let generacion = 0;
 let msAcumulados = 0;
 let ultimoFeeds = Date.now();
 
 const registrar = (texto: string) => ctx.postMessage({ tipo: 'registro', entrada: { t: Date.now(), texto } });
 
-function crearActivo(parametros: ParametrosSimbolo, calibrado: boolean): Activo {
+function crearActivo(proveedor: Proveedor, parametros: ParametrosSimbolo, calibrado: boolean): Activo {
   const pipeline = new Pipeline(parametros);
   pipeline.cambiarTemporalidad(temporalidad);
-  const a: Activo = { pipeline, calibrado, sesion: null, trades: 0, latenciaMs: null, filas: 0 };
+  const almacen = almacenes.get(proveedor);
+  const a: Activo = { proveedor, pipeline, calibrado, sesion: null, trades: 0, latenciaMs: null, filas: 0, cortes: 0, historial: [], cvdHist: [], ritmo: [], filasVentana: 0, segVentana: 0 };
   if (calibrado && almacen && config?.guardar) a.sesion = almacen.nuevaSesion(parametros.simbolo, parametros, Date.now()).catch(() => -1);
   return a;
 }
@@ -50,11 +60,11 @@ function crearActivo(parametros: ParametrosSimbolo, calibrado: boolean): Activo 
 /** Sustituye el pipeline de un activo por uno calibrado (antes de recibir trades, o con el primer lote). */
 function calibrar(simbolo: string, parametros: ParametrosSimbolo): Activo {
   const viejo = activos.get(simbolo);
-  const a = crearActivo(parametros, true);
-  if (viejo) {
-    a.pipeline.conexion = viejo.pipeline.conexion;
-    a.pipeline.detalleConexion = viejo.pipeline.detalleConexion;
-  }
+  if (!viejo) throw new Error(`Activo desconocido: ${simbolo}`);
+  const a = crearActivo(viejo.proveedor, parametros, true);
+  a.pipeline.conexion = viejo.pipeline.conexion;
+  a.pipeline.detalleConexion = viejo.pipeline.detalleConexion;
+  a.cortes = viejo.cortes;
   activos.set(simbolo, a);
   const t = parametros.temporalidades;
   registrar(`${simbolo}: tick ${parametros.tickSize} · dollar bar ${num(t.dollar.tipo === 'dolar' ? t.dollar.usd : 0)} USD · paso Footprint 1m ${parametros.pasos['1m']}`);
@@ -76,20 +86,20 @@ function procesar(simbolo: string, m: MensajeMercado, gen: number): void {
     }
     a.trades += m.trades.length;
     // Latencia = llegada − hora del trade en el exchange (en Simulación no aplica).
-    if (config?.proveedor !== 'simulacion') a.latenciaMs = Math.max(0, Date.now() - m.trades[m.trades.length - 1].timestamp);
+    if (a.proveedor !== 'simulacion') a.latenciaMs = Math.max(0, Date.now() - m.trades[m.trades.length - 1].timestamp);
   }
   if (m.tipo === 'conexion' && (m.estado !== a.pipeline.conexion || m.detalle !== a.pipeline.detalleConexion)) {
-    if (m.estado === 'en-vivo' || m.estado === 'error' || m.estado === 'reconectando') registrar(`${simbolo}: ${m.estado}${m.detalle ? ` · ${m.detalle}` : ''}`);
+    if (m.estado === 'en-vivo' || m.estado === 'error' || m.estado === 'reconectando' || m.estado === 'sin-datos') registrar(`${simbolo}: ${m.estado}${m.detalle ? ` · ${m.detalle}` : ''}`);
+    if ((m.estado === 'reconectando' || m.estado === 'error') && a.pipeline.conexion === 'en-vivo') a.cortes += 1;
   }
   const t0 = performance.now();
   const nuevas = a.pipeline.procesar(m);
   msAcumulados += performance.now() - t0;
   if (nuevas.length) {
     a.filas += nuevas.length;
-    if (almacen && a.sesion) {
-      const al = almacen;
-      void a.sesion.then((id) => id >= 0 && al.guardar(simbolo, id, nuevas));
-    }
+    a.filasVentana += nuevas.length;
+    const al = almacenes.get(a.proveedor);
+    if (al && a.sesion) void a.sesion.then((id) => id >= 0 && al.guardar(simbolo, id, nuevas));
   }
 }
 
@@ -110,8 +120,30 @@ function publicarFeeds(): void {
   const feeds: EstadoFeed[] = [...activos.entries()].map(([simbolo, a]) => {
     const p = a.pipeline;
     const dollar = p.parametros.temporalidades.dollar;
+    // Muestras por segundo (historial de precio y CVD) y ritmo de dollar bars en ventanas de 10 s.
+    const r = p.resumen();
+    if (r.precio !== null) {
+      a.historial.push(r.precio);
+      if (a.historial.length > 300) a.historial.splice(0, a.historial.length - 300);
+    }
+    a.cvdHist.push(r.cvdSesion);
+    if (a.cvdHist.length > 61) a.cvdHist.splice(0, a.cvdHist.length - 61);
+    a.segVentana += 1;
+    if (a.segVentana >= 10) {
+      a.ritmo.push(a.filasVentana * 6);
+      if (a.ritmo.length > 30) a.ritmo.shift();
+      a.segVentana = 0;
+      a.filasVentana = 0;
+    }
     const f: EstadoFeed = {
       simbolo,
+      proveedor: a.proveedor,
+      guardando: !!(almacenes.get(a.proveedor) && a.sesion),
+      cortes: a.cortes,
+      historial: a.historial.slice(-120),
+      ritmo: [...a.ritmo],
+      cvdVelocidad: a.cvdHist.length >= 61 ? a.cvdHist[a.cvdHist.length - 1] - a.cvdHist[0] : null,
+      resumen: r,
       conexion: p.conexion,
       detalle: p.detalleConexion,
       tradesPorSeg: a.trades / seg,
@@ -125,34 +157,50 @@ function publicarFeeds(): void {
     a.trades = 0;
     return f;
   });
-  ctx.postMessage({ tipo: 'feeds', proveedor: config?.proveedor ?? null, visible, feeds, enCola: almacen?.enCola ?? 0 });
+  const enCola = [...almacenes.values()].reduce((x, al) => x + al.enCola, 0);
+  ctx.postMessage({ tipo: 'feeds', proveedores: [...new Set([...activos.values()].map((a) => a.proveedor))], visible, feeds, enCola });
 }
 
 function detenerTodo(): void {
   generacion += 1;
-  detenerFuente?.();
-  detenerFuente = null;
+  for (const d of detenerFuentes) d();
+  detenerFuentes = [];
 }
+
+const vaciarAlmacenes = () => Promise.all([...almacenes.values()].map((al) => al.vaciar().catch(() => 0)));
 
 const NOMBRE: Record<Proveedor, string> = { binance: 'Binance USD-M Futures', rithmic: 'Rithmic (puente)', urus: 'Servidor Urus', simulacion: 'Simulación' };
 
 async function aplicar(c: ConfigCentro): Promise<void> {
   detenerTodo();
   const gen = generacion;
-  await almacen?.vaciar().catch(() => 0);
-  almacen?.cerrar();
+  // Cerrar el chorro anterior: escribir lo pendiente y soltar sus carpetas.
+  await vaciarAlmacenes();
+  for (const al of almacenes.values()) al.cerrar();
   config = c;
-  almacen = c.guardar ? new AlmacenFeatures(c.proveedor) : null;
-  const simbolos = [...new Set(c.simbolos.map((s) => s.trim().toUpperCase()).filter(Boolean))].slice(0, 6);
-  // Pipeline limpio: no queda nada de la fuente anterior.
+  const lista: { simbolo: string; proveedor: Proveedor }[] = [];
+  for (const x of c.activos) {
+    const simbolo = x.simbolo.trim().toUpperCase();
+    if (simbolo && !lista.some((y) => y.simbolo === simbolo)) lista.push({ simbolo, proveedor: x.proveedor });
+  }
+  lista.splice(6);
+  const grupos = new Map<Proveedor, string[]>();
+  for (const x of lista) grupos.set(x.proveedor, [...(grupos.get(x.proveedor) ?? []), x.simbolo]);
+  almacenes = new Map(c.guardar ? [...grupos.keys()].map((p) => [p, new AlmacenFeatures(p)] as const) : []);
+  // Pipeline limpio: no queda nada de la configuración anterior.
   activos = new Map();
-  const calibradoInicial = c.proveedor === 'simulacion';
-  for (const s of simbolos) activos.set(s, crearActivo(parametrosPorDefecto(s), calibradoInicial));
-  if (!visible || !activos.has(visible)) visible = simbolos[0] ?? null;
-  registrar(`Fuente: ${NOMBRE[c.proveedor]} · activos: ${simbolos.join(', ') || '—'} · pipeline limpio${c.guardar ? ` · guardando en la carpeta athenai-${c.proveedor}` : ' · sin guardar'}`);
-  const emitir = (s: string) => (m: MensajeMercado) => procesar(s, m, gen);
+  for (const x of lista) activos.set(x.simbolo, crearActivo(x.proveedor, parametrosPorDefecto(x.simbolo), x.proveedor === 'simulacion'));
+  if (!visible || !activos.has(visible)) visible = lista[0]?.simbolo ?? null;
+  const descripcion = [...grupos].map(([p, ss]) => `${NOMBRE[p]}: ${ss.join(', ')}`).join(' · ');
+  registrar(`Pipeline limpio · ${descripcion || 'sin activos'}${c.guardar ? ` · guardando en ${[...grupos.keys()].map((p) => `athenai-${p}`).join(', ')}` : ' · sin guardar'}`);
+  for (const [p, simbolos] of grupos) void iniciarFuente(p, simbolos, c, gen);
+  publicar();
+  publicarFeeds();
+}
 
-  switch (c.proveedor) {
+async function iniciarFuente(proveedor: Proveedor, simbolos: string[], c: ConfigCentro, gen: number): Promise<void> {
+  const emitir = (s: string) => (m: MensajeMercado) => procesar(s, m, gen);
+  switch (proveedor) {
     case 'simulacion': {
       const gens = simbolos.map((s, i) => {
         // Precarga de historia (≈ 6 s de cálculo por hora): 60 min para el primer activo, 15 min para el resto.
@@ -170,7 +218,7 @@ async function aplicar(c: ConfigCentro): Promise<void> {
         });
         ultimo = ahora;
       }, 100);
-      detenerFuente = () => clearInterval(id);
+      detenerFuentes.push(() => clearInterval(id));
       break;
     }
     case 'binance': {
@@ -184,23 +232,23 @@ async function aplicar(c: ConfigCentro): Promise<void> {
           calibrar(i.simbolo, parametrosParaSimbolo(i.simbolo, i.tickSize, i.precio, i.volumen24hUsd));
         },
       });
+      detenerFuentes.push(() => f.detener());
       void f.iniciar();
-      detenerFuente = () => f.detener();
       break;
     }
     case 'urus': {
       const fs = simbolos.map((s) => new FuenteUrus({ baseUrl: c.urus.baseUrl, simbolo: s, onMensaje: emitir(s) }));
+      detenerFuentes.push(() => fs.forEach((f) => f.detener()));
       fs.forEach((f) => f.iniciar());
-      detenerFuente = () => fs.forEach((f) => f.detener());
       break;
     }
     case 'rithmic': {
       let fs: FuenteUrus[] = [];
       let cancelado = false;
-      detenerFuente = () => {
+      detenerFuentes.push(() => {
         cancelado = true;
         fs.forEach((f) => f.detener());
-      };
+      });
       for (const s of simbolos) procesar(s, { tipo: 'conexion', estado: 'conectando', detalle: 'Iniciando sesión en Rithmic por el puente' }, gen);
       try {
         await iniciarSesionRithmic(c.rithmic.puente, c.rithmic);
@@ -215,8 +263,6 @@ async function aplicar(c: ConfigCentro): Promise<void> {
       break;
     }
   }
-  publicar();
-  publicarFeeds();
 }
 
 function responder(id: number, trabajo: () => Promise<unknown>): void {
@@ -228,7 +274,9 @@ function responder(id: number, trabajo: () => Promise<unknown>): void {
 
 setInterval(publicar, 1000 / HZ_ESTADO);
 setInterval(publicarFeeds, 1000);
-setInterval(() => void almacen?.vaciar().catch((e) => registrar(`No se pudo guardar: ${e instanceof Error ? e.message : e}`)), 2_000);
+setInterval(() => {
+  for (const al of almacenes.values()) void al.vaciar().catch((e) => registrar(`No se pudo guardar en athenai-${al.proveedor}: ${e instanceof Error ? e.message : e}`));
+}, 2_000);
 
 ctx.onmessage = (e) => {
   const m = e.data;
@@ -261,35 +309,38 @@ ctx.onmessage = (e) => {
         responder(m.id, async () => {
           const a = visible ? activos.get(visible) : undefined;
           const filas = a?.pipeline.todasLasFilas() ?? [];
-          return { csv: filasACsv(filas), filas: filas.length, simbolo: visible, proveedor: config?.proveedor };
+          return { csv: filasACsv(filas), filas: filas.length, simbolo: visible, proveedor: a?.proveedor };
         });
         break;
       case 'almacen-resumen':
         responder(m.id, async () => {
-          await almacen?.vaciar();
+          await vaciarAlmacenes();
           const salida: Record<string, unknown> = {};
           for (const p of ['binance', 'rithmic', 'urus', 'simulacion'] as Proveedor[]) {
-            const al = almacen?.proveedor === p ? almacen : new AlmacenFeatures(p);
+            const propio = almacenes.get(p);
+            const al = propio ?? new AlmacenFeatures(p);
             salida[p] = await al.resumen();
-            if (al !== almacen) al.cerrar();
+            if (!propio) al.cerrar();
           }
           return salida;
         });
         break;
       case 'almacen-exportar':
         responder(m.id, async () => {
-          const al = almacen?.proveedor === m.proveedor ? almacen : new AlmacenFeatures(m.proveedor);
+          const propio = almacenes.get(m.proveedor);
+          const al = propio ?? new AlmacenFeatures(m.proveedor);
           const filas = await al.leer(m.simbolo);
-          if (al !== almacen) al.cerrar();
+          if (!propio) al.cerrar();
           return { csv: csvGuardadas(filas), filas: filas.length };
         });
         break;
       case 'almacen-borrar':
         responder(m.id, async () => {
-          if (almacen?.proveedor === m.proveedor) {
-            await almacen.borrar();
-            // La fuente sigue activa: las sesiones de cada activo se vuelven a abrir en la carpeta nueva.
-            for (const a of activos.values()) if (a.calibrado) a.sesion = almacen.nuevaSesion(a.pipeline.simbolo, a.pipeline.parametros, Date.now()).catch(() => -1);
+          const propio = almacenes.get(m.proveedor);
+          if (propio) {
+            await propio.borrar();
+            // La fuente sigue activa: las sesiones de sus activos se vuelven a abrir en la carpeta nueva.
+            for (const a of activos.values()) if (a.proveedor === m.proveedor && a.calibrado) a.sesion = propio.nuevaSesion(a.pipeline.simbolo, a.pipeline.parametros, Date.now()).catch(() => -1);
           } else await new AlmacenFeatures(m.proveedor).borrar();
           registrar(`Carpeta athenai-${m.proveedor} borrada`);
           return true;

@@ -7,190 +7,188 @@ import PanelLateral from '@/components/ui/PanelLateral';
 import Insignia from '@/components/ui/Insignia';
 import Punto from '@/components/ui/Punto';
 import Consola, { type LineaConsola } from '@/components/ui/Consola';
-import { AGENTES, type AgenteId } from '@/data/mock';
-import { useSistema } from '@/hooks/SistemaDemo';
-import type { EstadoMercado } from '@/lib/simulacion';
-import { crearAleatorio, elegir } from '@/lib/random';
-import { conSigno, num } from '@/lib/format';
+import { NOMBRE_PROVEEDOR, useFeeds } from '@/components/orderflow/OrderFlowChart';
+import { AGENTES, CAPAS, type Agente, type AgenteId } from '@/data/mock';
+import type { EstadoFeed } from '@/motores/worker/protocolo';
+import { conSigno, decimalesDe, num } from '@/lib/format';
 
-type Contexto = { m: EstadoMercado; r: () => number; n: number };
-
-/** Plantillas de pensamiento por agente; usan valores vivos del mercado DEMO. */
-const PENSAMIENTOS: Record<AgenteId, ((c: Contexto) => { texto: string; tarea: string })[]> = {
-  rastreador: [
-    ({ m, r }) => {
-      const k = 3 + Math.floor(r() * 9);
-      return { texto: `Barrido de dollar bars ${num(m.dollarBars - 500)}–${num(m.dollarBars)}: ${k} candidatas con volumen ≥ 2× la media`, tarea: `Barrido de las últimas 500 dollar bars (${k} candidatas)` };
-    },
-    ({ m }) => ({ texto: `CVD de sesión en ${conSigno(m.cvd, 0)} BTC con el precio en ${num(m.precio, 1)}; sin divergencia relevante`, tarea: 'Vigilando divergencias CVD–precio' }),
-    ({ m }) => {
-      const d = (m.precio - m.vwap) / m.atr;
-      return { texto: `Precio a ${conSigno(d, 2)} ATR del VWAP (${num(m.vwap, 1)}); marco la zona para Flujo`, tarea: 'Marcando zonas respecto al VWAP' };
-    },
-    ({ r }) => {
-      const k = 2 + Math.floor(r() * 6);
-      return { texto: `Envío ${k} ventanas con estructura repetida al Lector para su análisis`, tarea: `Preparando ${k} ventanas para el Lector` };
-    },
-  ],
-  lector: [
-    ({ r }) => {
-      const k = 4 + Math.floor(r() * 10);
-      const j = Math.max(1, Math.floor(k * (0.5 + r() * 0.4)));
-      return { texto: `PD-031: reviso ${k} ocurrencias nuevas; ${j} coinciden con la firma (similitud ≥ 0,80)`, tarea: 'Revisando ocurrencias de PD-031' };
-    },
-    ({ r }) => {
-      const k = 20 + Math.floor(r() * 180);
-      return { texto: `PD-014: tras ${k} ocurrencias recientes la firma mantiene el peso en absorción (+0,88) y agotamiento (+0,79)`, tarea: 'Comprobando deriva de firmas' };
-    },
-    ({ r }) => ({ texto: `PD-011 en las últimas 24 h: win rate local ${num(54 + r() * 8, 1)}% sobre ${18 + Math.floor(r() * 20)} casos`, tarea: 'Midiendo PD-011 en datos recientes' }),
-    ({ r }) => ({ texto: `Descarto ${1 + Math.floor(r() * 4)} falsos positivos de PD-019 por spread > 2 ticks`, tarea: 'Filtrando falsos positivos de PD-019' }),
-  ],
-  sintetizador: [
-    ({ r }) => {
-      const [a, b] = elegir(r, [['PD-011', 'PD-014'], ['PD-017', 'PD-019'], ['PD-022', 'PD-011'], ['PD-031', 'PD-019']] as const);
-      return { texto: `Combino ${a} + ${b} en régimen de ${elegir(r, ['volatilidad baja', 'tendencia', 'volatilidad media'])}`, tarea: `Redactando hipótesis compuesta desde ${a} y ${b}` };
-    },
-    ({ m, r }) => {
-      const k = 60 + Math.floor(r() * 240);
-      return { texto: `Hipótesis lista con evidencia en ${k} ocurrencias; la paso a la cola del Juez (CVD actual ${conSigno(m.cvd, 0)} BTC)`, tarea: 'Enviando hipótesis a la cola del Juez' };
-    },
-    ({ r }) => ({ texto: `Descarto PD-025 + PD-028: señales contradictorias en el ${num(30 + r() * 25, 0)}% de los casos`, tarea: 'Evaluando combinaciones de patrones' }),
-    ({ m }) => ({ texto: `Resumen a ${num(m.dollarBars)} dollar bars: lo aprendido hoy refuerza Order Flow cerca del VWAP; Momentum sin novedades`, tarea: 'Redactando resumen de aprendizaje' }),
-  ],
-  flujo: [
-    ({ m, r }) => {
-      const nivel = Math.round((m.precio - 20 - r() * 60) / 10) * 10;
-      return { texto: `Absorción en el bid ${num(nivel, 0)}: ${num(18 + r() * 60, 1)} BTC ejecutados sin desplazar el precio`, tarea: `Monitoreando absorción en ${num(nivel, 0)}` };
-    },
-    ({ m }) => {
-      const b = m.barras[m.barras.length - 2];
-      const d = b.compra - b.venta;
-      return { texto: `Delta de la última dollar bar ${conSigno(d, 1)} BTC · agotamiento ${Math.abs(d) < 1.5 ? 'probable' : 'no detectado'}`, tarea: 'Midiendo delta y agotamiento por barra' };
-    },
-    ({ r }) => ({ texto: `Desequilibrio del libro ${num(0.7 + r() * 1.4, 2)} en los 10 primeros niveles`, tarea: 'Leyendo desequilibrio del libro' }),
-    ({ m }) => ({ texto: `Open Interest ${num(m.oi, 0)} BTC · latencia del feed ${m.latenciaMs} ms`, tarea: 'Vigilando Open Interest' }),
-  ],
+const ESTADO_FEED: Record<string, string> = {
+  conectando: 'conectando',
+  'en-vivo': 'en vivo',
+  reconectando: 'reconectando',
+  'sin-datos': 'sin datos',
+  error: 'error',
+  detenido: 'detenido',
 };
 
-interface Bitacora {
-  lineas: LineaConsola[];
-  tarea: string;
-  pensamientos: number;
+const usdK = (v: number) => (v >= 1e6 ? `${num(v / 1e6, 1)} M` : `${num(v / 1e3, 0)} k`);
+const baseDe = (s: string) => s.replace(/(USDT|USDC|BUSD|USD)$/, '') || s;
+
+/** Lo que el Vigía observa ahora en cada feed (datos reales del motor). */
+function lineasVigia(feeds: EstadoFeed[]): string[] {
+  return feeds.map((f) => {
+    const lat = f.latenciaMs === null ? '—' : `${num(f.latenciaMs)} ms`;
+    const extra = f.conexion !== 'en-vivo' && f.detalle ? ` · ${f.detalle}` : '';
+    return `${f.simbolo} (${NOMBRE_PROVEEDOR[f.proveedor]}): ${ESTADO_FEED[f.conexion] ?? f.conexion} · ${num(f.tradesPorSeg, 1)} trades/s · latencia ${lat} · ${f.cortes} ${f.cortes === 1 ? 'corte' : 'cortes'}${extra}`;
+  });
+}
+
+/** Lo que Flujo lee en el Order Flow de cada mercado (resumen de los motores de Urus). */
+function lineasFlujo(feeds: EstadoFeed[]): string[] {
+  const out: string[] = [];
+  for (const f of feeds) {
+    const r = f.resumen;
+    if (f.conexion !== 'en-vivo' || r.precio === null) continue;
+    const b = baseDe(f.simbolo);
+    const dp = decimalesDe(f.tickSize);
+    if (r.absorcion) out.push(`${f.simbolo}: absorción en el ${r.absorcion.lado} (score ${num(r.absorcion.score, 0)}) en una de las últimas 10 dollar bars · precio ${num(r.precio, dp)}`);
+    if (r.agotamiento) out.push(`${f.simbolo}: agotamiento ${r.agotamiento.lado === 'bullish' ? 'comprador' : 'vendedor'} confirmado (score ${num(r.agotamiento.score, 0)})`);
+    if (r.bigCompraUsd + r.bigVentaUsd > 0) out.push(`${f.simbolo}: big trades en 5 min · compra ${usdK(r.bigCompraUsd)} / venta ${usdK(r.bigVentaUsd)} USD`);
+    if (r.liqLargosUsd + r.liqCortosUsd > 0) out.push(`${f.simbolo}: liquidaciones en 5 min · largos ${usdK(r.liqLargosUsd)} / cortos ${usdK(r.liqCortosUsd)} USD`);
+    if (r.stackedCompra + r.stackedVenta > 0) out.push(`${f.simbolo}: imbalances apilados en las últimas 5 barras · compra ${r.stackedCompra} / venta ${r.stackedVenta}`);
+    if (f.cvdVelocidad !== null) out.push(`${f.simbolo}: CVD de sesión ${conSigno(r.cvdSesion, 2)} ${b} · último minuto ${conSigno(f.cvdVelocidad, 2)} ${b}`);
+    if (r.oiDeltaPct !== null) out.push(`${f.simbolo}: Open Interest ${conSigno(r.oiDeltaPct, 2, '%')} en 15 min`);
+  }
+  return out;
+}
+
+function lineasSinMotor(a: Agente): LineaConsola[] {
+  const t = new Date();
+  return [
+    { id: `${a.id}-1`, hora: t, texto: `Sin motor todavía. Se activa en el Bloque ${a.bloque} de la hoja de ruta.` },
+    { id: `${a.id}-2`, hora: t, texto: `Motor previsto: ${a.motor}.` },
+    { id: `${a.id}-3`, hora: t, texto: `Rol: ${a.rol}.` },
+  ];
 }
 
 export default function AgentesView() {
-  const { mercado } = useSistema();
-  const mercadoRef = useRef(mercado);
-  mercadoRef.current = mercado;
+  const { feeds, registro } = useFeeds();
+  const feedsRef = useRef(feeds.feeds);
+  feedsRef.current = feeds.feeds;
   const [seleccion, setSeleccion] = useState<AgenteId | null>(null);
-  const [bitacoras, setBitacoras] = useState<Record<AgenteId, Bitacora>>(() => {
-    const r = crearAleatorio(5);
-    const ahora = Date.now();
-    const inicial = {} as Record<AgenteId, Bitacora>;
-    AGENTES.forEach((a, ai) => {
-      const lineas: LineaConsola[] = PENSAMIENTOS[a.id].map((p, i) => {
-        const { texto } = p({ m: mercado, r, n: i });
-        return { id: `${a.id}-i${i}`, hora: new Date(ahora - (i + 1) * 47_000 - ai * 9_000), texto };
-      });
-      inicial[a.id] = { lineas, tarea: a.tarea, pensamientos: 120 + ai * 37 };
-    });
-    return inicial;
-  });
+  const [consolas, setConsolas] = useState<Record<'vigia' | 'flujo', LineaConsola[]>>({ vigia: [], flujo: [] });
+  const n = useRef(0);
 
+  // Vigía y Flujo: cada 3 s anotan lo que ven en los datos reales (sin repetir líneas idénticas).
   useEffect(() => {
-    const r = crearAleatorio(Date.now() % 100000);
-    let n = 0;
-    const t = setInterval(() => {
-      const a = AGENTES[n % AGENTES.length];
-      n += 1;
-      // Nunca repetir una línea que ya esté en la consola del agente.
-      const existentes = new Set(bitacorasRef.current[a.id].lineas.map((l) => l.texto));
-      let pensamiento: { texto: string; tarea: string } | null = null;
-      for (let intento = 0; intento < 8 && !pensamiento; intento++) {
-        const plantilla = PENSAMIENTOS[a.id][Math.floor(r() * PENSAMIENTOS[a.id].length)];
-        const p = plantilla({ m: mercadoRef.current, r, n });
-        if (!existentes.has(p.texto)) pensamiento = p;
-      }
-      if (!pensamiento) return;
-      const { texto, tarea } = pensamiento;
-      setBitacoras((prev) => {
-        const b = prev[a.id];
-        return { ...prev, [a.id]: { lineas: [{ id: `${a.id}-${n}`, hora: new Date(), texto }, ...b.lineas].slice(0, 40), tarea, pensamientos: b.pensamientos + 1 } };
+    const tick = () => {
+      const ahora = new Date();
+      setConsolas((prev) => {
+        const nuevo = { ...prev };
+        for (const [id, lineas] of [
+          ['vigia', lineasVigia(feedsRef.current)],
+          ['flujo', lineasFlujo(feedsRef.current)],
+        ] as const) {
+          const existentes = new Set(prev[id].slice(0, 12).map((l) => l.texto));
+          const frescas = lineas.filter((t) => !existentes.has(t)).slice(0, 3);
+          if (frescas.length) nuevo[id] = [...frescas.map((texto) => ({ id: `${id}-${n.current++}`, hora: ahora, texto })), ...prev[id]].slice(0, 60);
+        }
+        return nuevo;
       });
-    }, 1600);
+    };
+    tick();
+    const t = setInterval(tick, 3_000);
     return () => clearInterval(t);
   }, []);
 
-  const bitacorasRef = useRef(bitacoras);
-  bitacorasRef.current = bitacoras;
+  const vivos = feeds.feeds.filter((f) => f.conexion === 'en-vivo').length;
+  const estadoAgente = (a: Agente): string => {
+    if (!a.real) return `Sin motor · Bloque ${a.bloque}`;
+    if (!feeds.feeds.length) return 'Sin fuente';
+    if (a.id === 'vigia') return `Vigilando ${vivos}/${feeds.feeds.length} feeds`;
+    return vivos ? `Leyendo ${vivos} ${vivos === 1 ? 'mercado' : 'mercados'}` : 'Esperando datos';
+  };
+  const estados = Object.fromEntries(AGENTES.map((a) => [a.id, estadoAgente(a)])) as Record<AgenteId, string>;
+  const consola = (a: Agente): LineaConsola[] => {
+    if (!a.real) return lineasSinMotor(a);
+    if (a.id === 'vigia') {
+      // El Vigía también firma el registro de conexiones del Centro de datos.
+      const reg = registro.slice(0, 20).map((e, i) => ({ id: `reg-${e.t}-${i}`, hora: new Date(e.t), texto: e.texto }));
+      return [...consolas.vigia, ...reg].sort((x, y) => y.hora.getTime() - x.hora.getTime()).slice(0, 60);
+    }
+    return consolas.flujo;
+  };
+  const etiquetaDatos = feeds.feeds.length ? `Datos de mercado · ${feeds.feeds.map((f) => f.simbolo).join(' · ')}` : 'Sin fuente de datos';
   const agente = AGENTES.find((a) => a.id === seleccion) ?? null;
+  const reales = AGENTES.filter((a) => a.real).length;
 
   return (
     <div className="space-y-4">
       <Encabezado
         modulo="Agentes"
         titulo="Sala de agentes"
-        descripcion="Cuatro agentes trabajan sobre los datos de mercado. Exploran, leen, sintetizan y vigilan el Order Flow; proponen hipótesis, pero no aprueban nada ni operan: eso es tarea del Juez y de los bots."
+        fuente={`${reales} DE ${AGENTES.length} CON MOTOR`}
+        descripcion="El equipo que investiga, prueba y vigila. Los agentes nunca operan: eso lo hacen los bots aprobados por el Juez. Cada agente trabaja solo cuando su motor existe; los demás muestran en qué bloque se activan."
       >
-        <Insignia variante="contorno">{AGENTES.length} activos</Insignia>
+        <Insignia variante="contorno">
+          {reales} con motor · {AGENTES.length - reales} pendientes
+        </Insignia>
       </Encabezado>
 
       <Panel cuerpo="p-0" className="overflow-hidden">
-        <div className="relative h-[460px] md:h-[540px]">
-          <SalaAgentes3D seleccion={seleccion} onSeleccion={setSeleccion} />
+        <div className="relative h-[480px] md:h-[600px]">
+          <SalaAgentes3D seleccion={seleccion} onSeleccion={setSeleccion} estados={estados} etiquetaDatos={etiquetaDatos} />
           <div className="pointer-events-none absolute bottom-4 left-4 flex items-center gap-2 text-[10px] text-plata-500">
             <MousePointerClick size={12} /> Haz clic en un agente para abrir su consola
           </div>
         </div>
       </Panel>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {AGENTES.map((a) => {
-          const b = bitacoras[a.id];
-          return (
-            <button key={a.id} onClick={() => setSeleccion(a.id)} className={`panel panel-hover p-4 text-left ${seleccion === a.id ? 'border-plata-400' : ''}`}>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2 text-sm text-white">
-                  <Bot size={15} strokeWidth={1.5} /> {a.nombre}
-                </span>
-                <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-etiqueta text-plata-300">
-                  <Punto estado="activo" /> {a.estado}
-                </span>
-              </div>
-              <p className="mt-2 text-[11px] text-plata-500">{a.rol}</p>
-              <p className="mt-3 line-clamp-2 min-h-[2.5em] font-mono text-[10.5px] text-plata-200">› {b.lineas[0]?.texto}</p>
-              <p className="mt-2 font-mono text-[10px] text-plata-500">{num(b.pensamientos)} pensamientos hoy · {a.modelo}</p>
-            </button>
-          );
-        })}
-      </div>
+      {([1, 2, 3] as const).map((capa) => (
+        <section key={capa} className="space-y-2">
+          <h3 className="etiqueta">
+            Capa {capa} · {CAPAS[capa]}
+          </h3>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {AGENTES.filter((a) => a.capa === capa).map((a) => {
+              const ultima = consola(a)[0]?.texto;
+              return (
+                <button key={a.id} data-agente={a.id} onClick={() => setSeleccion(a.id)} className={`panel panel-hover p-4 text-left ${seleccion === a.id ? 'border-plata-400' : ''} ${a.real ? '' : 'opacity-70'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2 text-sm text-white">
+                      <Bot size={15} strokeWidth={1.5} /> {a.nombre}
+                    </span>
+                    <span className="flex items-center gap-1.5 text-[9.5px] uppercase tracking-etiqueta text-plata-300">
+                      <Punto estado={a.real ? (vivos ? 'activo' : 'espera') : 'detenido'} /> {a.real ? 'Motor real' : `Bloque ${a.bloque}`}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[11px] text-plata-500">{a.rol}</p>
+                  <p className="mt-3 line-clamp-2 min-h-[2.5em] font-mono text-[10.5px] text-plata-200">› {ultima ?? 'Esperando datos…'}</p>
+                  <p className="mt-2 font-mono text-[10px] text-plata-500">{a.motor}</p>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ))}
 
-      <PanelLateral abierto={!!agente} onCerrar={() => setSeleccion(null)} subtitulo="Consola del agente" titulo={agente?.nombre ?? ''}>
+      <PanelLateral abierto={!!agente} onCerrar={() => setSeleccion(null)} subtitulo={agente ? `Capa ${agente.capa} · ${CAPAS[agente.capa]}` : 'Consola del agente'} titulo={agente?.nombre ?? ''}>
         {agente && (
           <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
-              <Insignia variante="solida">{agente.estado}</Insignia>
+              <Insignia variante={agente.real ? 'solida' : 'tenue'}>{estados[agente.id]}</Insignia>
               <Insignia variante="tenue">
-                <Cpu size={10} /> {agente.modelo}
+                <Cpu size={10} /> {agente.motor}
               </Insignia>
             </div>
             <p className="text-[13px] leading-relaxed text-plata-200">{agente.rol}.</p>
-            <div className="rounded-lg border border-borde-suave p-3">
-              <p className="etiqueta">Tarea actual</p>
-              <p className="mt-1 text-sm text-white">{bitacoras[agente.id].tarea}</p>
-              <p className="mt-2 font-mono text-[10px] text-plata-500">
-                Fuente: Binance USD-M · BTCUSDT {num(mercado.precio, 1)} · {num(mercado.dollarBars)} dollar bars
-              </p>
-            </div>
+            {agente.real && (
+              <div className="rounded-lg border border-borde-suave p-3">
+                <p className="etiqueta">Mercados</p>
+                <p className="mt-1 font-mono text-[11px] text-plata-200">
+                  {feeds.feeds.length ? feeds.feeds.map((f) => `${f.simbolo} · ${NOMBRE_PROVEEDOR[f.proveedor]} · ${ESTADO_FEED[f.conexion]}`).join('  |  ') : 'Sin fuente: configúrala en el Centro de datos'}
+                </p>
+              </div>
+            )}
             <div>
               <p className="etiqueta mb-2 flex items-center gap-1.5">
-                <Terminal size={11} /> Pensamiento en tiempo real
+                <Terminal size={11} /> {agente.real ? 'Lo que ve en los datos' : 'Estado'}
               </p>
               <div className="rounded-lg border border-borde-suave bg-black/60 p-2">
-                <Consola lineas={bitacoras[agente.id].lineas} alto="h-[360px]" />
+                <Consola lineas={consola(agente)} alto="h-[360px]" />
               </div>
             </div>
-            <p className="text-[10px] leading-relaxed text-plata-500">Los agentes solo leen datos de mercado. No tienen acceso a las reglas del Juez ni a la ejecución de los bots.</p>
+            <p className="text-[10px] leading-relaxed text-plata-500">Los agentes no operan ni aprueban nada. Solo los bots que pasan el Juez operan, primero en Paper.</p>
           </div>
         )}
       </PanelLateral>
