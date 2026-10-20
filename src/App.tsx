@@ -9,6 +9,8 @@ import InvestigacionView from '@/modules/InvestigacionView';
 import ConocimientoView from '@/modules/ConocimientoView';
 import LaboratorioView from '@/modules/LaboratorioView';
 import AgentesView from '@/modules/AgentesView';
+import PaperTradingView from '@/modules/PaperTradingView';
+import DecisionesView from '@/modules/DecisionesView';
 import type { Modulo } from '@/types/nav';
 
 const VISTAS: Partial<Record<Modulo, ComponentType>> = {
@@ -17,6 +19,8 @@ const VISTAS: Partial<Record<Modulo, ComponentType>> = {
   conocimiento: ConocimientoView,
   laboratorio: LaboratorioView,
   agentes: AgentesView,
+  paper: PaperTradingView,
+  decisiones: DecisionesView,
 };
 
 export default function App() {

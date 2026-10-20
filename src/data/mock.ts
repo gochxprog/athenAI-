@@ -284,7 +284,8 @@ export const CUENTA_PAPER = { capitalInicial: 50_000, realizadoHistorico: 3_184.
 
 // --- Decisiones -------------------------------------------------------------
 export interface Decision {
-  hora: string;
+  /** Minutos antes del momento actual (las horas se calculan en vivo). */
+  haceMin: number;
   tipo: 'Veredicto del Juez' | 'Ejecución de bot' | 'Monitor' | 'Dinero real';
   ref: string;
   detalle: string;
@@ -292,18 +293,18 @@ export interface Decision {
 }
 
 export const DECISIONES: Decision[] = [
-  { hora: '09:42', tipo: 'Ejecución de bot', ref: 'B-02 · E-084', detalle: 'SHORT 0,080 BTC @ 84.781,5 · stop 84.955 · objetivo 84.610', resultado: 'EJECUTADA' },
-  { hora: '09:36', tipo: 'Monitor', ref: 'B-04 · E-087', detalle: 'Slippage medio 2,6 ticks frente a 1 tick esperado en 3 operaciones', resultado: 'PAUSADO' },
-  { hora: '09:30', tipo: 'Ejecución de bot', ref: 'B-01 · E-087', detalle: 'LONG 0,120 BTC @ 84.596,0 · stop 84.402 · objetivo 84.980', resultado: 'EJECUTADA' },
-  { hora: '09:12', tipo: 'Veredicto del Juez', ref: 'E-088 · H-1273', detalle: 'Max Drawdown 14,2% supera el límite del 12%', resultado: 'RECHAZADA' },
-  { hora: '08:57', tipo: 'Dinero real', ref: 'E-087', detalle: 'Solicitud de paso a cuenta real: faltan 23 de 60 días de Paper Trading y el OK del dueño', resultado: 'BLOQUEADO' },
-  { hora: '08:41', tipo: 'Ejecución de bot', ref: 'B-03 · E-081', detalle: 'SHORT 0,060 BTC @ 84.902,0 cerrada en stop · −64,3 USD', resultado: 'EJECUTADA' },
-  { hora: '08:15', tipo: 'Veredicto del Juez', ref: 'E-087 · H-1269', detalle: 'Re-validación semanal: Sharpe OOS 1,66 · PBO 9% · p = 0,008', resultado: 'APROBADA' },
-  { hora: '07:52', tipo: 'Veredicto del Juez', ref: 'E-086 · H-1248', detalle: 'Win rate 51,2% y luck test p = 0,21', resultado: 'RECHAZADA' },
-  { hora: '07:20', tipo: 'Ejecución de bot', ref: 'B-02 · E-084', detalle: 'LONG 0,080 BTC @ 84.433,0 cerrada en objetivo · +118,4 USD', resultado: 'EJECUTADA' },
-  { hora: '06:48', tipo: 'Veredicto del Juez', ref: 'E-085 · H-1237', detalle: 'Resultado explicable por azar: luck test p = 0,34', resultado: 'RECHAZADA' },
-  { hora: '05:31', tipo: 'Ejecución de bot', ref: 'B-01 · E-087', detalle: 'LONG 0,120 BTC @ 84.212,5 cerrada en objetivo · +201,0 USD', resultado: 'EJECUTADA' },
-  { hora: '04:05', tipo: 'Veredicto del Juez', ref: 'E-084 · H-1266', detalle: 'Re-validación semanal: Sharpe OOS 1,52 · PBO 13% · p = 0,019', resultado: 'APROBADA' },
+  { haceMin: 6, tipo: 'Ejecución de bot', ref: 'B-02 · E-084', detalle: 'SHORT 0,080 BTC @ 84.781,5 · stop 84.955 · objetivo 84.610', resultado: 'EJECUTADA' },
+  { haceMin: 12, tipo: 'Monitor', ref: 'B-04 · E-087', detalle: 'Slippage medio 2,6 ticks frente a 1 tick esperado en 3 operaciones', resultado: 'PAUSADO' },
+  { haceMin: 18, tipo: 'Ejecución de bot', ref: 'B-01 · E-087', detalle: 'LONG 0,120 BTC @ 84.596,0 · stop 84.402 · objetivo 84.980', resultado: 'EJECUTADA' },
+  { haceMin: 36, tipo: 'Veredicto del Juez', ref: 'E-088 · H-1273', detalle: 'Max Drawdown 14,2% supera el límite del 12%', resultado: 'RECHAZADA' },
+  { haceMin: 51, tipo: 'Dinero real', ref: 'E-087', detalle: 'Solicitud de paso a cuenta real: faltan 23 de 60 días de Paper Trading y el OK del dueño', resultado: 'BLOQUEADO' },
+  { haceMin: 67, tipo: 'Ejecución de bot', ref: 'B-03 · E-081', detalle: 'SHORT 0,060 BTC @ 84.902,0 cerrada en stop · −64,3 USD', resultado: 'EJECUTADA' },
+  { haceMin: 93, tipo: 'Veredicto del Juez', ref: 'E-087 · H-1269', detalle: 'Re-validación semanal: Sharpe OOS 1,66 · PBO 9% · p = 0,008', resultado: 'APROBADA' },
+  { haceMin: 116, tipo: 'Veredicto del Juez', ref: 'E-086 · H-1248', detalle: 'Win rate 51,2% y luck test p = 0,21', resultado: 'RECHAZADA' },
+  { haceMin: 148, tipo: 'Ejecución de bot', ref: 'B-02 · E-084', detalle: 'LONG 0,080 BTC @ 84.433,0 cerrada en objetivo · +118,4 USD', resultado: 'EJECUTADA' },
+  { haceMin: 180, tipo: 'Veredicto del Juez', ref: 'E-085 · H-1237', detalle: 'Resultado explicable por azar: luck test p = 0,34', resultado: 'RECHAZADA' },
+  { haceMin: 257, tipo: 'Ejecución de bot', ref: 'B-01 · E-087', detalle: 'LONG 0,120 BTC @ 84.212,5 cerrada en objetivo · +201,0 USD', resultado: 'EJECUTADA' },
+  { haceMin: 343, tipo: 'Veredicto del Juez', ref: 'E-084 · H-1266', detalle: 'Re-validación semanal: Sharpe OOS 1,52 · PBO 13% · p = 0,019', resultado: 'APROBADA' },
 ];
 
 // --- Sistema --------------------------------------------------------------------

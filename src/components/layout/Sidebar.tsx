@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Lock, Menu, X } from 'lucide-react';
 import { MENU } from '@/data/menu';
-import { BOTS, DECISIONES, ESTRATEGIAS, HIPOTESIS, MAQUINAS, PATRONES, AGENTES } from '@/data/mock';
+import { BOTS, ESTRATEGIAS, HIPOTESIS, MAQUINAS, PATRONES, AGENTES } from '@/data/mock';
 import { useSistema } from '@/hooks/SistemaDemo';
 import Punto, { type EstadoPunto } from '@/components/ui/Punto';
 import type { Modulo } from '@/types/nav';
@@ -26,7 +26,7 @@ export default function Sidebar({ activo, onSeleccion }: Props) {
     conocimiento: { n: PATRONES.length, e: 'activo' },
     agentes: { n: AGENTES.length, e: 'activo' },
     paper: { n: BOTS.filter((b) => b.estado === 'Ejecutando').length, e: 'activo' },
-    decisiones: { n: DECISIONES.length, e: 'espera' },
+    decisiones: { e: 'espera' },
     costos: { e: 'espera' },
     maquinas: { n: MAQUINAS.filter((m) => m.estado === 'Operativa').length, e: 'activo' },
     datos: { e: mercado.grabando ? 'activo' : 'detenido' },
