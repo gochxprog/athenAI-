@@ -32,3 +32,10 @@ export function haceTiempo(min: number) {
   const m = Math.round(min % 60);
   return m ? `hace ${h} h ${m} min` : `hace ${h} h`;
 }
+
+/** Decimales necesarios para mostrar un paso de precio (0,1 → 1 · 0,25 → 2 · 1 → 0). */
+export function decimalesDe(paso: number): number {
+  if (!(paso > 0)) return 2;
+  for (let d = 0; d <= 8; d += 1) if (Math.abs(Math.round(paso * 10 ** d) - paso * 10 ** d) < 1e-6) return d;
+  return 8;
+}

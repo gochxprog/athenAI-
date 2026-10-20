@@ -5,10 +5,12 @@ interface Props {
   modulo: string;
   titulo: string;
   descripcion: string;
+  /** Origen de los datos que muestra el módulo (por defecto DEMO). */
+  fuente?: string;
   children?: ReactNode;
 }
 
-export default function Encabezado({ modulo, titulo, descripcion, children }: Props) {
+export default function Encabezado({ modulo, titulo, descripcion, fuente = 'DEMO', children }: Props) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
@@ -18,7 +20,7 @@ export default function Encabezado({ modulo, titulo, descripcion, children }: Pr
     >
       <div className="min-w-0">
         <p className="etiqueta mb-1.5">
-          {modulo} · <span className="text-plata-300">DEMO</span>
+          {modulo} · <span className="text-plata-300">{fuente}</span>
         </p>
         <h2 className="text-2xl font-light tracking-tight text-white md:text-[28px]">{titulo}</h2>
         <p className="mt-1 max-w-2xl text-xs leading-relaxed text-plata-400">{descripcion}</p>

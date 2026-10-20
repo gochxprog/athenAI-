@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Layers3, Radio, Server } from 'lucide-react';
+import { Database, Layers3 } from 'lucide-react';
 import LienzoOrderFlow, { type CapasGrafico } from './LienzoOrderFlow';
 import DomEscalera from './DomEscalera';
-import { motorOrderFlow } from '@/motores/worker/motorCliente';
+import { motorOrderFlow, type EstadoFeeds } from '@/motores/worker/motorCliente';
+import type { EntradaRegistro, Proveedor } from '@/motores/worker/protocolo';
+import { useNavegar } from '@/hooks/Navegacion';
 import type { EstadoGrafico } from '@/motores/nucleo/pipeline';
 import type { IdTemporalidad } from '@/motores/nucleo/tipos';
 import Punto from '@/components/ui/Punto';
@@ -47,16 +49,30 @@ export function useEstadoMotor() {
   return { estado, msProceso };
 }
 
+/** Hook: feeds de la fuente activa y registro de cambios del Centro de datos. */
+export function useFeeds() {
+  const [x, setX] = useState<{ feeds: EstadoFeeds; registro: readonly EntradaRegistro[] }>({ feeds: motorOrderFlow.feeds, registro: motorOrderFlow.registro });
+  useEffect(() => motorOrderFlow.suscribirFeeds((feeds, registro) => setX({ feeds, registro })), []);
+  return x;
+}
+
+export const NOMBRE_PROVEEDOR: Record<Proveedor, string> = {
+  binance: 'Binance Futures',
+  rithmic: 'Rithmic',
+  urus: 'Servidor Urus',
+  simulacion: 'Simulación',
+};
+
 /**
  * Panel de gráficos de Order Flow: velas / Footprint por temporalidad, subpaneles CVD y OI,
  * overlays de absorción/agotamiento, LHM y eventos, más el DOM. Los datos vienen del Worker del motor,
- * que recibe la estructura de Urus (aggTrades + vista del libro + OI) desde la fuente DEMO o el servidor.
+ * que recibe la estructura de Urus (aggTrades + vista del libro + OI) de la fuente elegida en el Centro de datos.
  */
 export default function OrderFlowChart({ estado }: { estado: EstadoGrafico | null }) {
   const [temporalidad, setTemporalidad] = useState<IdTemporalidad>(estado?.temporalidad ?? '1m');
   const [capas, setCapas] = useState<CapasGrafico>({ footprint: false, cvd: true, oi: true, absorcion: true, lhm: true, eventos: true });
-  const [fuente, setFuente] = useState(motorOrderFlow.fuente);
-  const [url, setUrl] = useState(motorOrderFlow.fuente.tipo === 'urus' ? motorOrderFlow.fuente.baseUrl : 'http://localhost:3000');
+  const { feeds } = useFeeds();
+  const navegar = useNavegar();
 
   useEffect(() => {
     motorOrderFlow.vista(capas.footprint ? 140 : 260, capas.footprint, capas.footprint ? 70 : 0);
@@ -65,11 +81,6 @@ export default function OrderFlowChart({ estado }: { estado: EstadoGrafico | nul
   const cambiarTemporalidad = (id: IdTemporalidad) => {
     setTemporalidad(id);
     motorOrderFlow.temporalidad(id);
-  };
-  const conectar = (tipo: 'demo' | 'urus') => {
-    const f = tipo === 'demo' ? ({ tipo: 'demo' } as const) : ({ tipo: 'urus', baseUrl: url, simbolo: 'BTCUSDT' } as const);
-    setFuente(f);
-    motorOrderFlow.usarFuente(f);
   };
 
   const conexion = estado?.conexion ?? 'conectando';
@@ -109,23 +120,19 @@ export default function OrderFlowChart({ estado }: { estado: EstadoGrafico | nul
             <Punto estado={conexion === 'en-vivo' ? 'activo' : conexion === 'detenido' || conexion === 'error' ? 'detenido' : 'espera'} />
             {ESTADO_CONEXION[conexion] ?? conexion}
           </span>
-          <div className="flex rounded-lg border border-borde p-0.5">
-            <button onClick={() => conectar('demo')} className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10.5px] ${fuente.tipo === 'demo' ? 'bg-white text-black' : 'text-plata-300 hover:text-white'}`}>
-              <Radio size={11} /> DEMO
-            </button>
-            <button onClick={() => conectar('urus')} className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10.5px] ${fuente.tipo === 'urus' ? 'bg-white text-black' : 'text-plata-300 hover:text-white'}`}>
-              <Server size={11} /> Servidor Urus
-            </button>
-          </div>
-          {fuente.tipo === 'urus' && (
-            <input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && conectar('urus')}
-              className="w-44 rounded-md border border-borde bg-black px-2 py-1 font-mono text-[10.5px] text-plata-100 outline-none focus:border-plata-400"
-              aria-label="URL del servidor Urus"
-            />
+          {feeds.feeds.length > 1 && (
+            <div className="flex rounded-lg border border-borde p-0.5" role="group" aria-label="Activo">
+              {feeds.feeds.map((f) => (
+                <button key={f.simbolo} onClick={() => motorOrderFlow.ver(f.simbolo)} className={`rounded-md px-2 py-1 font-mono text-[10.5px] ${feeds.visible === f.simbolo ? 'bg-white text-black' : 'text-plata-300 hover:text-white'}`}>
+                  {f.simbolo}
+                </button>
+              ))}
+            </div>
           )}
+          <button onClick={() => navegar('datos')} className="flex items-center gap-1.5 rounded-lg border border-borde px-2.5 py-1 text-[10.5px] text-plata-200 hover:border-plata-400 hover:text-white" title="Cambiar fuente y activos en el Centro de datos">
+            <Database size={11} /> {feeds.proveedor ? NOMBRE_PROVEEDOR[feeds.proveedor] : 'Centro de datos'}
+            {feeds.feeds.length === 1 && <span className="font-mono text-plata-400">· {feeds.feeds[0].simbolo}</span>}
+          </button>
         </div>
       </div>
 

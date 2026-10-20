@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
 import type { EstadoGrafico } from '@/motores/nucleo/pipeline';
-import { num } from '@/lib/format';
+import { decimalesDe, num } from '@/lib/format';
 
 const FILAS_POR_LADO = 13;
 const fmtQ = (v: number) => (v === 0 ? '' : v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2));
 
 /**
- * DOM (Level 2): escalera de precios agrupada a 1 USD con liquidez pasiva (bid/ask), tendencia del nivel
+ * DOM (Level 2): escalera de precios agrupada (≈ 1,2 pb por nivel; 1 USD en BTC) con liquidez pasiva (bid/ask), tendencia del nivel
  * (▲ stacking / ▼ pulling, del OrderBookEngine de Urus), volumen agresor ejecutado en los últimos 10 s
  * y desequilibrio entre niveles contiguos (≥ 3:1).
  */
@@ -14,13 +14,14 @@ export default function DomEscalera({ estado }: { estado: EstadoGrafico | null }
   const filas = useMemo(() => {
     const libro = estado?.libro;
     if (!libro) return [];
-    const golpes = new Map(libro.golpes.map((g) => [Math.round(g.p), g]));
+    const clave = (p: number) => Math.round(p / libro.paso);
+    const golpes = new Map(libro.golpes.map((g) => [clave(g.p), g]));
     const asks = libro.asks.slice(0, FILAS_POR_LADO).reverse();
     const bids = libro.bids.slice(0, FILAS_POR_LADO);
     const max = Math.max(1, ...asks.map((a) => a[1]), ...bids.map((b) => b[1]));
     const maxG = Math.max(0.001, ...libro.golpes.map((g) => Math.max(g.compra, g.venta)));
     const fila = (p: number, tam: number, tendencia: number, lado: 'ask' | 'bid', vecino: number | undefined) => {
-      const g = golpes.get(Math.round(p));
+      const g = golpes.get(clave(p));
       const ratio = vecino && vecino > 0 ? tam / vecino : null;
       return { p, tam, tendencia, lado, compra: g?.compra ?? 0, venta: g?.venta ?? 0, pct: tam / max, pctCompra: (g?.compra ?? 0) / maxG, pctVenta: (g?.venta ?? 0) / maxG, imb: ratio !== null && ratio >= 3 };
     };
@@ -32,16 +33,19 @@ export default function DomEscalera({ estado }: { estado: EstadoGrafico | null }
 
   const libro = estado?.libro;
   const m = estado?.metricas;
+  const dp = decimalesDe(libro?.paso ?? 1);
+  const dt = decimalesDe(estado?.tickSize ?? 0.1);
+  const base = (estado?.simbolo ?? 'BTCUSDT').replace(/(USDT|USDC|BUSD|USD)$/, '') || 'Vol';
 
   return (
     <div className="flex h-full flex-col">
       <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 border-b border-borde-suave px-3 py-2.5 font-mono text-[10px]">
-        <Dato k="Spread" v={libro?.spread != null ? num(libro.spread, 1) : '—'} />
+        <Dato k="Spread" v={libro?.spread != null ? num(libro.spread, dt) : '—'} />
         <Dato k="OBI 10" v={libro?.obi10 != null ? `${libro.obi10 > 0 ? '+' : ''}${num(libro.obi10, 2)}` : '—'} />
-        <Dato k="MicroPrice" v={libro?.microPrice != null ? num(libro.microPrice, 1) : '—'} />
+        <Dato k="MicroPrice" v={libro?.microPrice != null ? num(libro.microPrice, dt + 1) : '—'} />
         <Dato k="Imbalance" v={libro?.imbalance != null ? `${libro.imbalance > 0 ? '+' : ''}${num(libro.imbalance, 2)}` : '—'} />
         <Dato k="Trades/s" v={m ? num(m.tradesPorSeg, 0) : '—'} />
-        <Dato k="BTC/s" v={m ? num(m.volumenPorSeg, 2) : '—'} />
+        <Dato k={`${base}/s`} v={m ? num(m.volumenPorSeg, 2) : '—'} />
         <Dato k="Compra/s" v={m ? num(m.compraPorSeg, 2) : '—'} />
         <Dato k="Venta/s" v={m ? num(m.ventaPorSeg, 2) : '—'} />
       </div>
@@ -60,7 +64,7 @@ export default function DomEscalera({ estado }: { estado: EstadoGrafico | null }
             <div key={`${f.lado}${f.p}`} className={`grid grid-cols-[1fr_1fr_64px_1fr_1fr] items-center px-1 ${mejor ? 'bg-white/[0.05]' : ''} ${f.lado === 'bid' && i === FILAS_POR_LADO ? 'border-t border-plata-500' : ''}`}>
               <Celda pct={f.pctVenta} valor={fmtQ(f.venta)} derecha />
               {f.lado === 'bid' ? <Celda pct={f.pct} valor={fmtQ(f.tam)} derecha fuerte={f.imb} tendencia={f.tendencia} /> : <span />}
-              <span className={`py-[3px] text-center ${mejor ? 'text-white' : 'text-plata-300'}`}>{num(f.p, 0)}</span>
+              <span className={`py-[3px] text-center ${mejor ? 'text-white' : 'text-plata-300'}`}>{num(f.p, dp)}</span>
               {f.lado === 'ask' ? <Celda pct={f.pct} valor={fmtQ(f.tam)} fuerte={f.imb} tendencia={f.tendencia} /> : <span />}
               <Celda pct={f.pctCompra} valor={fmtQ(f.compra)} />
             </div>

@@ -7,7 +7,8 @@ import { Anillo, CintaTrades } from './anillo';
 import { SerieBarras, type BarraAnalizada } from './serieBarras';
 import { MotorMercado, type MetricasFlujo } from './motorMercado';
 import { construirFila, type FilaFeatures } from './features';
-import { AGRUPACION_POR_TEMPORALIDAD, TEMPORALIDADES, type EstadoConexion, type EventoMotor, type IdTemporalidad, type MensajeMercado } from './tipos';
+import { parametrosPorDefecto, type ParametrosSimbolo } from './parametros';
+import { type EstadoConexion, type EventoMotor, type IdTemporalidad, type MensajeMercado } from './tipos';
 
 export interface NivelGrafico {
   p: number;
@@ -41,6 +42,8 @@ export interface BarraGrafico {
 export interface LibroGrafico {
   bids: [number, number, number][];
   asks: [number, number, number][];
+  /** Paso de precio de la vista del libro (tick × agrupación). */
+  paso: number;
   mid: number | null;
   spread: number | null;
   imbalance: number | null;
@@ -52,6 +55,7 @@ export interface LibroGrafico {
 
 export interface EstadoGrafico {
   simbolo: string;
+  tickSize: number;
   temporalidad: IdTemporalidad;
   paso: number;
   ahora: number;
@@ -87,10 +91,16 @@ export class Pipeline {
   conexion: EstadoConexion = 'detenido';
   detalleConexion = '';
 
-  constructor(readonly simbolo = 'BTCUSDT', readonly tickSize = 0.1) {
+  readonly simbolo: string;
+  readonly tickSize: number;
+
+  constructor(readonly parametros: ParametrosSimbolo = parametrosPorDefecto()) {
+    const { simbolo, tickSize, temporalidades, pasos } = parametros;
+    this.simbolo = simbolo;
+    this.tickSize = tickSize;
     this.mercado = new MotorMercado(simbolo, tickSize);
-    this.canonica = new SerieBarras(TEMPORALIDADES.dollar, AGRUPACION_POR_TEMPORALIDAD.dollar, 600, tickSize);
-    this.vista = new SerieBarras(TEMPORALIDADES['1m'], AGRUPACION_POR_TEMPORALIDAD['1m'], 600, tickSize);
+    this.canonica = new SerieBarras(temporalidades.dollar, pasos.dollar, 600, tickSize);
+    this.vista = new SerieBarras(temporalidades['1m'], pasos['1m'], 600, tickSize);
   }
 
   get temporalidad(): IdTemporalidad {
@@ -134,7 +144,7 @@ export class Pipeline {
   cambiarTemporalidad(id: IdTemporalidad): void {
     if (id === this.idVista) return;
     this.idVista = id;
-    this.vista = new SerieBarras(TEMPORALIDADES[id], AGRUPACION_POR_TEMPORALIDAD[id], 600, this.tickSize);
+    this.vista = new SerieBarras(this.parametros.temporalidades[id], this.parametros.pasos[id], 600, this.tickSize);
     this.cvdVista = new Map();
     this.cvdAcum = 0;
     this.diaCvd = -1;
@@ -238,6 +248,7 @@ export class Pipeline {
       libro = {
         bids: v.bids.slice(0, 60).map((l) => [l[0], l[1], l[2]]),
         asks: v.asks.slice(0, 60).map((l) => [l[0], l[1], l[2]]),
+        paso: v.tickSize * v.group,
         mid: v.mid,
         spread: v.spread,
         imbalance: v.imbalance,
@@ -253,6 +264,7 @@ export class Pipeline {
 
     return {
       simbolo: this.simbolo,
+      tickSize: this.tickSize,
       temporalidad: this.idVista,
       paso: this.vista.paso,
       ahora,

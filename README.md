@@ -11,6 +11,7 @@ npm run build      # typecheck + build de producción en dist/
 npm run lint
 npm test           # 266 pruebas (motores de Urus + núcleo de athenAI)
 npm run soak       # prueba de resistencia: 8 h de mercado simulado
+npm run binance-simulado  # Binance USD-M local (REST + WS) para probar la fuente sin internet
 ```
 
 ## Lógica del sistema
@@ -32,7 +33,7 @@ npm run soak       # prueba de resistencia: 8 h de mercado simulado
 | — | Estrategias | Biblioteca con todos los veredictos, incluidas las rechazadas |
 | E | Agentes | Sala 3D con Rastreador, Lector, Sintetizador y Flujo, y su consola en tiempo real |
 | F | Paper Trading · Decisiones | Bots monitorizados, posiciones en vivo, cuenta real bloqueada y bitácora de decisiones |
-| G | Máquinas · Datos | Telemetría de infraestructura, Recorder y Features |
+| G | Máquinas · Datos | Telemetría de infraestructura. **Centro de datos**: fuente (Binance por defecto, Rithmic por puente, servidor Urus, Simulación), activos que aprende, feeds y una carpeta de Features por fuente |
 
 ## Motores de Order Flow (Urus)
 

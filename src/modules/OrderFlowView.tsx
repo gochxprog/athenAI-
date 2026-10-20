@@ -4,12 +4,12 @@ import { Activity, Cpu, Download, ListTree, Table2 } from 'lucide-react';
 import Encabezado from '@/components/ui/Encabezado';
 import Panel from '@/components/ui/Panel';
 import Insignia from '@/components/ui/Insignia';
-import OrderFlowChart, { useEstadoMotor } from '@/components/orderflow/OrderFlowChart';
-import { motorOrderFlow } from '@/motores/worker/motorCliente';
+import OrderFlowChart, { NOMBRE_PROVEEDOR, useEstadoMotor, useFeeds } from '@/components/orderflow/OrderFlowChart';
+import { descargarCsv, motorOrderFlow } from '@/motores/worker/motorCliente';
 import { DEFINICIONES_FEATURES } from '@/motores/nucleo/features';
 import type { EstadoGrafico } from '@/motores/nucleo/pipeline';
 import type { TipoEvento } from '@/motores/nucleo/tipos';
-import { hora, num } from '@/lib/format';
+import { decimalesDe, hora, num } from '@/lib/format';
 
 type Pestana = 'eventos' | 'features' | 'salud';
 
@@ -25,12 +25,14 @@ const NOMBRE_EVENTO: Record<TipoEvento, string> = {
 export default function OrderFlowView() {
   const { estado, msProceso } = useEstadoMotor();
   const [pestana, setPestana] = useState<Pestana>('eventos');
+  const { feeds } = useFeeds();
 
   return (
     <div className="space-y-4">
       <Encabezado
         modulo="Order Flow"
         titulo="Gráficos de Order Flow"
+        fuente={feeds.proveedor ? `${NOMBRE_PROVEEDOR[feeds.proveedor].toUpperCase()}${estado ? ` · ${estado.simbolo}` : ''}` : 'SIN FUENTE'}
         descripcion="Velas o Footprint, CVD, Open Interest, absorción, agotamiento, pools de liquidez (LHM), big trades, icebergs y stop runs, con el DOM al lado. Calculado por los motores de Urus en un proceso aparte; lo mismo que ves es lo que aprenden los modelos."
       >
         <Insignia variante="contorno">{estado ? `${num(estado.metricas.barrasCanonicas)} filas de Features` : 'Arrancando motor…'}</Insignia>
@@ -92,22 +94,22 @@ const COLUMNAS_VISTA = ['delta', 'trades_rel', 'cvd_sesion', 'imb_compra', 'imb_
 function Features({ estado }: { estado: EstadoGrafico | null }) {
   const [exportando, setExportando] = useState(false);
   const filas = estado?.features.ultimas ?? [];
+  const { feeds } = useFeeds();
+  const usd = feeds.feeds.find((f) => f.simbolo === feeds.visible)?.dollarBarUsd ?? 10_000_000;
   const exportar = async () => {
     setExportando(true);
-    const { csv } = await motorOrderFlow.exportarFeatures();
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `athenai-features-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setExportando(false);
+    try {
+      const { csv, simbolo, proveedor } = await motorOrderFlow.exportarFeatures();
+      descargarCsv(csv, `athenai-${proveedor ?? 'motor'}-${simbolo ?? 'activo'}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`);
+    } finally {
+      setExportando(false);
+    }
   };
   const nombre = (k: string) => DEFINICIONES_FEATURES.find((d) => d.clave === k)?.nombre ?? k;
   return (
     <div className="space-y-4">
       <Panel
-        titulo={`Features por dollar bar (10 M USD) · ${num(estado?.features.total ?? 0)} filas`}
+        titulo={`Features de ${estado?.simbolo ?? '—'} por dollar bar (${usd >= 1e6 ? `${num(usd / 1e6)} M` : `${num(usd / 1e3)} mil`} USD) · ${num(estado?.features.total ?? 0)} filas`}
         icono={Table2}
         accion={
           <button onClick={exportar} disabled={exportando} className="flex items-center gap-1.5 rounded-md border border-borde px-2.5 py-1 text-[11px] text-plata-200 hover:border-plata-400 hover:text-white disabled:opacity-40">
@@ -135,7 +137,7 @@ function Features({ estado }: { estado: EstadoGrafico | null }) {
             {filas.map((f) => (
               <tr key={f.n} className="border-t border-borde-suave text-plata-200">
                 <td className="py-1.5 text-left text-plata-400">{hora(new Date(f.cierre))}</td>
-                <td className="py-1.5">{num(f.close, 1)}</td>
+                <td className="py-1.5">{num(f.close, decimalesDe(estado?.tickSize ?? 0.1))}</td>
                 {COLUMNAS_VISTA.map((k) => {
                   const v = f.valores[k];
                   return (

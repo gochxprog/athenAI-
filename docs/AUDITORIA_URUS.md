@@ -73,14 +73,36 @@ UI (hilo principal) ◄── estado compacto a 5 Hz ── dibuja en canvas (ve
 
 La memoria y el tiempo se estabilizan cuando la cinta se llena (hora 3) y **no crecen después**. ≈ 100 ms por minuto de mercado equivale a ≈ 0,17 % de un núcleo.
 
-## 6. Conectar al servidor de Urus
+## 6. Centro de datos (módulo Datos)
 
-En **Order Flow → Servidor Urus**, escribe la URL del servidor (por defecto `http://localhost:3000`).
+La fuente ya no se elige en el gráfico: se configura en **Datos → Centro de datos**. Hay **una fuente activa a la vez**:
 
-athenAI usa estas rutas del servidor:
+| Fuente | Qué necesita | Notas |
+|---|---|---|
+| **Binance Futures** (por defecto) | Nada: datos públicos | aggTrades + libro L2 sincronizado (snapshot + diffs encadenados por `pu`) + Open Interest cada 5 s |
+| **Rithmic** | Usuario, contraseña, sistema, gateway y la URL de un **puente R\|Protocol** | Rithmic no acepta conexiones desde un navegador. athenAI hace `POST {puente}/api/rithmic/login` y luego lee el mercado con el protocolo de Urus. Sin puente, el feed muestra el error |
+| **Servidor Urus** | URL del servidor | `GET /api/realtime/stream`, `POST /api/realtime/subscriptions`, `GET /api/oi` (CORS para el origen de athenAI) |
+| **Simulación** | Nada | Solo pruebas; nunca se mezcla con datos reales |
 
-- `GET /api/realtime/stream` (SSE);
-- `POST /api/realtime/subscriptions` con los topics `trades:BTCUSDT` y `book:BTCUSDT:200:10`;
-- `GET /api/oi`.
+Al pulsar **Aplicar y empezar a aprender**:
 
-Si athenAI y Urus se sirven desde dominios distintos, el servidor de Urus debe permitir **CORS** para el origen de athenAI.
+1. se detiene la fuente anterior y se descarta todo su estado (**pipeline limpio**);
+2. se crea **un pipeline por activo** (hasta 6);
+3. cada pipeline se **calibra a su activo**:
+   - tick del exchange (o tabla de futuros CME / menor salto observado si la fuente no lo publica);
+   - paso del Footprint proporcional al precio;
+   - dollar bar ≈ volumen de 24 h / 2.000, entre 100 mil y 10 M USD;
+   - volume bar equivalente en unidades del activo.
+
+La configuración se guarda en el navegador. La contraseña de Rithmic **no** se guarda salvo que se marque «Recordar la contraseña».
+
+### Dónde quedan los datos
+
+Cada fuente tiene su propia base IndexedDB (su "carpeta"): `athenai-binance`, `athenai-rithmic`, `athenai-urus`, `athenai-simulacion`.
+
+- Cada fila lleva `simbolo` y `sesion`. La sesión cambia al reaplicar o reconectar, porque la numeración de barras se reinicia.
+- Cada carpeta se exporta a CSV por activo o se borra sin tocar las demás.
+
+### Probar sin internet
+
+`npm run binance-simulado` levanta un Binance USD-M local (REST + WebSocket con el formato real). En **Endpoints (avanzado)** pon `http://localhost:8899` y `ws://localhost:8899`.

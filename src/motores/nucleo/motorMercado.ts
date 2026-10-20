@@ -37,6 +37,7 @@ export class MotorMercado {
 
   libro: OrderBookView | null = null;
   ahora = 0;
+  ultimoPrecio: number | null = null;
   cvdSesion = 0;
   /** VWAP de la sesión UTC en curso. */
   vwapSesion: number | null = null;
@@ -58,6 +59,7 @@ export class MotorMercado {
 
   trade(t: AggTrade): void {
     if (t.timestamp > this.ahora) this.ahora = t.timestamp;
+    this.ultimoPrecio = t.price;
     const r = this.cvd.processTick({ timestamp: t.timestamp, price: t.price, volume: t.quantity, isBuyerMaker: t.buyerIsMaker, id: t.aggTradeId });
     this.cvdSesion = r.cvd;
 

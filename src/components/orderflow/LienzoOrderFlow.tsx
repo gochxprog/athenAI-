@@ -1,3 +1,4 @@
+import { decimalesDe } from '@/lib/format';
 import { useEffect, useRef } from 'react';
 import type { BarraGrafico, EstadoGrafico } from '@/motores/nucleo/pipeline';
 import type { EventoMotor } from '@/motores/nucleo/tipos';
@@ -156,6 +157,7 @@ function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGra
     return;
   }
 
+  const dp = decimalesDe(estado.tickSize);
   const todas: BarraGrafico[] = estado.enCurso ? [...estado.barras, estado.enCurso] : estado.barras;
   const areaW = W - EJE_PRECIO;
   const altoSub = (on: boolean, frac: number) => (on ? Math.round((H - EJE_TIEMPO) * frac) : 0);
@@ -227,7 +229,7 @@ function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGra
     ctx.lineTo(areaW, y);
     ctx.stroke();
     ctx.fillStyle = C.eje;
-    ctx.fillText(fmt(p, pasoEje < 1 ? 1 : 0), areaW + 6, y);
+    ctx.fillText(fmt(p, decimalesDe(pasoEje)), areaW + 6, y);
   }
 
   // LHM: pools vivos (línea continua) y huellas de pools barridos (discontinua, se desvanece).
@@ -329,7 +331,7 @@ function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGra
     ctx.lineTo(areaW, y);
     ctx.stroke();
     ctx.setLineDash([]);
-    etiquetaEje(ctx, areaW, y, fmt(ultima.c, 1), true);
+    etiquetaEje(ctx, areaW, y, fmt(ultima.c, dp), true);
   }
 
   // Subpaneles.
@@ -371,14 +373,14 @@ function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGra
     ctx.lineTo(areaW, m.y + 0.5);
     ctx.stroke();
     ctx.setLineDash([]);
-    if (m.y < hPrincipal) etiquetaEje(ctx, areaW, m.y, fmt(pDeY(m.y), 1), true);
+    if (m.y < hPrincipal) etiquetaEje(ctx, areaW, m.y, fmt(pDeY(m.y), dp), true);
     const k = Math.round((m.x - xDe(0)) / v.ancho);
     const b = visibles[k];
     if (b) {
       const lineas = [
         `${hhmm(b.t)}${b.completa ? '' : ' · en curso'}`,
-        `O ${fmt(b.o)}  H ${fmt(b.h)}`,
-        `L ${fmt(b.l)}  C ${fmt(b.c)}`,
+        `O ${fmt(b.o, dp)}  H ${fmt(b.h, dp)}`,
+        `L ${fmt(b.l, dp)}  C ${fmt(b.c, dp)}`,
         `Vol ${fmtQ(b.v)}  Δ ${b.d > 0 ? '+' : ''}${fmtQ(b.d)}`,
         `CVD ${fmt(b.cvd, 0)}${b.oi !== null ? `  OI ${fmt(b.oi, 0)}` : ''}`,
       ];
