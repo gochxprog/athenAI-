@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { ContactShadows, Grid, Html, OrbitControls, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { AGENTES, type AgenteId } from '@/data/mock';
@@ -191,6 +191,12 @@ function Puesto({ id, seleccionado, onSeleccion }: { id: AgenteId; seleccionado:
         <meshStandardMaterial color={GRIS_OSCURO} />
       </mesh>
 
+      {/* Zona de toque amplia e invisible: facilita seleccionar al agente en pantallas táctiles */}
+      <mesh position={[0, 0.85, 0.3]}>
+        <cylinderGeometry args={[0.55, 0.55, 1.7, 16]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+
       {/* Agente */}
       <group ref={cuerpo} position={[0, 0, 0.5]}>
         <mesh position={[0, 0.42, 0]}>
@@ -214,11 +220,15 @@ function Puesto({ id, seleccionado, onSeleccion }: { id: AgenteId; seleccionado:
         </group>
       </group>
 
-      <Html position={[0, 1.78, 0.5]} center style={{ pointerEvents: 'none' }}>
-        <div className={`whitespace-nowrap rounded-md border px-2 py-1 text-center backdrop-blur transition-colors ${seleccionado ? 'border-white bg-white text-black' : 'border-borde bg-black/70 text-white'}`}>
+      <Html position={[0, 1.78, 0.5]} center zIndexRange={[20, 0]}>
+        <button
+          type="button"
+          onClick={() => onSeleccion(id)}
+          className={`block cursor-pointer whitespace-nowrap rounded-md border px-2.5 py-1.5 text-center backdrop-blur transition-colors ${seleccionado ? 'border-white bg-white text-black' : 'border-borde bg-black/70 text-white hover:border-plata-300'}`}
+        >
           <p className="text-[11px] font-medium leading-none">{agente.nombre}</p>
           <p className={`mt-0.5 text-[9px] uppercase tracking-[0.14em] ${seleccionado ? 'text-black/60' : 'text-plata-400'}`}>{agente.estado}</p>
-        </div>
+        </button>
       </Html>
     </group>
   );
@@ -234,9 +244,21 @@ function Sala() {
   );
 }
 
+/** Aleja la cámara en pantallas estrechas para que los cuatro puestos queden siempre a la vista. */
+function AjusteCamara() {
+  const { camera, size } = useThree();
+  useEffect(() => {
+    const factor = Math.max(1, 1.45 / (size.width / size.height));
+    camera.position.set(0, 3.4 * factor, 5.6 * factor);
+    camera.lookAt(0, 0.9, -0.8);
+  }, [camera, size.width, size.height]);
+  return null;
+}
+
 export default function SalaAgentes3D({ seleccion, onSeleccion }: Props) {
   return (
     <Canvas shadows camera={{ position: [0, 3.4, 5.6], fov: 42 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }}>
+      <AjusteCamara />
       <ambientLight intensity={0.35} />
       <directionalLight position={[3, 6, 4]} intensity={1.1} castShadow shadow-mapSize={[1024, 1024]} />
       <directionalLight position={[-4, 3, -2]} intensity={0.35} />
@@ -248,7 +270,7 @@ export default function SalaAgentes3D({ seleccion, onSeleccion }: Props) {
       {AGENTES.map((a) => (
         <Puesto key={a.id} id={a.id} seleccionado={seleccion === a.id} onSeleccion={onSeleccion} />
       ))}
-      <OrbitControls target={[0, 0.9, -0.8]} enablePan={false} minDistance={4} maxDistance={10} minPolarAngle={0.5} maxPolarAngle={1.35} enableDamping autoRotate={seleccion === null} autoRotateSpeed={0.25} />
+      <OrbitControls target={[0, 0.9, -0.8]} enablePan={false} minDistance={4} maxDistance={16} minPolarAngle={0.5} maxPolarAngle={1.35} enableDamping />
     </Canvas>
   );
 }

@@ -316,39 +316,18 @@ export interface Maquina {
   ram: number;
   gpu: number | null;
   procesos: number;
-  costoHora: number;
+  uptime: string;
   region: string;
 }
 
 export const MAQUINAS: Maquina[] = [
-  { id: 'srv-dl-01', rol: 'Entrenamiento Deep Learning (Cerebro)', estado: 'Operativa', cpu: 71, ram: 64, gpu: 88, procesos: 3, costoHora: 1.815, region: 'eu-central' },
-  { id: 'srv-ml-01', rol: 'Laboratorio ML (RF / LightGBM)', estado: 'Operativa', cpu: 83, ram: 57, gpu: null, procesos: 6, costoHora: 0.63, region: 'eu-central' },
-  { id: 'srv-juez-01', rol: 'Juez: Backtest · Walk-Forward · Monte Carlo', estado: 'Operativa', cpu: 92, ram: 48, gpu: null, procesos: 12, costoHora: 1.02, region: 'eu-central' },
-  { id: 'srv-recorder', rol: 'Recorder de Order Flow (Binance USD-M)', estado: 'Operativa', cpu: 24, ram: 31, gpu: null, procesos: 2, costoHora: 0.135, region: 'ap-northeast' },
-  { id: 'srv-bots-01', rol: 'Ejecución de bots (Paper Trading)', estado: 'Operativa', cpu: 18, ram: 22, gpu: null, procesos: 4, costoHora: 0.135, region: 'ap-northeast' },
-  { id: 'srv-db-01', rol: 'Base de datos de series temporales', estado: 'Standby', cpu: 9, ram: 41, gpu: null, procesos: 1, costoHora: 0.255, region: 'eu-central' },
+  { id: 'srv-dl-01', rol: 'Entrenamiento Deep Learning (Cerebro)', estado: 'Operativa', cpu: 71, ram: 64, gpu: 88, procesos: 3, uptime: '41 d 6 h', region: 'eu-central' },
+  { id: 'srv-ml-01', rol: 'Laboratorio ML (RF / LightGBM)', estado: 'Operativa', cpu: 83, ram: 57, gpu: null, procesos: 6, uptime: '41 d 6 h', region: 'eu-central' },
+  { id: 'srv-juez-01', rol: 'Juez: Backtest · Walk-Forward · Monte Carlo', estado: 'Operativa', cpu: 92, ram: 48, gpu: null, procesos: 12, uptime: '18 d 2 h', region: 'eu-central' },
+  { id: 'srv-recorder', rol: 'Recorder de Order Flow (Binance USD-M)', estado: 'Operativa', cpu: 24, ram: 31, gpu: null, procesos: 2, uptime: '172 d 9 h', region: 'ap-northeast' },
+  { id: 'srv-bots-01', rol: 'Ejecución de bots (Paper Trading)', estado: 'Operativa', cpu: 18, ram: 22, gpu: null, procesos: 4, uptime: '37 d 0 h', region: 'ap-northeast' },
+  { id: 'srv-db-01', rol: 'Base de datos de series temporales', estado: 'Standby', cpu: 9, ram: 41, gpu: null, procesos: 1, uptime: '96 d 14 h', region: 'eu-central' },
 ];
-
-export const COSTOS_MES = [
-  { concepto: 'GPU · entrenamiento del Cerebro (srv-dl-01)', categoria: 'Máquinas', monto: 871.2 },
-  { concepto: 'Juez · Backtest y Monte Carlo (srv-juez-01)', categoria: 'Máquinas', monto: 489.6 },
-  { concepto: 'Laboratorio ML (srv-ml-01)', categoria: 'Máquinas', monto: 302.4 },
-  { concepto: 'Almacenamiento de Order Flow (2,8 TB)', categoria: 'Datos', monto: 64.4 },
-  { concepto: 'Recorder + bots (srv-recorder, srv-bots-01)', categoria: 'Máquinas', monto: 129.6 },
-  { concepto: 'Base de datos (srv-db-01)', categoria: 'Máquinas', monto: 122.4 },
-  { concepto: 'Agentes · inferencia de modelos', categoria: 'Agentes', monto: 218.3 },
-];
-
-export const COSTO_POR_AGENTE = [
-  { agente: 'Rastreador', horas: 712, monto: 61.8 },
-  { agente: 'Lector', horas: 488, monto: 44.2 },
-  { agente: 'Sintetizador', horas: 655, monto: 72.9 },
-  { agente: 'Flujo', horas: 720, monto: 39.4 },
-];
-
-export const PRESUPUESTO_MES = 4_000;
-/** Días transcurridos del mes en la DEMO (20 de octubre). */
-export const DIAS_MES_TRANSCURRIDOS = 20;
 
 export interface Feature {
   nombre: string;

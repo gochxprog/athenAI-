@@ -9,6 +9,8 @@ import Consola from '@/components/ui/Consola';
 import Sparkline from '@/components/charts/Sparkline';
 import Barra from '@/components/ui/Barra';
 import { useSistema, usePulso } from '@/hooks/SistemaDemo';
+import { useNavegar } from '@/hooks/Navegacion';
+import type { Modulo } from '@/types/nav';
 import { BOTS, ESTRATEGIAS, MODELOS } from '@/data/mock';
 import { conSigno, num, pct } from '@/lib/format';
 import type { BarraFlujo, TipoEvento } from '@/lib/simulacion';
@@ -57,6 +59,7 @@ export default function DashboardView() {
   const anclasIzq = useAnclas(centroRef, izqRefs);
   const anclasDer = useAnclas(centroRef, derRefs);
   const [red, setRed] = useState({ nodos: 0, sinapsis: 0 });
+  const navegar = useNavegar();
   const dl = MODELOS[0];
 
   return (
@@ -105,7 +108,7 @@ export default function DashboardView() {
           <TituloColumna derecha>Métricas del Motor</TituloColumna>
           <div className="flex flex-1 flex-col justify-between gap-3">
             <div ref={(el) => (derRefs.current[0] = el)}>
-              <Panel titulo="Hipótesis Generadas" icono={Lightbulb} conector="izq">
+              <Panel titulo="Hipótesis Generadas" icono={Lightbulb} conector="izq" onClick={() => navegar('investigacion')}>
                 <ContadorAnimado valor={motor.hipotesis} className="text-[34px] font-light leading-none text-white" />
                 <p className="mt-2 text-[11px] text-plata-500">Propuestas por los modelos desde datos de Order Flow</p>
                 <div className="mt-3 grid grid-cols-2 gap-2 border-t border-borde-suave pt-3 text-[10px]">
@@ -115,14 +118,14 @@ export default function DashboardView() {
               </Panel>
             </div>
             <div ref={(el) => (derRefs.current[1] = el)}>
-              <Panel titulo="Pruebas en Proceso" icono={FlaskConical} conector="izq">
+              <Panel titulo="Pruebas en Proceso" icono={FlaskConical} conector="izq" onClick={() => navegar('laboratorio')}>
                 <ContadorAnimado valor={motor.pruebas} className="text-[34px] font-light leading-none text-white" />
                 <p className="mt-2 text-[11px] text-plata-500">Backtest · Walk-Forward · Monte Carlo</p>
                 <PruebasEnCurso />
               </Panel>
             </div>
             <div ref={(el) => (derRefs.current[2] = el)}>
-              <Panel titulo="Aprobadas por el Juez" icono={Gavel} conector="izq">
+              <Panel titulo="Aprobadas por el Juez" icono={Gavel} conector="izq" onClick={() => navegar('estrategias')}>
                 <div className="flex items-baseline justify-between">
                   <ContadorAnimado valor={motor.aprobadas} className="text-[34px] font-light leading-none text-white" />
                   <span className="cifra text-[11px] text-plata-400">{pct(motor.aprobadas / (motor.aprobadas + motor.rechazadas), 1)} de lo evaluado</span>
@@ -164,6 +167,7 @@ function MiniDato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
 }
 
 function MercadoVivo() {
+  const navegar = useNavegar();
   const { mercado } = useSistema();
   const previo = useRef(mercado.precio);
   const dir = mercado.precio > previo.current ? 1 : mercado.precio < previo.current ? -1 : 0;
@@ -174,7 +178,7 @@ function MercadoVivo() {
   const spread = 0.1;
 
   return (
-    <Panel titulo="Mercado Vivo · Binance USD-M" icono={Radio} conector="der">
+    <Panel titulo="Mercado Vivo · Binance USD-M" icono={Radio} conector="der" onClick={() => navegar('datos')}>
       <div className="flex items-center justify-between">
         <span className="font-mono text-[11px] text-plata-400">BTCUSDT · Perpetuo</span>
         <Estado estado={mercado.conectado ? 'activo' : 'detenido'} texto={mercado.conectado ? 'Conectado' : 'Desconectado'} />
@@ -196,6 +200,7 @@ function MercadoVivo() {
 }
 
 function FlujoOrderFlow({ barras }: { barras: BarraFlujo[] }) {
+  const navegar = useNavegar();
   const { mercado } = useSistema();
   const deltas = barras.map((b) => b.compra - b.venta);
   const ordenados = deltas.map(Math.abs).sort((a, b) => a - b);
@@ -203,7 +208,7 @@ function FlujoOrderFlow({ barras }: { barras: BarraFlujo[] }) {
   const ultima = deltas[deltas.length - 1];
 
   return (
-    <Panel titulo="Flujo Order Flow · Recorder" icono={BarChart3} conector="der">
+    <Panel titulo="Flujo Order Flow · Recorder" icono={BarChart3} conector="der" onClick={() => navegar('datos')}>
       <div className="flex items-center justify-between">
         <span className="font-mono text-[11px] text-plata-400">Delta por dollar bar</span>
         <Estado estado={mercado.grabando ? 'activo' : 'detenido'} texto={mercado.grabando ? 'Grabando' : 'Detenido'} />
@@ -234,6 +239,7 @@ function FlujoOrderFlow({ barras }: { barras: BarraFlujo[] }) {
 }
 
 function MetricasEntrada() {
+  const navegar = useNavegar();
   const { mercado } = useSistema();
   const distancia = (mercado.precio - mercado.vwap) / mercado.atr;
   const filas = [
@@ -243,7 +249,7 @@ function MetricasEntrada() {
     { k: 'Open Interest', v: `${num(mercado.oi, 0)} BTC`, n: 'perpetuo' },
   ];
   return (
-    <Panel titulo="Métricas de Entrada" icono={Database} conector="der" cuerpo="px-4 py-2" accion={<span className="font-mono text-[9.5px] text-plata-500">Features</span>}>
+    <Panel titulo="Métricas de Entrada" icono={Database} conector="der" onClick={() => navegar('datos')} cuerpo="px-4 py-2" accion={<span className="font-mono text-[9.5px] text-plata-500">Features</span>}>
       <dl className="divide-y divide-borde-suave">
         {filas.map((f) => (
           <div key={f.k} className="flex items-baseline justify-between gap-2 py-2">
@@ -286,24 +292,25 @@ function PruebasEnCurso() {
 function CadenaFlujo() {
   const { motor, mercado } = useSistema();
   const pasos = [
-    { titulo: 'Fuentes de datos', dato: `${num(mercado.dollarBars)} dollar bars`, icono: Database },
-    { titulo: 'Cerebro ML / DL', dato: `${num(motor.hipotesis)} hipótesis`, icono: Brain },
-    { titulo: 'Juez', dato: `${motor.pruebas} en prueba · reglas bloqueadas`, icono: Gavel },
-    { titulo: 'Estrategias', dato: `${ESTRATEGIAS.filter((e) => e.veredicto === 'Aprobada').length} aprobadas en biblioteca`, icono: CheckCheck },
-    { titulo: 'Bots', dato: `${BOTS.filter((b) => b.estado === 'Ejecutando').length} ejecutando · Paper`, icono: Activity },
+    { titulo: 'Fuentes de datos', dato: `${num(mercado.dollarBars)} dollar bars`, icono: Database, destino: 'datos' as Modulo },
+    { titulo: 'Cerebro ML / DL', dato: `${num(motor.hipotesis)} hipótesis`, icono: Brain, destino: 'investigacion' as Modulo },
+    { titulo: 'Juez', dato: `${motor.pruebas} en prueba · reglas bloqueadas`, icono: Gavel, destino: 'laboratorio' as Modulo },
+    { titulo: 'Estrategias', dato: `${ESTRATEGIAS.filter((e) => e.veredicto === 'Aprobada').length} aprobadas en biblioteca`, icono: CheckCheck, destino: 'estrategias' as Modulo },
+    { titulo: 'Bots', dato: `${BOTS.filter((b) => b.estado === 'Ejecutando').length} ejecutando · Paper`, icono: Activity, destino: 'paper' as Modulo },
   ];
+  const navegar = useNavegar();
   return (
     <Panel cuerpo="px-4 py-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-5 sm:gap-0">
         {pasos.map((p, i) => {
           const Icono = p.icono;
           return (
-            <div key={p.titulo} className="relative flex items-center gap-3 sm:pr-6">
+            <button key={p.titulo} onClick={() => navegar(p.destino)} className="group relative flex items-center gap-3 rounded-lg text-left transition-colors hover:bg-white/[0.03] sm:pr-6">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-borde bg-white/[0.03]">
                 <Icono size={15} strokeWidth={1.5} className="text-plata-200" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-white">{p.titulo}</p>
+                <p className="text-xs text-white group-hover:underline group-hover:underline-offset-4">{p.titulo}</p>
                 <p className="cifra truncate text-[10px] text-plata-500">{p.dato}</p>
               </div>
               {i < pasos.length - 1 && (
@@ -315,7 +322,7 @@ function CadenaFlujo() {
                   />
                 </div>
               )}
-            </div>
+            </button>
           );
         })}
       </div>

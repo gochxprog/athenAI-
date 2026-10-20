@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 
@@ -12,10 +12,32 @@ interface Props {
 
 /** Panel deslizante desde la derecha (detalle de hipótesis, consola de agente…). */
 export default function PanelLateral({ abierto, onCerrar, titulo, subtitulo, children }: Props) {
+  const cerrarRef = useRef(onCerrar);
+  cerrarRef.current = onCerrar;
+
+  // Abrir el panel añade una entrada al historial: el botón Atrás lo cierra en vez de salir de la app.
+  useEffect(() => {
+    if (!abierto) return;
+    window.history.pushState({ panelLateral: true }, '');
+    let cerradoConAtras = false;
+    const alVolver = () => {
+      cerradoConAtras = true;
+      cerrarRef.current();
+    };
+    const alTeclear = (e: KeyboardEvent) => e.key === 'Escape' && cerrarRef.current();
+    window.addEventListener('popstate', alVolver);
+    window.addEventListener('keydown', alTeclear);
+    return () => {
+      window.removeEventListener('popstate', alVolver);
+      window.removeEventListener('keydown', alTeclear);
+      if (!cerradoConAtras && window.history.state?.panelLateral) window.history.back();
+    };
+  }, [abierto]);
+
   return (
     <AnimatePresence>
       {abierto && (
-        <>
+        <motion.div key="panel-lateral" initial={{ opacity: 1 }} animate={{ opacity: 1 }} exit={{ opacity: 1 }} transition={{ duration: 0.3 }}>
           <motion.div
             className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px] lg:hidden"
             initial={{ opacity: 0 }}
@@ -41,7 +63,7 @@ export default function PanelLateral({ abierto, onCerrar, titulo, subtitulo, chi
             </header>
             <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
           </motion.aside>
-        </>
+        </motion.div>
       )}
     </AnimatePresence>
   );

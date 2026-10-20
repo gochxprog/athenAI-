@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, FlaskConical, Microscope, Library, Brain, Bot,
-  Wallet, Gavel, Calculator, Server, Database, type LucideIcon,
+  Wallet, Gavel, Server, Database, type LucideIcon,
 } from 'lucide-react';
 import type { Modulo } from '@/types/nav';
 
@@ -32,7 +32,6 @@ export const MENU: { titulo: string; items: ItemMenu[] }[] = [
   {
     titulo: 'Sistema',
     items: [
-      { id: 'costos', etiqueta: 'Costos', icono: Calculator },
       { id: 'maquinas', etiqueta: 'Máquinas', icono: Server },
       { id: 'datos', etiqueta: 'Datos', icono: Database },
     ],

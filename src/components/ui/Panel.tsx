@@ -8,13 +8,23 @@ interface Props {
   conector?: 'izq' | 'der';
   className?: string;
   cuerpo?: string;
+  /** Si se indica, todo el panel es pulsable (teclado incluido). */
+  onClick?: () => void;
   children: ReactNode;
 }
 
 /** Superficie base: vidrio en escala de grises con borde ultrafino. */
-export default function Panel({ titulo, icono: Icono, accion, conector, className = '', cuerpo = 'p-4', children }: Props) {
+export default function Panel({ titulo, icono: Icono, accion, conector, className = '', cuerpo = 'p-4', onClick, children }: Props) {
+  const pulsable = onClick
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        onClick,
+        onKeyDown: (e: React.KeyboardEvent) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onClick()),
+      }
+    : {};
   return (
-    <section className={`panel ${className}`}>
+    <section className={`panel ${onClick ? 'panel-hover cursor-pointer active:scale-[0.995]' : ''} ${className}`} {...pulsable}>
       {(titulo || accion) && (
         <header className="flex items-center justify-between gap-3 border-b border-borde-suave px-4 py-3">
           <div className="flex min-w-0 items-center gap-2">

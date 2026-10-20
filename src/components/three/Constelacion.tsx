@@ -133,20 +133,25 @@ function NodoHipotesis({ h, pos, estado, seleccionado, atenuado, onSeleccion }: 
   };
 
   return (
-    <group position={pos}>
-      <mesh
-        ref={malla}
-        onClick={alClic}
-        onPointerOver={(e) => {
-          e.stopPropagation();
-          setHover(true);
-          document.body.style.cursor = 'pointer';
-        }}
-        onPointerOut={() => {
-          setHover(false);
-          document.body.style.cursor = '';
-        }}
-      >
+    <group
+      position={pos}
+      onClick={alClic}
+      onPointerOver={(e) => {
+        e.stopPropagation();
+        setHover(true);
+        document.body.style.cursor = 'pointer';
+      }}
+      onPointerOut={() => {
+        setHover(false);
+        document.body.style.cursor = '';
+      }}
+    >
+      {/* Zona de toque invisible, más grande que el nodo, para pantallas táctiles */}
+      <mesh>
+        <sphereGeometry args={[Math.max(radio * 3, 0.24), 12, 12]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+      <mesh ref={malla}>
         <sphereGeometry args={[radio, 24, 24]} />
         {rechazada ? (
           <meshBasicMaterial color="#9a9da4" wireframe transparent opacity={opacidad} />

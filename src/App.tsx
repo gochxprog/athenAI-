@@ -1,8 +1,9 @@
 import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import Sidebar from '@/components/layout/Sidebar';
 import Topbar from '@/components/layout/Topbar';
 import { SistemaDemoProvider } from '@/hooks/SistemaDemo';
+import { NavegacionContexto } from '@/hooks/Navegacion';
 import { META_MODULO } from '@/data/metaModulo';
 import type { Modulo } from '@/types/nav';
 
@@ -15,7 +16,6 @@ const EstrategiasView = lazy(() => import('@/modules/EstrategiasView'));
 const AgentesView = lazy(() => import('@/modules/AgentesView'));
 const PaperTradingView = lazy(() => import('@/modules/PaperTradingView'));
 const DecisionesView = lazy(() => import('@/modules/DecisionesView'));
-const CostosView = lazy(() => import('@/modules/CostosView'));
 const MaquinasView = lazy(() => import('@/modules/MaquinasView'));
 const DatosView = lazy(() => import('@/modules/DatosView'));
 
@@ -28,13 +28,36 @@ const VISTAS: Record<Modulo, ComponentType> = {
   agentes: AgentesView,
   paper: PaperTradingView,
   decisiones: DecisionesView,
-  costos: CostosView,
   maquinas: MaquinasView,
   datos: DatosView,
 };
 
+const MODULOS = Object.keys(VISTAS) as Modulo[];
+
+/** El módulo vive en el hash (#/laboratorio) para que el botón Atrás del navegador funcione. */
+function moduloDesdeHash(): Modulo {
+  const h = window.location.hash.replace(/^#\/?/, '');
+  return (MODULOS as string[]).includes(h) ? (h as Modulo) : 'panel';
+}
+
 export default function App() {
-  const [modulo, setModulo] = useState<Modulo>('panel');
+  const [modulo, setModulo] = useState<Modulo>(moduloDesdeHash);
+
+  useEffect(() => {
+    if (!window.location.hash) window.history.replaceState(window.history.state, '', '#/panel');
+    const alCambiar = () => setModulo(moduloDesdeHash());
+    window.addEventListener('popstate', alCambiar);
+    window.addEventListener('hashchange', alCambiar);
+    return () => {
+      window.removeEventListener('popstate', alCambiar);
+      window.removeEventListener('hashchange', alCambiar);
+    };
+  }, []);
+
+  const navegar = (m: Modulo) => {
+    if (m !== moduloDesdeHash()) window.history.pushState(null, '', `#/${m}`);
+    setModulo(m);
+  };
   const meta = META_MODULO[modulo];
   const Vista = VISTAS[modulo];
 
@@ -45,27 +68,22 @@ export default function App() {
 
   return (
     <SistemaDemoProvider>
+      <NavegacionContexto.Provider value={navegar}>
       <div className="flex h-screen overflow-hidden bg-black text-plata-200">
-        <Sidebar activo={modulo} onSeleccion={setModulo} />
+        <Sidebar activo={modulo} onSeleccion={navegar} />
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto" id="contenedor-principal">
           <Topbar titulo={meta.titulo} seccion={meta.seccion} />
           <main className="flex-1 p-4 md:p-6">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={modulo}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.28, ease: 'easeOut' }}
-              >
-                <Suspense fallback={<CargandoModulo />}>
-                  <Vista />
-                </Suspense>
-              </motion.div>
-            </AnimatePresence>
+            {/* Sin animación de salida: una salida que no termina (p. ej. por animaciones internas) dejaría la navegación trabada. */}
+            <motion.div key={modulo} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: 'easeOut' }}>
+              <Suspense fallback={<CargandoModulo />}>
+                <Vista />
+              </Suspense>
+            </motion.div>
           </main>
         </div>
       </div>
+      </NavegacionContexto.Provider>
     </SistemaDemoProvider>
   );
 }

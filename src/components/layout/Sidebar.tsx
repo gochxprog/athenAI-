@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Lock, Menu, X } from 'lucide-react';
 import { MENU } from '@/data/menu';
@@ -16,8 +16,6 @@ export default function Sidebar({ activo, onSeleccion }: Props) {
   const [abierta, setAbierta] = useState(false);
   const { motor, mercado } = useSistema();
 
-  useEffect(() => setAbierta(false), [activo]);
-
   const info: Partial<Record<Modulo, { n?: number; e: EstadoPunto }>> = {
     panel: { e: 'activo' },
     laboratorio: { n: motor.pruebas, e: 'activo' },
@@ -27,7 +25,6 @@ export default function Sidebar({ activo, onSeleccion }: Props) {
     agentes: { n: AGENTES.length, e: 'activo' },
     paper: { n: BOTS.filter((b) => b.estado === 'Ejecutando').length, e: 'activo' },
     decisiones: { e: 'espera' },
-    costos: { e: 'espera' },
     maquinas: { n: MAQUINAS.filter((m) => m.estado === 'Operativa').length, e: 'activo' },
     datos: { e: mercado.grabando ? 'activo' : 'detenido' },
   };
@@ -57,7 +54,10 @@ export default function Sidebar({ activo, onSeleccion }: Props) {
                 return (
                   <li key={it.id}>
                     <button
-                      onClick={() => onSeleccion(it.id)}
+                      onClick={() => {
+                        onSeleccion(it.id);
+                        setAbierta(false);
+                      }}
                       aria-current={sel ? 'page' : undefined}
                       className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors ${
                         sel ? 'text-white' : 'text-plata-400 hover:bg-white/[0.03] hover:text-plata-100'
@@ -108,7 +108,9 @@ export default function Sidebar({ activo, onSeleccion }: Props) {
 
       <AnimatePresence>
         {abierta && (
-          <div className="fixed inset-0 z-50 md:hidden">
+          // El hijo directo de AnimatePresence debe ser un motion con key; si no, nunca se desmonta
+          // y su fondo queda bloqueando todos los toques.
+          <motion.div key="menu-movil" className="fixed inset-0 z-50 md:hidden" initial={{ opacity: 1 }} animate={{ opacity: 1 }} exit={{ opacity: 1 }} transition={{ duration: 0.25 }}>
             <motion.div className="absolute inset-0 bg-black/70 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setAbierta(false)} />
             <motion.aside
               className="absolute left-0 top-0 flex h-full w-64 flex-col border-r border-borde bg-[#050505]"
@@ -119,7 +121,7 @@ export default function Sidebar({ activo, onSeleccion }: Props) {
             >
               {contenido}
             </motion.aside>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </>

@@ -8,7 +8,7 @@ import Insignia from '@/components/ui/Insignia';
 import Sparkline from '@/components/charts/Sparkline';
 import { MAQUINAS, type Maquina } from '@/data/mock';
 import { crearAleatorio, normal } from '@/lib/random';
-import { num, usd } from '@/lib/format';
+import { num } from '@/lib/format';
 
 interface Lectura {
   cpu: number;
@@ -71,7 +71,7 @@ export default function MaquinasView() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi etiqueta="CPU media" valor={`${num(cpuMedia, 0)}%`} />
         <Kpi etiqueta="Procesos" valor={String(MAQUINAS.reduce((a, m) => a + m.procesos, 0))} />
-        <Kpi etiqueta="Costo por hora" valor={usd(MAQUINAS.reduce((a, m) => a + m.costoHora, 0), 2)} />
+        <Kpi etiqueta="Disponibilidad · 30 días" valor="99,97%" />
         <Kpi etiqueta="Regiones" valor="eu-central · ap-northeast" pequeño />
       </div>
 
@@ -135,8 +135,8 @@ function TarjetaMaquina({ m, l }: { m: Maquina; l: Lectura }) {
           <p className="cifra mt-0.5 text-plata-100">{m.procesos}</p>
         </div>
         <div>
-          <p className="uppercase tracking-[0.12em] text-plata-500">Costo/h</p>
-          <p className="cifra mt-0.5 text-plata-100">{usd(m.costoHora, 3)}</p>
+          <p className="uppercase tracking-[0.12em] text-plata-500">Uptime</p>
+          <p className="cifra mt-0.5 text-plata-100">{m.uptime}</p>
         </div>
         <div>
           <p className="uppercase tracking-[0.12em] text-plata-500">Región</p>

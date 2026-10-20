@@ -38,7 +38,10 @@ const PENSAMIENTOS: Record<AgenteId, ((c: Contexto) => { texto: string; tarea: s
       const j = Math.max(1, Math.floor(k * (0.5 + r() * 0.4)));
       return { texto: `PD-031: reviso ${k} ocurrencias nuevas; ${j} coinciden con la firma (similitud ≥ 0,80)`, tarea: 'Revisando ocurrencias de PD-031' };
     },
-    () => ({ texto: 'PD-014: la firma mantiene el peso en absorción (+0,88) y agotamiento (+0,79); sin deriva', tarea: 'Comprobando deriva de firmas' }),
+    ({ r }) => {
+      const k = 20 + Math.floor(r() * 180);
+      return { texto: `PD-014: tras ${k} ocurrencias recientes la firma mantiene el peso en absorción (+0,88) y agotamiento (+0,79)`, tarea: 'Comprobando deriva de firmas' };
+    },
     ({ r }) => ({ texto: `PD-011 en las últimas 24 h: win rate local ${num(54 + r() * 8, 1)}% sobre ${18 + Math.floor(r() * 20)} casos`, tarea: 'Midiendo PD-011 en datos recientes' }),
     ({ r }) => ({ texto: `Descarto ${1 + Math.floor(r() * 4)} falsos positivos de PD-019 por spread > 2 ticks`, tarea: 'Filtrando falsos positivos de PD-019' }),
   ],
@@ -52,7 +55,7 @@ const PENSAMIENTOS: Record<AgenteId, ((c: Contexto) => { texto: string; tarea: s
       return { texto: `Hipótesis lista con evidencia en ${k} ocurrencias; la paso a la cola del Juez (CVD actual ${conSigno(m.cvd, 0)} BTC)`, tarea: 'Enviando hipótesis a la cola del Juez' };
     },
     ({ r }) => ({ texto: `Descarto PD-025 + PD-028: señales contradictorias en el ${num(30 + r() * 25, 0)}% de los casos`, tarea: 'Evaluando combinaciones de patrones' }),
-    () => ({ texto: 'Resumen: lo aprendido hoy refuerza Order Flow cerca del VWAP; Momentum sin novedades', tarea: 'Redactando resumen de aprendizaje' }),
+    ({ m }) => ({ texto: `Resumen a ${num(m.dollarBars)} dollar bars: lo aprendido hoy refuerza Order Flow cerca del VWAP; Momentum sin novedades`, tarea: 'Redactando resumen de aprendizaje' }),
   ],
   flujo: [
     ({ m, r }) => {
@@ -99,18 +102,27 @@ export default function AgentesView() {
     let n = 0;
     const t = setInterval(() => {
       const a = AGENTES[n % AGENTES.length];
-      const plantilla = PENSAMIENTOS[a.id][Math.floor(r() * PENSAMIENTOS[a.id].length)];
-      const { texto, tarea } = plantilla({ m: mercadoRef.current, r, n });
       n += 1;
+      // Nunca repetir una línea que ya esté en la consola del agente.
+      const existentes = new Set(bitacorasRef.current[a.id].lineas.map((l) => l.texto));
+      let pensamiento: { texto: string; tarea: string } | null = null;
+      for (let intento = 0; intento < 8 && !pensamiento; intento++) {
+        const plantilla = PENSAMIENTOS[a.id][Math.floor(r() * PENSAMIENTOS[a.id].length)];
+        const p = plantilla({ m: mercadoRef.current, r, n });
+        if (!existentes.has(p.texto)) pensamiento = p;
+      }
+      if (!pensamiento) return;
+      const { texto, tarea } = pensamiento;
       setBitacoras((prev) => {
         const b = prev[a.id];
-        if (b.lineas[0]?.texto === texto) return prev;
         return { ...prev, [a.id]: { lineas: [{ id: `${a.id}-${n}`, hora: new Date(), texto }, ...b.lineas].slice(0, 40), tarea, pensamientos: b.pensamientos + 1 } };
       });
     }, 1600);
     return () => clearInterval(t);
   }, []);
 
+  const bitacorasRef = useRef(bitacoras);
+  bitacorasRef.current = bitacoras;
   const agente = AGENTES.find((a) => a.id === seleccion) ?? null;
 
   return (

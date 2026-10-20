@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ChevronDown, Library } from 'lucide-react';
 import Encabezado from '@/components/ui/Encabezado';
 import Panel from '@/components/ui/Panel';
@@ -79,7 +79,6 @@ export default function EstrategiasView() {
                     <InsigniaVeredicto valor={e.veredicto} />
                   </td>
                 </tr>
-                <AnimatePresence initial={false}>
                   {abierta === e.id && (
                     <tr>
                       <td colSpan={12} className="p-0">
@@ -89,7 +88,6 @@ export default function EstrategiasView() {
                       </td>
                     </tr>
                   )}
-                </AnimatePresence>
               </Fragment>
             ))}
           </tbody>

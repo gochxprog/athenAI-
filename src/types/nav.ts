@@ -7,6 +7,5 @@ export type Modulo =
   | 'agentes'
   | 'paper'
   | 'decisiones'
-  | 'costos'
   | 'maquinas'
   | 'datos';

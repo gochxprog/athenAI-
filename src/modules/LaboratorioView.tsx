@@ -1,27 +1,46 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { BookMarked, Boxes, Cpu, Database, Gauge, Gavel, Layers, ListOrdered, Lock, ShieldCheck, TreePine, XCircle } from 'lucide-react';
+import { BookMarked, Boxes, Cpu, Database, Dices, Gauge, Gavel, Layers, LineChart, ListOrdered, Lock, ShieldCheck, Shuffle, TreePine, XCircle, type LucideIcon } from 'lucide-react';
 import Encabezado from '@/components/ui/Encabezado';
 import Panel from '@/components/ui/Panel';
 import Insignia, { InsigniaVeredicto } from '@/components/ui/Insignia';
 import Barra from '@/components/ui/Barra';
 import BarrasH from '@/components/charts/BarrasH';
-import CurvaEquityJuez from '@/components/charts/CurvaEquityJuez';
+import CurvaEquity from '@/components/charts/CurvaEquity';
+import MonteCarloAnimado from '@/components/charts/MonteCarloAnimado';
+import WalkForwardAnimado from '@/components/charts/WalkForwardAnimado';
+import LuckTestAnimado from '@/components/charts/LuckTestAnimado';
 import { useSistema, usePulso } from '@/hooks/SistemaDemo';
-import { CAPITAL_BACKTEST, ESTRATEGIAS, FEATURES, MODELOS, RECHAZOS_JUEZ, REGLAS_JUEZ, WALK_FORWARD, type Estrategia } from '@/data/mock';
+import { CAPITAL_BACKTEST, ESTRATEGIAS, FEATURES, MODELOS, RECHAZOS_JUEZ, REGLAS_JUEZ, type Estrategia } from '@/data/mock';
+import { simularEstrategia } from '@/lib/backtest';
 import { crearAleatorio } from '@/lib/random';
 import { num, pct, usd } from '@/lib/format';
 
+type Pestana = 'equity' | 'walk' | 'montecarlo' | 'luck' | 'juez' | 'ml';
+
+const PESTANAS: { id: Pestana; titulo: string; icono: LucideIcon; descripcion: string }[] = [
+  { id: 'equity', titulo: 'Curva de equity', icono: LineChart, descripcion: 'Entrenamiento (In-Sample) frente a validación del Juez (Out-of-Sample), con su drawdown.' },
+  { id: 'walk', titulo: 'Walk-Forward', icono: Layers, descripcion: 'La estrategia se re-entrena y se valida ventana a ventana sobre datos que nunca vio.' },
+  { id: 'montecarlo', titulo: 'Monte Carlo', icono: Dices, descripcion: 'Miles de reordenamientos de las operaciones reales para medir el rango de resultados y el riesgo.' },
+  { id: 'luck', titulo: 'Luck test', icono: Shuffle, descripcion: 'Se compara la estrategia con 1.000 versiones aleatorias para descartar que el resultado sea suerte.' },
+  { id: 'juez', titulo: 'Juez y rechazos', icono: Gavel, descripcion: 'Reglas bloqueadas, motivos de rechazo acumulados y pruebas en curso.' },
+  { id: 'ml', titulo: 'Núcleo ML', icono: Cpu, descripcion: 'Modelos de Machine Learning clásico que proponen hipótesis desde los datos.' },
+];
+
 export default function LaboratorioView() {
   const [id, setId] = useState('E-087');
+  const [pestana, setPestana] = useState<Pestana>('equity');
   const e = ESTRATEGIAS.find((x) => x.id === id)!;
+  const sim = useMemo(() => simularEstrategia(e), [e]);
+  const actual = PESTANAS.find((p) => p.id === pestana)!;
+  const porEstrategia = pestana === 'equity' || pestana === 'walk' || pestana === 'montecarlo' || pestana === 'luck';
 
   return (
     <div className="space-y-4">
       <Encabezado
         modulo="Laboratorio"
         titulo="Backtest Engine y Juez"
-        descripcion="Aquí viven los modelos de Machine Learning clásico y el Juez. Backtest, Walk-Forward y Monte Carlo validan: nunca predicen. Las reglas del Juez están bloqueadas y ningún modelo puede modificarlas."
+        descripcion="Aquí viven los modelos de Machine Learning clásico y el Juez. Backtest, Walk-Forward, Monte Carlo y el luck test validan: nunca predicen. Las reglas del Juez están bloqueadas y ningún modelo puede modificarlas."
       >
         <Insignia variante="contorno">
           <Lock size={10} /> Reglas del Juez bloqueadas
@@ -30,48 +49,88 @@ export default function LaboratorioView() {
 
       <Pipeline />
 
-      <Panel
-        titulo="Curva de equity · In-Sample vs Out-of-Sample"
-        icono={Gauge}
-        accion={
-          <select
-            value={id}
-            onChange={(ev) => setId(ev.target.value)}
-            className="rounded-md border border-borde bg-black px-2 py-1 font-mono text-[11px] text-plata-100 outline-none focus:border-plata-400"
-            aria-label="Estrategia a visualizar"
-          >
-            {ESTRATEGIAS.map((x) => (
-              <option key={x.id} value={x.id}>
-                {x.id} · {x.nombre} · {x.veredicto}
-              </option>
-            ))}
-          </select>
-        }
-      >
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm text-white">
+      <Panel cuerpo="p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="etiqueta">Estrategia en el Laboratorio</p>
+            <p className="mt-1 text-sm text-white">
               {e.id} · {e.nombre}
             </p>
             <p className="text-[11px] text-plata-500">
-              Origen {e.origen} · propuesta por {e.modelo} · capital de backtest {usd(CAPITAL_BACKTEST, 0)} · costos incluidos
+              Origen {e.origen} · propuesta por {e.modelo} · capital de backtest {usd(CAPITAL_BACKTEST, 0)} · comisión y slippage incluidos
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-4 text-[10px] text-plata-400">
-            <Leyenda trazo="h-px w-5 bg-plata-300" texto="In-Sample (entrenamiento)" />
-            <Leyenda trazo="h-0.5 w-5 bg-white" texto="Out-of-Sample (Juez)" />
-            <Leyenda trazo="h-2.5 w-5 bg-white/15" texto="Monte Carlo P10–P90" />
-            <Leyenda trazo="h-px w-5 border-t border-dashed border-white/60" texto="P5 / P95" />
+          <div className="flex items-center gap-3">
             <InsigniaVeredicto valor={e.veredicto} />
+            <select
+              value={id}
+              onChange={(ev) => setId(ev.target.value)}
+              className="max-w-[260px] rounded-md border border-borde bg-black px-2 py-1.5 font-mono text-[11px] text-plata-100 outline-none focus:border-plata-400"
+              aria-label="Estrategia a analizar"
+            >
+              {ESTRATEGIAS.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.id} · {x.nombre}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
-        <CurvaParaEstrategia e={e} />
       </Panel>
 
       <MetricasJuez e={e} />
 
+      {/* Cada prueba en su propia pestaña */}
+      <div className="sticky top-16 z-20 -mx-1 overflow-x-auto bg-black/80 px-1 py-2 backdrop-blur-xl">
+        <div className="flex min-w-max gap-1 rounded-xl border border-borde p-1">
+          {PESTANAS.map((p) => {
+            const Icono = p.icono;
+            const sel = p.id === pestana;
+            return (
+              <button
+                key={p.id}
+                onClick={() => setPestana(p.id)}
+                className={`relative flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs transition-colors ${sel ? 'text-black' : 'text-plata-300 hover:text-white'}`}
+              >
+                {sel && <motion.span layoutId="pestana-lab" className="absolute inset-0 rounded-lg bg-white" transition={{ type: 'spring', stiffness: 400, damping: 34 }} />}
+                <Icono size={13} className="relative" />
+                <span className="relative">{p.titulo}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <motion.div key={pestana} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+        <Panel
+          titulo={porEstrategia ? `${actual.titulo} · ${e.id}` : actual.titulo}
+          icono={actual.icono}
+          accion={<span className="hidden text-[10px] text-plata-500 md:inline">{actual.descripcion}</span>}
+        >
+          <p className="mb-4 text-[11px] text-plata-500 md:hidden">{actual.descripcion}</p>
+          {pestana === 'equity' && <CurvaEquity sim={sim} clave={e.id} />}
+          {pestana === 'walk' && <WalkForwardAnimado e={e} />}
+          {pestana === 'montecarlo' && <MonteCarloAnimado sim={sim} clave={e.id} />}
+          {pestana === 'luck' && <LuckTestAnimado e={e} />}
+          {pestana === 'juez' && <JuezYRechazos />}
+          {pestana === 'ml' && (
+            <div className="grid gap-4 md:grid-cols-2">
+              {MODELOS.filter((m) => m.ubicacion === 'Laboratorio').map((m, i) => (
+                <ModeloML key={m.id} indice={i} id={m.id} />
+              ))}
+            </div>
+          )}
+        </Panel>
+      </motion.div>
+    </div>
+  );
+}
+
+function JuezYRechazos() {
+  return (
+    <div className="space-y-4">
       <div className="grid gap-4 xl:grid-cols-2">
-        <Panel titulo="Filtro de rechazo del Juez · motivos acumulados" icono={XCircle} accion={<span className="cifra text-[10px] text-plata-500">{num(RECHAZOS_JUEZ.reduce((a, r) => a + r.cantidad, 0))} rechazadas</span>}>
+        <Panel titulo="Filtro de rechazo · motivos acumulados" icono={XCircle} accion={<span className="cifra text-[10px] text-plata-500">{num(RECHAZOS_JUEZ.reduce((a, r) => a + r.cantidad, 0))} rechazadas</span>}>
           <BarrasH datos={RECHAZOS_JUEZ.map((r) => ({ etiqueta: r.razon, valor: r.cantidad }))} total />
         </Panel>
         <Panel titulo="Reglas del Juez · solo lectura" icono={Lock} accion={<Insignia variante="tenue">Bloqueadas</Insignia>}>
@@ -91,53 +150,8 @@ export default function LaboratorioView() {
           </p>
         </Panel>
       </div>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-        <Panel titulo={`Walk-Forward · ${e.id} · Sharpe por ventana`} icono={Layers}>
-          <WalkForward e={e} />
-        </Panel>
-        <ColaPruebas />
-      </div>
-
-      <div>
-        <h3 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white">
-          <Cpu size={13} /> Núcleo de Machine Learning
-        </h3>
-        <div className="grid gap-4 md:grid-cols-2">
-          {MODELOS.filter((m) => m.ubicacion === 'Laboratorio').map((m, i) => (
-            <ModeloML key={m.id} indice={i} id={m.id} />
-          ))}
-        </div>
-      </div>
+      <ColaPruebas />
     </div>
-  );
-}
-
-function Leyenda({ trazo, texto }: { trazo: string; texto: string }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <span className={`inline-block ${trazo}`} />
-      {texto}
-    </span>
-  );
-}
-
-function CurvaParaEstrategia({ e }: { e: Estrategia }) {
-  const derivaIS = (Math.max(e.expectancy, 0) + e.overfitting * 0.9 + 6) / CAPITAL_BACKTEST;
-  const derivaOOS = e.expectancy / CAPITAL_BACKTEST;
-  const opsIS = Math.max(60, Math.round(e.trades * 0.65));
-  const opsOOS = Math.max(40, e.trades - opsIS);
-  return (
-    <CurvaEquityJuez
-      key={e.id}
-      semilla={e.semilla}
-      deriva={derivaIS}
-      vol={0.0042 + e.overfitting * 0.00005}
-      retencionOOS={derivaOOS / derivaIS}
-      operacionesIS={Math.min(opsIS, 220)}
-      operacionesOOS={Math.min(opsOOS, 140)}
-      capital={CAPITAL_BACKTEST}
-    />
   );
 }
 
@@ -222,59 +236,10 @@ function Pipeline() {
   );
 }
 
-function WalkForward({ e }: { e: Estrategia }) {
-  const factor = e.sharpe / 1.86;
-  const datos = WALK_FORWARD.map((w) => ({ v: w.v, is: w.is * Math.max(factor, 0.55), oos: w.oos * factor * (1 - Math.max(0, e.overfitting - 15) / 100) }));
-  const max = Math.max(...datos.flatMap((d) => [d.is, d.oos]), 2.5);
-  const promIS = datos.reduce((a, d) => a + d.is, 0) / datos.length;
-  const promOOS = datos.reduce((a, d) => a + d.oos, 0) / datos.length;
-  return (
-    <div>
-      <div className="relative flex h-44 items-end gap-2 border-b border-borde-suave">
-        <span className="absolute inset-x-0 border-t border-dashed border-white/25" style={{ bottom: `${(1 / max) * 100}%` }}>
-          <span className="absolute -top-2 left-0 bg-black pr-1.5 font-mono text-[9px] text-plata-400">Sharpe 1,00 · umbral</span>
-        </span>
-        {datos.map((d, i) => (
-          <div key={d.v} className="flex h-full flex-1 items-end justify-center gap-[2px]">
-            <motion.div className="w-1/2 max-w-[14px] rounded-t-sm border border-plata-500" initial={{ height: 0 }} animate={{ height: `${(d.is / max) * 100}%` }} transition={{ duration: 0.8, delay: i * 0.04 }} />
-            <motion.div className="w-1/2 max-w-[14px] rounded-t-sm bg-white" initial={{ height: 0 }} animate={{ height: `${(Math.max(d.oos, 0.02) / max) * 100}%` }} transition={{ duration: 0.8, delay: i * 0.04 + 0.1 }} />
-          </div>
-        ))}
-      </div>
-      <div className="mt-1 flex gap-2">
-        {datos.map((d) => (
-          <span key={d.v} className="flex-1 text-center font-mono text-[9px] text-plata-500">
-            V{d.v}
-          </span>
-        ))}
-      </div>
-      <div className="mt-3 grid grid-cols-3 gap-3 border-t border-borde-suave pt-3">
-        <div>
-          <p className="etiqueta">IS promedio</p>
-          <p className="cifra mt-1 text-sm text-white">{num(promIS, 2)}</p>
-        </div>
-        <div>
-          <p className="etiqueta">OOS promedio</p>
-          <p className="cifra mt-1 text-sm text-white">{num(promOOS, 2)}</p>
-        </div>
-        <div>
-          <p className="etiqueta">Degradación</p>
-          <p className="cifra mt-1 text-sm text-white">−{num((1 - promOOS / promIS) * 100, 0)}%</p>
-        </div>
-      </div>
-      <p className="mt-2 flex items-center gap-3 text-[10px] text-plata-500">
-        <span className="flex items-center gap-1.5"><span className="h-2 w-2 border border-plata-500" /> In-Sample</span>
-        <span className="flex items-center gap-1.5"><span className="h-2 w-2 bg-white" /> Out-of-Sample</span>
-        <span>12 ventanas · 70/30 · anclado</span>
-      </p>
-    </div>
-  );
-}
-
 function ColaPruebas() {
   const { motor } = useSistema();
   const n = usePulso(900);
-  const fases = ['Walk-Forward', 'Monte Carlo', 'Luck test', 'Costos'];
+  const fases = ['Walk-Forward', 'Monte Carlo', 'Luck test', 'Comisión y slippage'];
   return (
     <Panel titulo="Pruebas en proceso" icono={Gavel} accion={<span className="cifra text-[10px] text-plata-500">{motor.pruebas} activas</span>} cuerpo="max-h-[300px] overflow-y-auto px-4 py-2">
       <table className="w-full text-left text-xs">
@@ -289,7 +254,7 @@ function ColaPruebas() {
           {motor.idsPrueba.map((id) => {
             const fase = fases[id % fases.length];
             const avance = (id * 7 + n * (2 + (id % 5))) % 100;
-            const detalle = fase === 'Walk-Forward' ? `ventana ${1 + Math.floor((avance / 100) * 12)}/12` : fase === 'Monte Carlo' ? `${num(Math.floor(avance * 20))}/2.000` : fase === 'Luck test' ? `${num(Math.floor(avance * 10))}/1.000` : 'comisión + slippage';
+            const detalle = fase === 'Walk-Forward' ? `ventana ${1 + Math.floor((avance / 100) * 12)}/12` : fase === 'Monte Carlo' ? `${num(Math.floor(avance * 20))}/2.000` : fase === 'Luck test' ? `${num(Math.floor(avance * 10))}/1.000` : 'costos de mercado modelados';
             return (
               <tr key={id} className="border-t border-borde-suave">
                 <td className="py-2 font-mono text-plata-200">H-{id}</td>

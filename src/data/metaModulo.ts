@@ -9,7 +9,6 @@ export const META_MODULO: Record<Modulo, { titulo: string; seccion: string }> = 
   agentes: { titulo: 'Agentes', seccion: 'Cerebro' },
   paper: { titulo: 'Paper Trading', seccion: 'Dinero' },
   decisiones: { titulo: 'Decisiones', seccion: 'Dinero' },
-  costos: { titulo: 'Costos', seccion: 'Sistema' },
   maquinas: { titulo: 'Máquinas', seccion: 'Sistema' },
   datos: { titulo: 'Datos', seccion: 'Sistema' },
 };

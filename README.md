@@ -25,21 +25,21 @@ npm run lint
 | A | Panel General | Fuentes de datos → esfera 3D de Deep Learning → métricas del motor, cadena de flujo y log del día |
 | B | Investigación | Constelación 3D de hipótesis por tema, panel de evidencia y envío al Laboratorio |
 | C | Conocimiento | Patrones descubiertos (sin catálogo), espacio aprendido, firma por Feature y estadísticas del Juez |
-| D | Laboratorio | Pipeline, equity In-Sample / Out-of-Sample con abanico Monte Carlo, reglas del Juez, rechazos, núcleo ML |
+| D | Laboratorio | Pipeline y pestañas separadas: curva de equity (In-Sample / Out-of-Sample), Walk-Forward, Monte Carlo y luck test animados, reglas del Juez y núcleo ML |
 | — | Estrategias | Biblioteca con todos los veredictos, incluidas las rechazadas |
 | E | Agentes | Sala 3D con Rastreador, Lector, Sintetizador y Flujo, y su consola en tiempo real |
 | F | Paper Trading · Decisiones | Bots monitorizados, posiciones en vivo, cuenta real bloqueada y bitácora de decisiones |
-| G | Costos · Máquinas · Datos | Gasto por agente y máquina, telemetría de infraestructura, Recorder y Features |
+| G | Máquinas · Datos | Telemetría de infraestructura, Recorder y Features |
 
 ## Estructura
 
 ```
 src/
-├── App.tsx                 # layout + carga diferida de módulos
+├── App.tsx                 # layout, carga diferida y navegación por hash (#/modulo, botón Atrás)
 ├── modules/                # una vista por módulo
 ├── components/
 │   ├── three/              # EsferaCerebro (three.js), Constelacion y SalaAgentes3D (R3F)
-│   ├── charts/             # Sparkline, BarrasH, CurvaEquityJuez
+│   ├── charts/             # Sparkline, BarrasH, CurvaEquity, MonteCarlo, WalkForward, LuckTest
 │   ├── layout/             # Sidebar, Topbar
 │   └── ui/                 # Panel, Insignia, Punto, Consola, PanelLateral…
 ├── data/mock.ts            # datos DEMO coherentes entre sí
