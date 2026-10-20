@@ -157,6 +157,10 @@ class MotorCliente {
     this.enviar({ tipo: 'aplicar', config });
   }
 
+  recalcularMemoria(): void {
+    this.enviar({ tipo: 'memoria-recalcular' });
+  }
+
   detener(): void {
     this.enviar({ tipo: 'detener' });
   }

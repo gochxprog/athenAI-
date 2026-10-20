@@ -11,8 +11,10 @@ import { FuenteUrus } from '../fuentes/urusSSE';
 import { FuenteBinance } from '../fuentes/binance';
 import { iniciarSesionRithmic } from '../fuentes/rithmicPuente';
 import { AlmacenFeatures, type FilaGuardada } from '../almacen/almacen';
+import { detectarRegimen, MIN_BARRAS_REGIMEN } from '../memoria/regimen';
+import { buscarMemoria, MIN_VENTANAS } from '../memoria/gemelos';
 import type { IdTemporalidad, MensajeMercado } from '../nucleo/tipos';
-import type { ConfigCentro, EstadoFeed, MensajeAlMotor, MensajeDelMotor, Proveedor } from './protocolo';
+import type { ConfigCentro, EstadoFeed, MemoriaFeed, MensajeAlMotor, MensajeDelMotor, Proveedor } from './protocolo';
 
 const ctx = self as unknown as { postMessage: (m: MensajeDelMotor) => void; onmessage: ((e: MessageEvent<MensajeAlMotor>) => void) | null };
 
@@ -32,6 +34,7 @@ interface Activo {
   ritmo: number[];
   filasVentana: number;
   segVentana: number;
+  memoria: MemoriaFeed | null;
 }
 
 let activos = new Map<string, Activo>();
@@ -52,7 +55,7 @@ function crearActivo(proveedor: Proveedor, parametros: ParametrosSimbolo, calibr
   const pipeline = new Pipeline(parametros);
   pipeline.cambiarTemporalidad(temporalidad);
   const almacen = almacenes.get(proveedor);
-  const a: Activo = { proveedor, pipeline, calibrado, sesion: null, trades: 0, latenciaMs: null, filas: 0, cortes: 0, historial: [], cvdHist: [], ritmo: [], filasVentana: 0, segVentana: 0 };
+  const a: Activo = { proveedor, pipeline, calibrado, sesion: null, trades: 0, latenciaMs: null, filas: 0, cortes: 0, historial: [], cvdHist: [], ritmo: [], filasVentana: 0, segVentana: 0, memoria: null };
   if (calibrado && almacen && config?.guardar) a.sesion = almacen.nuevaSesion(parametros.simbolo, parametros, Date.now()).catch(() => -1);
   return a;
 }
@@ -65,6 +68,7 @@ function calibrar(simbolo: string, parametros: ParametrosSimbolo): Activo {
   a.pipeline.conexion = viejo.pipeline.conexion;
   a.pipeline.detalleConexion = viejo.pipeline.detalleConexion;
   a.cortes = viejo.cortes;
+  a.memoria = viejo.memoria;
   activos.set(simbolo, a);
   const t = parametros.temporalidades;
   registrar(`${simbolo}: tick ${parametros.tickSize} · dollar bar ${num(t.dollar.tipo === 'dolar' ? t.dollar.usd : 0)} USD · paso Footprint 1m ${parametros.pasos['1m']}`);
@@ -144,6 +148,7 @@ function publicarFeeds(): void {
       ritmo: [...a.ritmo],
       cvdVelocidad: a.cvdHist.length >= 61 ? a.cvdHist[a.cvdHist.length - 1] - a.cvdHist[0] : null,
       resumen: r,
+      memoria: a.memoria,
       conexion: p.conexion,
       detalle: p.detalleConexion,
       tradesPorSeg: a.trades / seg,
@@ -194,6 +199,8 @@ async function aplicar(c: ConfigCentro): Promise<void> {
   const descripcion = [...grupos].map(([p, ss]) => `${NOMBRE[p]}: ${ss.join(', ')}`).join(' · ');
   registrar(`Pipeline limpio · ${descripcion || 'sin activos'}${c.guardar ? ` · guardando en ${[...grupos.keys()].map((p) => `athenai-${p}`).join(', ')}` : ' · sin guardar'}`);
   for (const [p, simbolos] of grupos) void iniciarFuente(p, simbolos, c, gen);
+  // Primera memoria con lo ya grabado en las carpetas (unos segundos después de arrancar).
+  ultimaMemoria = Date.now() - CADA_MEMORIA_MS + 5_000;
   publicar();
   publicarFeeds();
 }
@@ -265,6 +272,52 @@ async function iniciarFuente(proveedor: Proveedor, simbolos: string[], c: Config
   }
 }
 
+// --- Memoria del mercado (Bloque B) -------------------------------------------------------------
+const CADA_MEMORIA_MS = 120_000;
+const MAX_FILAS_MEMORIA = 20_000;
+let calculandoMemoria = false;
+let ultimaMemoria = 0;
+
+/** Recalcula régimen y memoria de todos los activos, uno detrás de otro, con lo grabado en su carpeta. */
+async function calcularMemoria(): Promise<void> {
+  if (calculandoMemoria) return;
+  calculandoMemoria = true;
+  const gen = generacion;
+  try {
+    for (const [simbolo, a] of [...activos]) {
+      if (gen !== generacion) return;
+      const al = almacenes.get(a.proveedor);
+      let filas: (FilaGuardada | (ReturnType<Pipeline['todasLasFilas']>[number] & { sesion?: number }))[];
+      try {
+        filas = al ? await al.leer(simbolo) : a.pipeline.todasLasFilas();
+      } catch (e) {
+        a.memoria = { calculadoEn: Date.now(), filas: 0, regimen: null, memoria: null, faltan: null, error: e instanceof Error ? e.message : String(e) };
+        continue;
+      }
+      if (gen !== generacion || activos.get(simbolo) !== a) continue;
+      filas = filas.slice(-MAX_FILAS_MEMORIA);
+      const t0 = performance.now();
+      try {
+        const regimen = detectarRegimen(filas);
+        const memoria = buscarMemoria(filas);
+        const faltan: string[] = [];
+        if (!regimen) faltan.push(`régimen: ${Math.min(filas.length, MIN_BARRAS_REGIMEN)}/${MIN_BARRAS_REGIMEN} barras`);
+        if (!memoria) faltan.push(`memoria: ${Math.min(filas.length, MIN_VENTANAS + 20)}/${MIN_VENTANAS + 20} barras`);
+        const antes = a.memoria;
+        a.memoria = { calculadoEn: Date.now(), filas: filas.length, regimen, memoria, faltan: faltan.length ? `Faltan datos · ${faltan.join(' · ')}` : null };
+        if (regimen && antes?.regimen?.actual !== regimen.actual) registrar(`${simbolo}: régimen ${regimen.actual} (${Math.round(regimen.probabilidades[regimen.actual] * 100)} %)`);
+        if (memoria?.distinto.aviso && !antes?.memoria?.distinto.aviso) registrar(`${simbolo}: HOY ES DISTINTO · ${memoria.distinto.motivo}`);
+      } catch (e) {
+        a.memoria = { calculadoEn: Date.now(), filas: filas.length, regimen: null, memoria: null, faltan: null, error: e instanceof Error ? e.message : String(e) };
+      }
+      msAcumulados += performance.now() - t0;
+    }
+  } finally {
+    calculandoMemoria = false;
+    ultimaMemoria = Date.now();
+  }
+}
+
 function responder(id: number, trabajo: () => Promise<unknown>): void {
   trabajo().then(
     (datos) => ctx.postMessage({ tipo: 'respuesta', id, ok: true, datos }),
@@ -273,6 +326,9 @@ function responder(id: number, trabajo: () => Promise<unknown>): void {
 }
 
 setInterval(publicar, 1000 / HZ_ESTADO);
+setInterval(() => {
+  if (activos.size && Date.now() - ultimaMemoria > CADA_MEMORIA_MS) void calcularMemoria();
+}, 10_000);
 setInterval(publicarFeeds, 1000);
 setInterval(() => {
   for (const al of almacenes.values()) void al.vaciar().catch((e) => registrar(`No se pudo guardar en athenai-${al.proveedor}: ${e instanceof Error ? e.message : e}`));
@@ -291,6 +347,9 @@ ctx.onmessage = (e) => {
         registrar('Fuente detenida');
         publicar();
         publicarFeeds();
+        break;
+      case 'memoria-recalcular':
+        void calcularMemoria();
         break;
       case 'ver':
         if (activos.has(m.simbolo)) visible = m.simbolo;

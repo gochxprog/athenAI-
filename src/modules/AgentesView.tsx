@@ -52,6 +52,25 @@ function lineasFlujo(feeds: EstadoFeed[]): string[] {
   return out;
 }
 
+/** Lo que el Rastreador sabe de la memoria de cada mercado (régimen, día gemelo, "hoy es distinto"). */
+function lineasRastreador(feeds: EstadoFeed[]): string[] {
+  const out: string[] = [];
+  const nombre = { rango: 'rango', tendencia: 'tendencia', raro: 'día raro' } as const;
+  for (const f of feeds) {
+    const m = f.memoria;
+    if (!m) continue;
+    if (m.faltan) out.push(`${f.simbolo}: ${m.faltan} (${num(m.filas)} filas grabadas)`);
+    const r = m.regimen;
+    if (r) out.push(`${f.simbolo}: régimen ${nombre[r.actual]} (${num(r.probabilidades[r.actual] * 100, 0)} %) desde hace ${r.barrasEnRegimen} barras · validación: ${r.validacion.util ? 'sirve' : 'no concluyente'}`);
+    const mem = m.memoria;
+    if (mem) {
+      out.push(`${f.simbolo}: ${mem.distinto.aviso ? 'HOY ES DISTINTO · ' : ''}${mem.distinto.motivo}`);
+      if (mem.resumen) out.push(`${f.simbolo}: ${mem.gemelos.length} gemelos; en ${mem.resumen.subieron} subió en las 20 barras siguientes (mediana ${conSigno(mem.resumen.retornoMediano * 100, 2, '%')})`);
+    }
+  }
+  return out;
+}
+
 function lineasSinMotor(a: Agente): LineaConsola[] {
   const t = new Date();
   return [
@@ -66,7 +85,7 @@ export default function AgentesView() {
   const feedsRef = useRef(feeds.feeds);
   feedsRef.current = feeds.feeds;
   const [seleccion, setSeleccion] = useState<AgenteId | null>(null);
-  const [consolas, setConsolas] = useState<Record<'vigia' | 'flujo', LineaConsola[]>>({ vigia: [], flujo: [] });
+  const [consolas, setConsolas] = useState<Record<'vigia' | 'flujo' | 'rastreador', LineaConsola[]>>({ vigia: [], flujo: [], rastreador: [] });
   const n = useRef(0);
 
   // Vigía y Flujo: cada 3 s anotan lo que ven en los datos reales (sin repetir líneas idénticas).
@@ -78,6 +97,7 @@ export default function AgentesView() {
         for (const [id, lineas] of [
           ['vigia', lineasVigia(feedsRef.current)],
           ['flujo', lineasFlujo(feedsRef.current)],
+          ['rastreador', lineasRastreador(feedsRef.current)],
         ] as const) {
           const existentes = new Set(prev[id].slice(0, 12).map((l) => l.texto));
           const frescas = lineas.filter((t) => !existentes.has(t)).slice(0, 3);
@@ -96,6 +116,10 @@ export default function AgentesView() {
     if (!a.real) return `Sin motor · Bloque ${a.bloque}`;
     if (!feeds.feeds.length) return 'Sin fuente';
     if (a.id === 'vigia') return `Vigilando ${vivos}/${feeds.feeds.length} feeds`;
+    if (a.id === 'rastreador') {
+      const listos = feeds.feeds.filter((f) => f.memoria?.regimen).length;
+      return listos ? `Régimen en ${listos}/${feeds.feeds.length} mercados` : 'Esperando historia';
+    }
     return vivos ? `Leyendo ${vivos} ${vivos === 1 ? 'mercado' : 'mercados'}` : 'Esperando datos';
   };
   const estados = Object.fromEntries(AGENTES.map((a) => [a.id, estadoAgente(a)])) as Record<AgenteId, string>;
@@ -106,7 +130,7 @@ export default function AgentesView() {
       const reg = registro.slice(0, 20).map((e, i) => ({ id: `reg-${e.t}-${i}`, hora: new Date(e.t), texto: e.texto }));
       return [...consolas.vigia, ...reg].sort((x, y) => y.hora.getTime() - x.hora.getTime()).slice(0, 60);
     }
-    return consolas.flujo;
+    return a.id === 'rastreador' ? consolas.rastreador : consolas.flujo;
   };
   const etiquetaDatos = feeds.feeds.length ? `Datos de mercado · ${feeds.feeds.map((f) => f.simbolo).join(' · ')}` : 'Sin fuente de datos';
   const agente = AGENTES.find((a) => a.id === seleccion) ?? null;

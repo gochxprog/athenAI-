@@ -2,6 +2,20 @@ import type { EstadoGrafico, ResumenFlujo } from '../nucleo/pipeline';
 import type { EstadoConexion, IdTemporalidad } from '../nucleo/tipos';
 import type { Proveedor, ResumenSimbolo } from '../almacen/almacen';
 import type { CredencialesRithmic } from '../fuentes/rithmicPuente';
+import type { ResultadoRegimen } from '../memoria/regimen';
+import type { ResultadoMemoria } from '../memoria/gemelos';
+
+/** Memoria del mercado de un activo (Bloque B): régimen, "hoy es distinto" y día gemelo. */
+export interface MemoriaFeed {
+  calculadoEn: number;
+  /** Filas usadas (de la carpeta de la fuente, o de memoria si no se guarda). */
+  filas: number;
+  regimen: ResultadoRegimen | null;
+  memoria: ResultadoMemoria | null;
+  /** Qué falta para que cada parte funcione (null si todo está listo). */
+  faltan: string | null;
+  error?: string;
+}
 
 export type { Proveedor, ResumenSimbolo };
 
@@ -45,6 +59,7 @@ export interface EstadoFeed {
   /** Cambio del CVD en el último minuto. */
   cvdVelocidad: number | null;
   resumen: ResumenFlujo;
+  memoria: MemoriaFeed | null;
 }
 
 export interface EntradaRegistro {
@@ -60,6 +75,7 @@ export type MensajeAlMotor =
   | { tipo: 'temporalidad'; id: IdTemporalidad }
   | { tipo: 'vista'; nBarras: number; footprint: boolean; nivelesFootprint: number }
   | { tipo: 'exportar-features'; id: number }
+  | { tipo: 'memoria-recalcular' }
   | { tipo: 'almacen-resumen'; id: number }
   | { tipo: 'almacen-exportar'; id: number; proveedor: Proveedor; simbolo: string }
   | { tipo: 'almacen-borrar'; id: number; proveedor: Proveedor };

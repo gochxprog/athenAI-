@@ -15,6 +15,7 @@ export default function Topbar({ titulo, seccion }: { titulo: string; seccion: s
   const conError = feeds.feeds.some((f) => f.conexion === 'error');
   const detenido = !total || feeds.feeds.every((f) => f.conexion === 'detenido');
   const texto = detenido ? 'Sin conexión' : vivos === total ? 'En vivo' : vivos > 0 ? `En vivo ${vivos}/${total}` : conError ? 'Error de conexión' : 'Conectando';
+  const distintos = feeds.feeds.filter((f) => f.memoria?.memoria?.distinto.aviso).map((f) => f.simbolo);
   const fuente = feeds.proveedores.map((p) => NOMBRE_PROVEEDOR[p]).join(' + ');
 
   return (
@@ -34,6 +35,11 @@ export default function Topbar({ titulo, seccion }: { titulo: string; seccion: s
           <p className="cifra text-sm text-white">{hora(ahora)}</p>
         </div>
         <div className="hidden h-8 w-px bg-borde sm:block" />
+        {distintos.length > 0 && (
+          <button onClick={() => navegar('orderflow')} className="hidden rounded-full border border-white bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-etiqueta text-black md:block" title="La data de ahora no se parece a nada de lo grabado">
+            Hoy es distinto · {distintos.join(', ')}
+          </button>
+        )}
         <button
           onClick={() => navegar('datos')}
           title={feeds.feeds.map((f) => `${f.simbolo}: ${f.conexion}${f.detalle ? ` · ${f.detalle}` : ''}`).join('\n') || 'Abrir el Centro de datos'}

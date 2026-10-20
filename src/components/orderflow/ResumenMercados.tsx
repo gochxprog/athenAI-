@@ -14,6 +14,17 @@ const ESTADO: Record<string, string> = {
   detenido: 'Detenido',
 };
 
+export const NOMBRE_REGIMEN: Record<'rango' | 'tendencia' | 'raro', string> = { rango: 'Rango', tendencia: 'Tendencia', raro: 'Día raro' };
+
+/** Texto corto de lo que falta para la memoria ("312/600 barras"). */
+const progreso = (f: EstadoFeed) => {
+  const m = f.memoria;
+  if (!m) return 'Calculando…';
+  if (m.error) return 'Error al calcular';
+  const x = m.faltan?.match(/régimen: (\d+\/\d+)/);
+  return x ? `Faltan datos · ${x[1]} barras` : 'Calculando…';
+};
+
 const usdK = (v: number) => (v >= 1e6 ? `${num(v / 1e6, 1)} M` : v >= 1e3 ? `${num(v / 1e3, 0)} k` : num(v, 0));
 
 /**
@@ -70,6 +81,11 @@ function Tarjeta({ f, activa, onClick }: { f: EstadoFeed; activa: boolean; onCli
       <div className="flex items-center gap-2">
         <span className="font-mono text-xs text-white">{f.simbolo}</span>
         <span className="text-[9.5px] text-plata-500">{NOMBRE_PROVEEDOR[f.proveedor]}</span>
+        {f.memoria?.memoria?.distinto.aviso && (
+          <span className="rounded border border-white bg-white px-1.5 py-0.5 text-[8.5px] font-semibold uppercase tracking-[0.12em] text-black" title={f.memoria.memoria.distinto.motivo}>
+            Hoy es distinto
+          </span>
+        )}
         <span className="ml-auto flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.12em] text-plata-300" title={f.detalle}>
           <Punto estado={f.conexion === 'en-vivo' ? 'activo' : f.conexion === 'error' || f.conexion === 'detenido' ? 'detenido' : 'espera'} />
           {ESTADO[f.conexion] ?? f.conexion}
@@ -92,7 +108,14 @@ function Tarjeta({ f, activa, onClick }: { f: EstadoFeed; activa: boolean; onCli
       <div className="mt-2 grid grid-cols-2 gap-2 text-[9.5px]">
         <div className="rounded border border-borde-suave px-2 py-1">
           <span className="block uppercase tracking-[0.12em] text-plata-600">Régimen</span>
-          <span className="text-plata-400">Sin motor · Bloque B</span>
+          {f.memoria?.regimen ? (
+            <span className="text-white" data-regimen={f.memoria.regimen.actual}>
+              {NOMBRE_REGIMEN[f.memoria.regimen.actual]} · {num(f.memoria.regimen.probabilidades[f.memoria.regimen.actual] * 100, 0)} %
+              <span className="text-plata-500"> · {f.memoria.regimen.barrasEnRegimen} b</span>
+            </span>
+          ) : (
+            <span className="text-plata-400">{progreso(f)}</span>
+          )}
         </div>
         <div className="rounded border border-borde-suave px-2 py-1">
           <span className="block uppercase tracking-[0.12em] text-plata-600">Veredicto del Juez</span>

@@ -1,18 +1,19 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Cpu, Download, ListTree, Table2 } from 'lucide-react';
+import { Activity, Brain, Cpu, Download, ListTree, Table2 } from 'lucide-react';
 import Encabezado from '@/components/ui/Encabezado';
 import Panel from '@/components/ui/Panel';
 import Insignia from '@/components/ui/Insignia';
 import OrderFlowChart, { NOMBRE_PROVEEDOR, useEstadoMotor, useFeeds } from '@/components/orderflow/OrderFlowChart';
 import ResumenMercados from '@/components/orderflow/ResumenMercados';
+import MemoriaMercado from '@/components/orderflow/MemoriaMercado';
 import { descargarCsv, motorOrderFlow } from '@/motores/worker/motorCliente';
 import { DEFINICIONES_FEATURES } from '@/motores/nucleo/features';
 import type { EstadoGrafico } from '@/motores/nucleo/pipeline';
 import type { TipoEvento } from '@/motores/nucleo/tipos';
 import { decimalesDe, hora, num } from '@/lib/format';
 
-type Pestana = 'eventos' | 'features' | 'salud';
+type Pestana = 'eventos' | 'memoria' | 'features' | 'salud';
 
 const NOMBRE_EVENTO: Record<TipoEvento, string> = {
   absorcion: 'Absorción',
@@ -49,15 +50,16 @@ export default function OrderFlowView() {
         </div>
       </Panel>
 
-      <div className="flex gap-1 rounded-xl border border-borde p-1">
+      <div className="flex gap-1 overflow-x-auto rounded-xl border border-borde p-1">
         {(
           [
             ['eventos', 'Eventos detectados', ListTree],
+            ['memoria', 'Memoria del mercado', Brain],
             ['features', 'Features para el ML', Table2],
             ['salud', 'Salud del motor', Cpu],
           ] as const
         ).map(([id, titulo, Icono]) => (
-          <button key={id} onClick={() => setPestana(id)} className={`relative flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs ${pestana === id ? 'text-black' : 'text-plata-300 hover:text-white'}`}>
+          <button key={id} onClick={() => setPestana(id)} className={`relative flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-xs ${pestana === id ? 'text-black' : 'text-plata-300 hover:text-white'}`}>
             {pestana === id && <motion.span layoutId="pestana-of" className="absolute inset-0 rounded-lg bg-white" transition={{ type: 'spring', stiffness: 400, damping: 34 }} />}
             <Icono size={13} className="relative" />
             <span className="relative">{titulo}</span>
@@ -66,6 +68,7 @@ export default function OrderFlowView() {
       </div>
 
       {pestana === 'eventos' && <Eventos estado={estado} />}
+      {pestana === 'memoria' && <MemoriaMercado />}
       {pestana === 'features' && <Features estado={estado} />}
       {pestana === 'salud' && <Salud estado={estado} msProceso={msProceso} />}
     </div>

@@ -59,7 +59,7 @@ Ejemplo: una escudería de Fórmula 1. Los agentes son ingenieros, mecánicos y 
 |---|---|---|---|---|
 | 1 · Detectores | **Vigía** | Vigila conexiones, latencia y huecos en los datos | Centro de datos / feeds | A |
 | | **Flujo** | Lee el Order Flow: imbalances, stacking/pulling, absorción, agotamiento, CVD, liquidaciones | Motores de Urus | A |
-| | **Rastreador** | Régimen del mercado y memoria (día gemelo, "hoy es distinto") | Memoria del mercado | B |
+| | **Rastreador** | Régimen del mercado y memoria (día gemelo, "hoy es distinto") | Memoria del mercado (HMM + similitud) | B ✅ |
 | 2 · Contexto y decisión | **Programador** | Corre las estrategias que escribes en Python | Editor + Pyodide | C |
 | | **Juez** | Prueba todo y da el veredicto | Motor de validación | C |
 | | **Etiquetador** | Marca en el pasado "qué pasó después" | Triple barrera | D |
