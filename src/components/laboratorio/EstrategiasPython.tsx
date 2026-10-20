@@ -9,6 +9,7 @@ import { notificador } from '@/motores/notificaciones/notificador';
 import type { RespuestaLaboratorio } from '@/motores/laboratorio/protocolo';
 import type { Proveedor, ResumenSimbolo } from '@/motores/worker/protocolo';
 import { COSTOS_POR_DEFECTO } from '@/motores/juez/backtest';
+import { NOMBRE_OBJETIVO, type ObjetivoWfo } from '@/motores/juez/walkForward';
 import { DEFINICIONES_FEATURES } from '@/motores/nucleo/features';
 import { num } from '@/lib/format';
 import { guardarEstrategias, leerEstrategias, PLANTILLAS, type EstrategiaGuardada } from './plantillas';
@@ -30,6 +31,10 @@ export default function EstrategiasPython() {
   const [otro, setOtro] = useState('');
   const [comision, setComision] = useState(COSTOS_POR_DEFECTO.comisionPb);
   const [deslizamiento, setDeslizamiento] = useState(COSTOS_POR_DEFECTO.deslizamientoPb);
+  // Walk-Forward: automático salvo que se cambie en «Avanzado» (0 = automático).
+  const [objetivoWfo, setObjetivoWfo] = useState<ObjetivoWfo>('sharpe');
+  const [lIs, setLIs] = useState(0);
+  const [lOos, setLOos] = useState(0);
   const [corriendo, setCorriendo] = useState(false);
   const [progreso, setProgreso] = useState<string[]>([]);
   const [resultado, setResultado] = useState<RespuestaLaboratorio | null>(null);
@@ -85,7 +90,7 @@ export default function EstrategiasPython() {
     setProgreso([]);
     try {
       const r = await laboratorio.ejecutar(
-        { codigo: sel.codigo, proveedor: f.proveedor, simbolo: f.simbolo, otro: o && { proveedor: o.proveedor, simbolo: o.simbolo }, costos: { comisionPb: comision, deslizamientoPb: deslizamiento }, ensayosPrevios: sel.ensayos },
+        { codigo: sel.codigo, proveedor: f.proveedor, simbolo: f.simbolo, otro: o && { proveedor: o.proveedor, simbolo: o.simbolo }, costos: { comisionPb: comision, deslizamientoPb: deslizamiento }, ensayosPrevios: sel.ensayos, wfo: { objetivo: objetivoWfo, lIs, lOos } },
         (t) => setProgreso((p) => [...p.slice(-6), t]),
       );
       setResultado(r);
@@ -220,6 +225,29 @@ export default function EstrategiasPython() {
             <input type="number" min={0} step={0.5} value={deslizamiento} onChange={(e) => setDeslizamiento(Number(e.target.value))} aria-label="Deslizamiento" className="mt-1 w-24 rounded-md border border-borde bg-black px-2 py-1.5 font-mono text-[11px] text-plata-100" />
           </label>
         </div>
+        <details className="text-[11px] text-plata-400">
+          <summary className="cursor-pointer text-plata-300">Avanzado · Walk-Forward</summary>
+          <div className="mt-2 flex flex-wrap items-end gap-3">
+            <label className="block">
+              <span className="etiqueta">Objetivo para elegir parámetros</span>
+              <select value={objetivoWfo} onChange={(e) => setObjetivoWfo(e.target.value as ObjetivoWfo)} aria-label="Objetivo Walk-Forward" className="mt-1 block rounded-md border border-borde bg-black px-2 py-1.5 text-[11px] text-plata-100">
+                {Object.entries(NOMBRE_OBJETIVO).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="etiqueta">IS (barras, 0 = auto)</span>
+              <input type="number" min={0} step={100} value={lIs} onChange={(e) => setLIs(Number(e.target.value))} aria-label="Barras IS" className="mt-1 w-24 rounded-md border border-borde bg-black px-2 py-1.5 font-mono text-[11px] text-plata-100" />
+            </label>
+            <label className="block">
+              <span className="etiqueta">OOS (barras, 0 = auto)</span>
+              <input type="number" min={0} step={100} value={lOos} onChange={(e) => setLOos(Number(e.target.value))} aria-label="Barras OOS" className="mt-1 w-24 rounded-md border border-borde bg-black px-2 py-1.5 font-mono text-[11px] text-plata-100" />
+            </label>
+          </div>
+        </details>
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={ejecutar} disabled={corriendo || !datos} className="flex items-center gap-2 rounded-lg bg-white px-3.5 py-2 text-xs font-medium text-black disabled:opacity-40">
             <Play size={13} /> Probar con el Juez

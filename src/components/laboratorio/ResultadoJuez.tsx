@@ -3,6 +3,7 @@ import Panel from '@/components/ui/Panel';
 import AbanicoTrayectorias from '@/components/charts/AbanicoTrayectorias';
 import type { OperacionConHora, RespuestaLaboratorio } from '@/motores/laboratorio/protocolo';
 import type { Metricas } from '@/motores/juez/backtest';
+import { NOMBRE_OBJETIVO } from '@/motores/juez/walkForward';
 import { conSigno, num } from '@/lib/format';
 
 const pct = (v: number | null | undefined, d = 1) => (v === null || v === undefined ? '—' : conSigno(v * 100, d, '%'));
@@ -177,6 +178,103 @@ function Explicacion({ que, sirve, mirar }: { que: string; sirve: string; mirar:
   );
 }
 
+const fechaCorta = (t: number | undefined) => (t ? new Date(t).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
+const TEXTO_CLASE: Record<string, string> = { excelente: 'Excelente', aceptable: 'Aceptable', débil: 'Débil', sobreajuste: 'Alerta de sobreajuste' };
+
+/** Motor 3 · Walk-Forward: ventanas IS → OOS, θ* por ventana y eficiencia (WFE). */
+function SeccionWalkForward({ r }: { r: RespuestaLaboratorio }) {
+  const j = r.resultado;
+  const w = j.wfo;
+  const n = r.filas;
+  const x = (i: number) => `${(i / n) * 100}%`;
+  const ancho = (a: number, b: number) => `${(Math.max(0, b - a) / n) * 100}%`;
+  return (
+    <Panel titulo="Motor 3 · Walk-Forward" accion={<span className="text-[10px] text-plata-500">{j.tramos.length} ventanas · objetivo {w ? NOMBRE_OBJETIVO[w.objetivo] : 'Sharpe'}</span>} cuerpo="space-y-4 p-4">
+      <Explicacion
+        que="entrenar la estrategia con un tramo del pasado (IS), probarla en el tramo siguiente que nunca vio (OOS), y repetirlo avanzando en el tiempo."
+        sirve="descubrir si la estrategia aprendió algo real o solo memorizó el pasado. Lo que vale es cómo le va en los tramos que no vio."
+        mirar="la eficiencia WFE (≥ 0,5 aceptable, ≥ 0,7 excelente, < 0,3 sobreajuste) y que la mayoría de ventanas OOS ganen."
+      />
+      {w && (
+        <div className="flex flex-wrap items-end gap-6" data-wfe={w.wfe ?? 'null'}>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.14em] text-plata-500">Eficiencia (WFE)</p>
+            <p className="cifra text-3xl font-light text-white">{w.wfe === null ? '—' : num(w.wfe, 2)}</p>
+            <p className="text-[11px] text-plata-300">{w.clase ? TEXTO_CLASE[w.clase] : 'El entrenamiento no gana: no hay ventaja que conservar'}</p>
+          </div>
+          <p className="max-w-md text-[11px] text-plata-400">
+            IS de {num(w.lIs)} barras, OOS de {num(w.lOos)}, avanza {num(w.lOos)} cada vez · {num(w.embargo)} barras de separación (embargo) entre cada IS y su OOS.
+          </p>
+        </div>
+      )}
+      <div className="space-y-1.5" data-ventanas-wfo>
+        {j.tramos.map((t, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className="w-14 shrink-0 text-[10px] text-plata-500">Ventana {i + 1}</span>
+            <div className="relative h-3 flex-1 rounded-sm bg-white/[0.04]">
+              <div className="absolute inset-y-0 rounded-sm bg-plata-500/50" style={{ left: x(t.isDesde ?? 0), width: ancho(t.isDesde ?? 0, t.isHasta ?? 0) }} title="IS (entrenamiento)" />
+              <div className="absolute inset-y-0 rounded-sm bg-white" style={{ left: x(t.oosDesde ?? t.desde), width: ancho(t.oosDesde ?? t.desde, t.oosHasta ?? t.hasta) }} title="OOS (validación ciega)" />
+            </div>
+          </div>
+        ))}
+        <p className="flex gap-4 pl-16 text-[10px] text-plata-500">
+          <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm bg-plata-500/50" /> IS · entrena</span>
+          <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm bg-white" /> OOS · prueba ciega</span>
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px] text-left text-[11px]">
+          <thead>
+            <tr className="text-[9.5px] uppercase tracking-[0.12em] text-plata-500">
+              <th className="py-1 font-normal">#</th>
+              <th className="py-1 font-normal">OOS (prueba ciega)</th>
+              <th className="py-1 font-normal">Parámetros elegidos (θ*)</th>
+              <th className="py-1 text-right font-normal">Objetivo IS</th>
+              <th className="py-1 text-right font-normal">Anual IS</th>
+              <th className="py-1 text-right font-normal">Anual OOS</th>
+              <th className="py-1 text-right font-normal">Retorno OOS</th>
+              <th className="py-1 text-right font-normal">Ops</th>
+            </tr>
+          </thead>
+          <tbody>
+            {j.tramos.map((t, i) => {
+              const vt = r.ventanasT?.[i];
+              return (
+                <tr key={i} className="border-t border-borde-suave">
+                  <td className="py-1 text-plata-300">{i + 1}</td>
+                  <td className="py-1 text-plata-400">{fechaCorta(vt?.oosDesdeT)} → {fechaCorta(vt?.oosHastaT)}</td>
+                  <td className="py-1 font-mono text-[10.5px] text-plata-400">{JSON.stringify(r.combos[t.combo])}</td>
+                  <td className="cifra py-1 text-right text-plata-300">{t.objetivoIs === undefined ? '—' : n2(t.objetivoIs, 3)}</td>
+                  <td className="cifra py-1 text-right text-plata-300">{pctN(t.anualIs, 0)}</td>
+                  <td className="cifra py-1 text-right text-white">{pctN(t.anualOos, 0)}</td>
+                  <td className="cifra py-1 text-right text-white">{pct(t.retorno)}</td>
+                  <td className="cifra py-1 text-right text-plata-300">{t.operaciones}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-plata-500">Curva OOS unida (todas las pruebas ciegas seguidas)</p>
+        <Linea datos={j.equityOos} base={1} />
+      </div>
+      <details className="rounded-lg border border-borde-suave px-3 py-2 text-[11px] text-plata-300">
+        <summary className="cursor-pointer text-plata-100">Cómo se calcula</summary>
+        <ul className="mt-2 list-disc space-y-1 pl-4">
+          <li>Tamaños automáticos: 5 ventanas con IS:OOS = 4:1 → L_OOS = barras ÷ 9, L_IS = 4 × L_OOS. Paso = L_OOS.</li>
+          <li>En cada IS: θ* = la variante con mayor objetivo ({w ? NOMBRE_OBJETIVO[w.objetivo] : 'Sharpe'}; tasa libre de riesgo 0). Solo usa barras del IS.</li>
+          <li>θ* se congela y se aplica al OOS siguiente. Prohibido reajustar con esos datos.</li>
+          <li>Embargo: las {w ? w.embargo : 20} últimas barras antes de cada OOS no se usan para elegir, para que el final del IS no se filtre en el OOS.</li>
+          <li>Anualizado = media del retorno por barra × barras por año.</li>
+          <li>WFE = media(anualizado OOS) ÷ media(anualizado IS). ≥ 0,7 excelente · ≥ 0,5 aceptable · 0,3–0,5 débil · &lt; 0,3 sobreajuste.</li>
+          <li>Retornos compuestos (producto), no sumados: +50 % y −50 % es −25 %, no 0 %.</li>
+        </ul>
+      </details>
+    </Panel>
+  );
+}
+
 /** Motor 2 · Métricas: fuera de muestra (lo que cuenta) frente a dentro (optimista). */
 function SeccionMetricas({ r }: { r: RespuestaLaboratorio }) {
   const j = r.resultado;
@@ -242,6 +340,7 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
 
       <SeccionBacktest r={r} />
       <SeccionMetricas r={r} />
+      <SeccionWalkForward r={r} />
 
       <Panel titulo="Reglas del Juez" cuerpo="overflow-x-auto px-4 py-2">
         <table className="w-full min-w-[720px] text-left text-xs">
@@ -258,32 +357,6 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
           </tbody>
         </table>
       </Panel>
-
-      <div className="grid gap-4">
-        <Panel titulo="Capital fuera de muestra (Walk-Forward)" accion={<span className="text-[10px] text-plata-500">solo tramos que la estrategia no vio</span>}>
-          <Linea datos={j.equityOos} base={1} />
-          <table className="mt-3 w-full text-left text-[11px]">
-            <thead>
-              <tr className="text-[9.5px] uppercase tracking-[0.12em] text-plata-500">
-                <th className="py-1 font-normal">Tramo</th>
-                <th className="py-1 font-normal">Parámetros elegidos (con datos anteriores)</th>
-                <th className="py-1 text-right font-normal">Retorno</th>
-                <th className="py-1 text-right font-normal">Operaciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {j.tramos.map((t, i) => (
-                <tr key={i} className="border-t border-borde-suave">
-                  <td className="py-1 text-plata-300">{i + 1}</td>
-                  <td className="py-1 font-mono text-[10.5px] text-plata-400">{JSON.stringify(r.combos[t.combo])}</td>
-                  <td className="cifra py-1 text-right text-white">{pct(t.retorno)}</td>
-                  <td className="cifra py-1 text-right text-plata-300">{t.operaciones}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Panel>
-      </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Panel titulo="Monte Carlo · 2.000 órdenes de las operaciones" accion={<span className="text-[10px] text-plata-500">retorno final</span>}>

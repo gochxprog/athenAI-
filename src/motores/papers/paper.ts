@@ -156,7 +156,8 @@ export function paperHtml(p: Paper): string {
   const reglas = j.reglas
     .map((g) => `<tr><td class="c">${g.ok === null ? '—' : g.ok ? '✓' : '✗'}</td><td>${esc(g.nombre)}</td><td>${esc(g.valor)}</td><td class="tenue">${esc(g.umbral)}</td></tr>`)
     .join('');
-  const tramos = j.tramos.map((t, i) => `<tr><td>${i + 1}</td><td><code>${esc(JSON.stringify(r.combos[t.combo]))}</code></td><td class="n">${pct(t.retorno)}</td><td class="n">${t.operaciones}</td></tr>`).join('');
+  const tramos = j.tramos.map((t, i) => `<tr><td>${i + 1}</td><td><code>${esc(JSON.stringify(r.combos[t.combo]))}</code></td><td class="n">${t.anualIs === undefined ? '—' : pct(t.anualIs)}</td><td class="n">${t.anualOos === undefined ? '—' : pct(t.anualOos)}</td><td class="n">${pct(t.retorno)}</td><td class="n">${t.operaciones}</td></tr>`).join('');
+  const wfe = j.wfo ? `<p>Eficiencia Walk-Forward (WFE): <b>${j.wfo.wfe === null ? '— (el entrenamiento no gana)' : `${num(j.wfo.wfe, 2)} · ${esc(j.wfo.clase ?? '')}`}</b> · IS ${j.wfo.lIs} barras, OOS ${j.wfo.lOos}, embargo ${j.wfo.embargo}.</p>` : '';
   const conclusion =
     j.veredicto === 'APROBADA'
       ? 'La estrategia supera todas las reglas aplicables del Juez con datos que no vio al elegir sus parámetros. Es candidata a operar en Paper; los resultados pasados no garantizan resultados futuros y debe vigilarse frente a lo que el Juez esperaba.'
@@ -199,7 +200,8 @@ export function paperHtml(p: Paper): string {
 <h2>4. Walk-Forward (fuera de muestra)</h2>
 <p class="nota">El 30 % inicial solo sirve para elegir parámetros. Cada tramo se prueba con los parámetros elegidos con los datos anteriores (20 barras de embargo). Fuera de muestra desde ${fecha(r.inicioOosT)}.</p>
 ${svgLinea([j.equityOos])}
-<table><tr><th>Tramo</th><th>Parámetros elegidos</th><th class="n">Retorno</th><th class="n">Operaciones</th></tr>${tramos}</table>
+${wfe}
+<table><tr><th>Ventana</th><th>Parámetros elegidos</th><th class="n">Anual IS</th><th class="n">Anual OOS</th><th class="n">Retorno OOS</th><th class="n">Operaciones</th></tr>${tramos}</table>
 
 <h2>5. Métricas</h2>
 <table><tr><th></th><th class="n">Fuera de muestra</th><th class="n">Dentro (optimista)</th></tr>${filasMetricas(j.oos, j.dentroMuestra)}</table>

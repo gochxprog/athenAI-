@@ -1,6 +1,7 @@
 import type { Costos } from '../juez/backtest';
 import type { Combo, ResultadoJuez } from '../juez/juez';
 import type { Proveedor } from '../almacen/almacen';
+import type { ConfigWfo } from '../juez/walkForward';
 
 export interface PeticionLaboratorio {
   tipo?: 'juzgar';
@@ -13,6 +14,8 @@ export interface PeticionLaboratorio {
   costos: Costos;
   /** Variantes ya probadas antes con esta idea (para el Deflated Sharpe). */
   ensayosPrevios: number;
+  /** Walk-Forward: objetivo y tamaños de ventana (ausente = automático). */
+  wfo?: ConfigWfo;
 }
 
 export interface RespuestaLaboratorio {
@@ -30,6 +33,8 @@ export interface RespuestaLaboratorio {
   costos: Costos;
   /** Se descontó el funding (hay tasas grabadas en estos datos). */
   fundingIncluido: boolean;
+  /** Horas de cada ventana del Walk-Forward. */
+  ventanasT: { isDesdeT: number; isHastaT: number; oosDesdeT: number; oosHastaT: number }[];
   /** Operaciones fuera de muestra con sus horas reales (motor Backtest). */
   operaciones: OperacionConHora[];
 }

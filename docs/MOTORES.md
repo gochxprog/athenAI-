@@ -29,7 +29,7 @@ Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el p
 |---|---|---|---|---|
 | 1 | Backtest | Retorno por barra, operaciones y capital, con costos, funding y sin cruzar huecos | `backtest.ts` + `costos.ts` | ✅ |
 | 2 | Métricas | Retorno, CAGR, Sharpe, Sortino, drawdown, Calmar, aciertos, factor de beneficio, esperanza, rachas | `backtest.ts` | ✅ |
-| 3 | Walk-Forward | Resultado en tramos que la estrategia no vio, con purga y embargo | `juez.ts` | 🔍 |
+| 3 | Walk-Forward | Ventanas rolling IS → OOS (4:1, paso = OOS), θ* por objetivo (Sharpe / Profit Factor / Retorno), embargo, eficiencia WFE | `walkForward.ts` | ✅ |
 | 4 | Monte Carlo | Rango de resultados y riesgo de ruina, barajando las operaciones | `juez.ts` | 🔍 |
 | 5 | Luck test | Si el resultado es suerte (p-valor) | `juez.ts` | 🔍 |
 | 6 | Robustez | Costos ×2, parámetros vecinos, otro mercado, estabilidad | `juez.ts` | 🔍 |

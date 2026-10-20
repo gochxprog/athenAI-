@@ -90,6 +90,7 @@ ctx.onmessage = async (e) => {
       tiempos: filas.map((f) => f.cierre),
       huecos: huecosDe(filas),
       funding: fundingIncluido ? funding : undefined,
+      wfo: p.wfo,
       combos: ejec.combos,
       posiciones: ejec.posiciones,
       costos: p.costos,
@@ -123,6 +124,10 @@ ctx.onmessage = async (e) => {
         resultado,
         costos: p.costos,
         fundingIncluido,
+        ventanasT: resultado.tramos.map((t) => {
+          const hora = (i: number) => filas[Math.max(0, Math.min(filas.length - 1, i))].cierre;
+          return { isDesdeT: hora(t.isDesde), isHastaT: hora(t.isHasta - 1), oosDesdeT: hora(t.oosDesde), oosHastaT: hora(t.oosHasta - 1) };
+        }),
         operaciones: resultado.operacionesOos.map((o) => ({ entradaT: filas[o.entrada].cierre, salidaT: filas[o.salida].cierre, lado: o.lado, retorno: o.retorno, barras: o.barras })),
         combos: ejec.combos, filas: filas.length, desde: filas[0].cierre, hasta: filas[filas.length - 1].cierre, inicioOosT: filas[resultado.inicioOos]?.cierre ?? 0, segundos: (performance.now() - t0) / 1000 },
     });

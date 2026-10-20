@@ -12,6 +12,7 @@
 import { crearAleatorio } from '@/lib/random';
 import { normalInversa } from '@/lib/backtest';
 import { costoPorLado } from './costos';
+import { walkForward, type ClaseWfe, type ConfigWfo, type ObjetivoWfo, type VentanaResultado } from './walkForward';
 import { aplicarHuecos, backtest, COSTOS_POR_DEFECTO, maxDrawdown, metricas, sharpeBarras, type Costos, type Metricas, type Operacion } from './backtest';
 
 export type Combo = Record<string, number | string | boolean>;
@@ -34,15 +35,14 @@ export interface EntradaJuez {
   /** Resultado de la prueba anti-futuro (la estrategia no usa datos de barras posteriores). */
   antiFuturo?: { ok: boolean; detalle: string } | null;
   semilla?: number;
+  /** Ventanas y objetivo del Walk-Forward (por defecto: automáticos y Sharpe). */
+  wfo?: ConfigWfo;
 }
 
-export interface TramoWF {
+/** Una ventana del Walk-Forward; `desde`/`hasta` = su tramo OOS. */
+export interface TramoWF extends VentanaResultado {
   desde: number;
   hasta: number;
-  combo: number;
-  retorno: number;
-  sharpe: number | null;
-  operaciones: number;
 }
 
 export interface Regla {
@@ -62,6 +62,8 @@ export interface ResultadoJuez {
   /** Mejor variante con toda la muestra (optimista: solo como referencia). */
   dentroMuestra: Metricas & { combo: number };
   tramos: TramoWF[];
+  /** Walk-Forward: objetivo, tamaños de ventana y eficiencia (WFE). */
+  wfo: { objetivo: ObjetivoWfo; lIs: number; lOos: number; embargo: number; wfe: number | null; clase: ClaseWfe | null };
   /** Capital fuera de muestra, por barra (empieza en 1 al inicio del primer tramo). */
   equityOos: number[];
   /** Operaciones fuera de muestra (índices de barra de la serie completa). */
@@ -87,9 +89,6 @@ export interface ResultadoJuez {
   ensayos: number;
 }
 
-const TRAMOS = 5;
-const EMBARGO = 20;
-const FRACCION_INICIAL = 0.3;
 export const MIN_BARRAS_OOS = 500;
 export const MIN_OPERACIONES = 30;
 
@@ -172,38 +171,19 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
   const srCompletos = completos.map((b) => sharpeBarras(b.retornos) ?? -Infinity);
   const mejor = srCompletos.indexOf(Math.max(...srCompletos));
 
-  // Walk-Forward purgado con embargo.
-  const inicioOos = Math.floor(n * FRACCION_INICIAL);
-  const largo = Math.floor((n - inicioOos) / TRAMOS);
-  const retOos = new Array(n).fill(0);
-  const posOos = new Array(n).fill(0);
-  const opsOos: Operacion[] = [];
-  const tramos: TramoWF[] = [];
+  // Motor 3 · Walk-Forward (ventanas rolling IS → OOS con embargo).
+  const wfo = walkForward({ cierres: e.cierres, tiempos: e.tiempos, posiciones, costos, opciones: fx, config: e.wfo });
+  const inicioOos = wfo.inicioOos;
+  const retOos = wfo.retornos;
+  const posOos = wfo.posiciones;
+  const opsOos = wfo.operaciones;
+  const tramos: TramoWF[] = wfo.ventanas.map((v) => ({ ...v, desde: v.oosDesde, hasta: v.oosHasta }));
+  // Robustez: el mismo θ* de cada ventana con el doble de costos.
+  const dobles = { comisionPb: costos.comisionPb * 2, deslizamientoPb: costos.deslizamientoPb * 2 };
   const retDobles = new Array(n).fill(0);
-  for (let k = 0; k < TRAMOS && largo > 1; k += 1) {
-    const desde = inicioOos + k * largo;
-    const hasta = k === TRAMOS - 1 ? n : desde + largo;
-    const finIs = Math.max(2, desde - EMBARGO);
-    let elegido = 0;
-    let mejorSr = -Infinity;
-    posiciones.forEach((p, ci) => {
-      const b = backtest(e.cierres, p, costos, 0, finIs, fx);
-      const s = sharpeBarras(b.retornos.slice(0, finIs)) ?? -Infinity;
-      if (s > mejorSr) {
-        mejorSr = s;
-        elegido = ci;
-      }
-    });
-    const b = backtest(e.cierres, posiciones[elegido], costos, desde, hasta, fx);
-    const bDoble = backtest(e.cierres, posiciones[elegido], { comisionPb: costos.comisionPb * 2, deslizamientoPb: costos.deslizamientoPb * 2 }, desde, hasta, fx);
-    for (let i = desde; i < hasta; i += 1) {
-      retOos[i] = b.retornos[i];
-      retDobles[i] = bDoble.retornos[i];
-      posOos[i] = i < hasta - 1 ? posiciones[elegido][i] : 0;
-    }
-    opsOos.push(...b.operaciones);
-    const m = metricas(b, e.tiempos, desde, hasta);
-    tramos.push({ desde, hasta, combo: elegido, retorno: m.retornoTotal, sharpe: m.sharpe, operaciones: m.operaciones });
+  for (const v of wfo.ventanas) {
+    const b = backtest(e.cierres, posiciones[v.combo], dobles, v.oosDesde, v.oosHasta, fx);
+    for (let i = v.oosDesde; i < v.oosHasta; i += 1) retDobles[i] = b.retornos[i];
   }
   const resOos = { retornos: retOos, equity: [], operaciones: opsOos };
   const oos = metricas(resOos, e.tiempos, inicioOos, n);
@@ -311,6 +291,7 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
     { nombre: 'Datos suficientes', ok: largoOos >= MIN_BARRAS_OOS && opsOos.length >= MIN_OPERACIONES, valor: `${largoOos} barras · ${opsOos.length} operaciones fuera de muestra`, umbral: `≥ ${MIN_BARRAS_OOS} barras y ≥ ${MIN_OPERACIONES} operaciones`, explicacion: 'Con pocas operaciones cualquier resultado puede ser casualidad.' },
     { nombre: 'No mira al futuro', ok: e.antiFuturo ? e.antiFuturo.ok : null, valor: e.antiFuturo?.detalle ?? 'no comprobado', umbral: 'posiciones idénticas con y sin datos posteriores', explicacion: 'Si la posición de hoy cambia al añadir datos de mañana, la estrategia hace trampa.' },
     { nombre: 'Gana fuera de muestra (Walk-Forward)', ok: oos.retornoTotal > 0, valor: pctTxt(oos.retornoTotal), umbral: '> 0 %', explicacion: 'Solo cuentan los tramos que la estrategia no vio al elegir sus parámetros.' },
+    { nombre: 'Eficiencia Walk-Forward (WFE)', ok: wfo.wfe === null ? false : wfo.wfe >= 0.5, valor: wfo.wfe === null ? 'el entrenamiento no gana' : `${dec(wfo.wfe, 2)} (${wfo.clase})`, umbral: '≥ 0,50', explicacion: 'Cuánto de lo que gana entrenando conserva en datos que no vio. < 0,30 = sobreajuste.' },
     { nombre: 'Estable entre tramos', ok: tramosPositivos >= 0.6, valor: `${Math.round(tramosPositivos * tramos.length)}/${tramos.length} tramos positivos`, umbral: '≥ 60 %', explicacion: 'Una ventaja real no depende de un solo periodo.' },
     { nombre: 'Luck test', ok: suerte ? suerte.p <= 0.05 : null, valor: suerte ? `p = ${dec(suerte.p, 3)}` : '—', umbral: 'p ≤ 0,05', explicacion: 'El azar con la misma exposición no debe igualarla más de 1 de cada 20 veces.' },
     { nombre: 'Drawdown máximo', ok: oos.maxDrawdown <= 0.2, valor: pctTxt(oos.maxDrawdown), umbral: '≤ 20 %', explicacion: 'Peor caída desde un máximo, fuera de muestra.' },
@@ -338,6 +319,7 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
     oos,
     dentroMuestra: { ...metCompletas[mejor], combo: mejor },
     tramos,
+    wfo: { objetivo: wfo.objetivo, lIs: wfo.lIs, lOos: wfo.lOos, embargo: wfo.embargo, wfe: wfo.wfe, clase: wfo.clase },
     equityOos,
     operacionesOos: opsOos,
     inicioOos,

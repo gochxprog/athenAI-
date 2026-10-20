@@ -213,13 +213,6 @@ export const RECHAZOS_JUEZ = [
   { razon: 'Sobreajuste (PBO alto)', cantidad: 80 },
 ];
 
-export const WALK_FORWARD = [
-  { v: 1, is: 2.12, oos: 1.71 }, { v: 2, is: 1.98, oos: 1.52 }, { v: 3, is: 2.31, oos: 1.84 },
-  { v: 4, is: 2.05, oos: 1.38 }, { v: 5, is: 1.89, oos: 1.61 }, { v: 6, is: 2.24, oos: 1.92 },
-  { v: 7, is: 2.02, oos: 1.47 }, { v: 8, is: 1.94, oos: 1.66 }, { v: 9, is: 2.18, oos: 1.73 },
-  { v: 10, is: 2.07, oos: 1.58 }, { v: 11, is: 1.91, oos: 1.44 }, { v: 12, is: 2.15, oos: 1.79 },
-];
-
 // --- Agentes ------------------------------------------------------------------
 export type AgenteId = 'vigia' | 'flujo' | 'rastreador' | 'programador' | 'juez' | 'etiquetador' | 'lector' | 'sintetizador' | 'guardian' | 'ejecutor';
 
