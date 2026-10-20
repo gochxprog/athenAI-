@@ -26,6 +26,19 @@ export interface RespuestaLaboratorio {
   segundos: number;
   /** Si la variante elegida abre largos y/o cortos (para describir la lógica). */
   lados: { largos: number; cortos: number };
+  /** Costos usados en el backtest. */
+  costos: Costos;
+  /** Operaciones fuera de muestra con sus horas reales (motor Backtest). */
+  operaciones: OperacionConHora[];
+}
+
+export interface OperacionConHora {
+  /** Cierre (ms) de la barra en que se decidió entrar y salir. */
+  entradaT: number;
+  salidaT: number;
+  lado: 1 | -1;
+  retorno: number;
+  barras: number;
 }
 
 export type MensajeLaboratorio =

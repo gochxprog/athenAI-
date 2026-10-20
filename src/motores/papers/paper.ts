@@ -25,9 +25,11 @@ export function crearPaper(datos: Omit<Paper, 'id' | 'creado'>, ahora = Date.now
   const r = datos.respuesta.resultado;
   const respuesta: RespuestaLaboratorio = {
     ...datos.respuesta,
+    operaciones: (datos.respuesta.operaciones ?? []).slice(-300),
     resultado: {
       ...r,
       equityOos: reducir(r.equityOos, 400),
+      operacionesOos: [],
       monteCarlo: r.monteCarlo ? { ...r.monteCarlo, caminos: r.monteCarlo.caminos.slice(0, 30) } : null,
     },
   };

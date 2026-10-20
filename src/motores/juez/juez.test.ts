@@ -35,7 +35,7 @@ describe('Backtest', () => {
     expect(conCostos.operaciones[0].retorno).toBeCloseTo((1 - 0.0005) * 1.01 ** 3 * (1 - 0.0005) - 1, 8);
     // Un giro de largo a corto paga dos lados.
     const giro = backtest([100, 100, 100], [1, -1, 0], { comisionPb: 10, deslizamientoPb: 0 });
-    expect(giro.retornos[1]).toBeCloseTo(-0.002, 10);
+    expect(giro.retornos[1]).toBeCloseTo((1 - 0.001) ** 2 - 1, 12);
   });
 
   it('normaliza cualquier salida de la estrategia a −1 / 0 / 1', () => {

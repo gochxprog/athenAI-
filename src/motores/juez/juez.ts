@@ -11,7 +11,7 @@
 //   6. PBO (CSCV): probabilidad de que la mejor variante dentro de muestra sea peor que la mediana fuera.
 import { crearAleatorio } from '@/lib/random';
 import { normalInversa } from '@/lib/backtest';
-import { backtest, COSTOS_POR_DEFECTO, maxDrawdown, metricas, sharpeBarras, type Costos, type Metricas, type Operacion } from './backtest';
+import { aplicarHuecos, backtest, COSTOS_POR_DEFECTO, maxDrawdown, metricas, sharpeBarras, type Costos, type Metricas, type Operacion } from './backtest';
 
 export type Combo = Record<string, number | string | boolean>;
 
@@ -61,6 +61,8 @@ export interface ResultadoJuez {
   tramos: TramoWF[];
   /** Capital fuera de muestra, por barra (empieza en 1 al inicio del primer tramo). */
   equityOos: number[];
+  /** Operaciones fuera de muestra (índices de barra de la serie completa). */
+  operacionesOos: Operacion[];
   /** Índice de la barra donde empieza la parte fuera de muestra. */
   inicioOos: number;
   monteCarlo: {
@@ -94,12 +96,6 @@ export function normalCdf(x: number): number {
   const d = 0.3989422804014327 * Math.exp((-x * x) / 2);
   const p = d * t * (0.31938153 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
   return x >= 0 ? 1 - p : p;
-}
-
-/** Quita la posición en la barra anterior a un hueco: no se gana ni se pierde a través de un corte de datos. */
-function sinHuecos(pos: readonly number[], huecos?: readonly boolean[]): number[] {
-  if (!huecos) return [...pos];
-  return pos.map((p, i) => (huecos[i + 1] ? 0 : p));
 }
 
 /**
@@ -162,7 +158,8 @@ const dec = (v: number, d: number) => v.toLocaleString('es-ES', { minimumFractio
 export function juzgar(e: EntradaJuez): ResultadoJuez {
   const n = e.cierres.length;
   const costos = e.costos ?? COSTOS_POR_DEFECTO;
-  const posiciones = e.posiciones.map((p) => sinHuecos(p, e.huecos));
+  // Regla de huecos (motor Backtest): sin posición en la barra anterior a un corte de datos.
+  const posiciones = e.posiciones.map((p) => aplicarHuecos(p, e.huecos));
   const r = crearAleatorio(e.semilla ?? 12_345);
 
   // Referencia dentro de muestra (optimista): cada variante sobre toda la serie.
@@ -338,6 +335,7 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
     dentroMuestra: { ...metCompletas[mejor], combo: mejor },
     tramos,
     equityOos,
+    operacionesOos: opsOos,
     inicioOos,
     monteCarlo,
     suerte,

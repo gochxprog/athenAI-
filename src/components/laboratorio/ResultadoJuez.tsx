@@ -1,7 +1,7 @@
-import { Check, Minus, X } from 'lucide-react';
+import { Check, Download, Minus, X } from 'lucide-react';
 import Panel from '@/components/ui/Panel';
 import AbanicoTrayectorias from '@/components/charts/AbanicoTrayectorias';
-import type { RespuestaLaboratorio } from '@/motores/laboratorio/protocolo';
+import type { OperacionConHora, RespuestaLaboratorio } from '@/motores/laboratorio/protocolo';
 import type { Metricas } from '@/motores/juez/backtest';
 import { conSigno, num } from '@/lib/format';
 
@@ -54,6 +54,87 @@ function Histograma({ valores, marcas }: { valores: number[]; marcas: { v: numbe
   );
 }
 
+function descargarOperaciones(ops: OperacionConHora[]): void {
+  const filas = ops.map((o) => [new Date(o.entradaT).toISOString(), new Date(o.salidaT).toISOString(), o.lado > 0 ? 'largo' : 'corto', o.barras, o.retorno].join(','));
+  const url = URL.createObjectURL(new Blob([['entrada,salida,lado,barras,retorno', ...filas].join('\n')], { type: 'text/csv' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'operaciones-fuera-de-muestra.csv';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1_000);
+}
+
+/** Motor 1 · Backtest: curva, drawdown, operaciones y cómo se calcula. */
+function SeccionBacktest({ r }: { r: RespuestaLaboratorio }) {
+  const eq = r.resultado.equityOos;
+  let pico = -Infinity;
+  const dd = eq.map((e) => {
+    pico = Math.max(pico, e);
+    return e / pico - 1;
+  });
+  const ops = r.operaciones ?? [];
+  const c = r.costos;
+  const porOps = ops.reduce((a, o) => a * (1 + o.retorno), 1) - 1;
+  return (
+    <Panel titulo="Motor 1 · Backtest" accion={<span className="text-[10px] text-plata-500">fuera de muestra · {num(ops.length)} operaciones</span>} cuerpo="space-y-4 p-4" >
+      <div data-seccion-backtest>
+        <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-plata-500">Capital (empieza en 1)</p>
+        <Linea datos={eq} base={1} />
+        <p className="mb-1 mt-2 text-[10px] uppercase tracking-[0.14em] text-plata-500">Drawdown (caída desde el máximo)</p>
+        <Linea datos={dd} base={0} alto={90} />
+        <p className="mt-2 text-[10.5px] text-plata-400" data-cuadre>
+          Cuadre: capital final {pct((eq[eq.length - 1] ?? 1) - 1, 2)} · producto de las operaciones {pct(porOps, 2)}
+        </p>
+      </div>
+      {ops.length > 0 && (
+        <div className="overflow-x-auto">
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-plata-500">Operaciones (últimas 50)</p>
+            <button onClick={() => descargarOperaciones(ops)} className="flex items-center gap-1 rounded-md border border-borde px-2 py-1 text-[10.5px] text-plata-200 hover:text-white">
+              <Download size={11} /> CSV ({num(ops.length)})
+            </button>
+          </div>
+          <table className="w-full min-w-[560px] text-left text-[11px]" data-operaciones>
+            <thead>
+              <tr className="text-[9.5px] uppercase tracking-[0.12em] text-plata-500">
+                <th className="py-1 font-normal">Entrada</th>
+                <th className="py-1 font-normal">Salida</th>
+                <th className="py-1 font-normal">Lado</th>
+                <th className="py-1 text-right font-normal">Barras</th>
+                <th className="py-1 text-right font-normal">Retorno neto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ops.slice(-50).reverse().map((o, i) => (
+                <tr key={i} className="border-t border-borde-suave">
+                  <td className="py-1 text-plata-300">{fecha(o.entradaT)}</td>
+                  <td className="py-1 text-plata-300">{fecha(o.salidaT)}</td>
+                  <td className="py-1 text-plata-200">{o.lado > 0 ? 'Largo' : 'Corto'}</td>
+                  <td className="cifra py-1 text-right text-plata-300">{o.barras}</td>
+                  <td className="cifra py-1 text-right text-white">{pct(o.retorno, 2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <details className="rounded-lg border border-borde-suave px-3 py-2 text-[11px] text-plata-300" data-formulas>
+        <summary className="cursor-pointer text-plata-100">Cómo se calcula</summary>
+        <ul className="mt-2 list-disc space-y-1 pl-4">
+          <li>La posición que decides al cierre de una barra (p) rige en la barra siguiente: retorno = p × (cierre siguiente / cierre − 1).</li>
+          <li>
+            Cada cambio de posición paga {c ? `${num(c.comisionPb + c.deslizamientoPb, 1)} pb por lado (comisión ${num(c.comisionPb, 1)} + deslizamiento ${num(c.deslizamientoPb, 1)})` : 'comisión + deslizamiento por lado'}: abrir o cerrar es 1 lado, girar de largo a corto son 2.
+          </li>
+          <li>Retorno neto de la barra = (1 + retorno de precio) × (1 − costo)^lados − 1. Capital = producto de (1 + retorno neto).</li>
+          <li>Nunca se mantiene una posición a través de un hueco de datos, y al final de cada tramo se cierra todo.</li>
+          <li>Todo es multiplicativo: el capital final cuadra exacto con el producto de las operaciones.</li>
+          <li>Pendiente: el funding de los perpetuos (cada 8 h) aún no se graba, así que no se descuenta.</li>
+        </ul>
+      </details>
+    </Panel>
+  );
+}
+
 function Fila({ k, oos, ins }: { k: string; oos: string; ins: string }) {
   return (
     <tr className="border-t border-borde-suave">
@@ -88,6 +169,8 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
           {num(r.filas)} dollar bars ({fecha(r.desde)} → {fecha(r.hasta)}) · fuera de muestra desde {fecha(r.inicioOosT)} · {r.combos.length} {r.combos.length === 1 ? 'variante' : 'variantes'} · {j.ensayos} probadas en total · {num(r.segundos, 1)} s
         </p>
       </div>
+
+      <SeccionBacktest r={r} />
 
       <Panel titulo="Reglas del Juez" cuerpo="overflow-x-auto px-4 py-2">
         <table className="w-full min-w-[720px] text-left text-xs">

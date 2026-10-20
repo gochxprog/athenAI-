@@ -117,6 +117,8 @@ ctx.onmessage = async (e) => {
           return { largos: pos.filter((x) => x > 0).length, cortos: pos.filter((x) => x < 0).length };
         })(),
         resultado,
+        costos: p.costos,
+        operaciones: resultado.operacionesOos.map((o) => ({ entradaT: filas[o.entrada].cierre, salidaT: filas[o.salida].cierre, lado: o.lado, retorno: o.retorno, barras: o.barras })),
         combos: ejec.combos, filas: filas.length, desde: filas[0].cierre, hasta: filas[filas.length - 1].cierre, inicioOosT: filas[resultado.inicioOos]?.cierre ?? 0, segundos: (performance.now() - t0) / 1000 },
     });
   } catch (err) {
