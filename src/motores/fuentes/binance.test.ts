@@ -22,13 +22,14 @@ const diff = (U: number, u: number, pu: number, b: [string, string][] = [], a: [
   data: { e: 'depthUpdate', E: 1, T: 1, s: 'BTCUSDT', U, u, pu, b, a },
 });
 
-function montar(snapshotId = 100) {
+function montar(snapshotId = 100, opciones: { ws?: string; restCaido?: boolean } = {}) {
   const mensajes: { s: string; m: MensajeMercado }[] = [];
   const sockets: SocketFalso[] = [];
   const pedidos: string[] = [];
   let resolverSnapshot: (() => void) | null = null;
   const fetchImpl = vi.fn(async (url: string) => {
     pedidos.push(url);
+    if (opciones.restCaido) throw new TypeError('Failed to fetch');
     const json = (x: unknown) => ({ ok: true, status: 200, json: async () => x }) as Response;
     if (url.includes('exchangeInfo')) return json({ symbols: [{ symbol: 'BTCUSDT', status: 'TRADING', filters: [{ filterType: 'PRICE_FILTER', tickSize: '0.10' }] }] });
     if (url.includes('ticker/24hr')) return json({ lastPrice: '84700.0', quoteVolume: '18000000000' });
@@ -50,6 +51,7 @@ function montar(snapshotId = 100) {
       return so;
     },
     fetchImpl,
+    ws: opciones.ws,
   });
   return { fuente, mensajes, sockets, pedidos, infos, soltarSnapshot: () => resolverSnapshot?.() };
 }
@@ -156,19 +158,46 @@ describe('FuenteBinance · rutas /public y /market', () => {
   beforeEach(() => vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout', 'Date'] }));
   afterEach(() => vi.useRealTimers());
 
-  it('avisa si llega el libro pero no los trades y prueba la ruta antigua', async () => {
+  it('con el servidor oficial nunca salta a la ruta antigua: reintenta /market', async () => {
     const { fuente, sockets, mensajes } = montar();
     await fuente.iniciar();
     sockets[0].emitir(diff(1, 2, 0));
-    vi.advanceTimersByTime(10_000);
+    vi.advanceTimersByTime(16_000);
     expect(mensajes.some((x) => x.m.tipo === 'conexion' && x.m.estado === 'sin-datos' && /no los trades/.test(x.m.detalle ?? ''))).toBe(true);
-    vi.advanceTimersByTime(5_001);
-    const ultimo = sockets[sockets.length - 1];
-    expect(ultimo.url).toBe('wss://fstream.binance.com/stream?streams=btcusdt@aggTrade/btcusdt@forceOrder');
-    expect(fuente.rutas()).toEqual({ libro: '/public/stream', trades: '/stream' });
-    // Con trades por la ruta antigua, pasa a en vivo.
+    vi.advanceTimersByTime(60_000);
+    expect(sockets.some((x) => x.url.includes('/stream?') && !x.url.includes('/market/') && !x.url.includes('/public/'))).toBe(false);
+    expect(fuente.rutas()).toEqual({ libro: '/public/stream', trades: '/market/stream' });
+    [...sockets].reverse().find((x) => x.url.includes('/public/'))!.emitir(diff(3, 4, 2));
+    const ultimo = [...sockets].reverse().find((x) => x.url.includes('/market/'))!;
     ultimo.emitir({ stream: 'btcusdt@aggTrade', data: { e: 'aggTrade', s: 'BTCUSDT', a: 1, p: '84700', q: '0.1', T: 1, m: false } });
     expect(mensajes[mensajes.length - 1].m).toMatchObject({ tipo: 'conexion', estado: 'en-vivo' });
+    fuente.detener();
+  });
+
+  it('un servidor propio sin rutas nuevas prueba una sola vez la ruta antigua', async () => {
+    const { fuente, sockets } = montar(100, { ws: 'ws://localhost:9999' });
+    await fuente.iniciar();
+    sockets[0].emitir(diff(1, 2, 0));
+    vi.advanceTimersByTime(20_001);
+    expect(fuente.rutas().trades).toBe('/stream');
+    vi.advanceTimersByTime(120_000);
+    expect(fuente.rutas().trades).toBe('/stream');
+    fuente.detener();
+  });
+
+  it('si el REST no responde abre igual los WebSockets', async () => {
+    const { fuente, sockets, mensajes } = montar(100, { restCaido: true });
+    await fuente.iniciar();
+    expect(sockets.map((x) => x.url)).toEqual([
+      'wss://fstream.binance.com/public/stream?streams=btcusdt@depth@100ms/noexiste@depth@100ms',
+      'wss://fstream.binance.com/market/stream?streams=btcusdt@aggTrade/btcusdt@forceOrder/noexiste@aggTrade/noexiste@forceOrder',
+    ]);
+    sockets[0].onopen?.({});
+    sockets[0].emitir(diff(1, 2, 0));
+    sockets[1].emitir({ stream: 'btcusdt@aggTrade', data: { e: 'aggTrade', s: 'BTCUSDT', a: 1, p: '84700', q: '0.1', T: 1, m: false } });
+    await Promise.resolve();
+    expect(mensajes.some((x) => x.m.tipo === 'conexion' && x.m.estado === 'error')).toBe(false);
+    expect(mensajes.filter((x) => x.m.tipo === 'conexion').pop()?.m).toMatchObject({ estado: 'en-vivo' });
     fuente.detener();
   });
 });

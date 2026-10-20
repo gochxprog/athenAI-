@@ -39,7 +39,7 @@ describe('Notificaciones', () => {
     expect(y.init.headers).toBeUndefined();
   });
 
-  it('avisa de un fallo solo si dura más de 30 s, y de la recuperación', async () => {
+  it('avisa de un fallo solo si dura más de la gracia, y de la recuperación', async () => {
     const { n, envios, avanzar } = montar();
     n.revisarFeeds([feed('reconectando')]);
     avanzar(GRACIA_FALLO_MS - 1);
@@ -54,12 +54,54 @@ describe('Notificaciones', () => {
     n.revisarFeeds([feed('en-vivo')]);
     await esperar();
     expect(envios).toHaveLength(6);
-    // Microcorte (< 30 s): no avisa.
+    // Microcorte (< gracia): no avisa.
     n.revisarFeeds([feed('reconectando')]);
     avanzar(10_000);
     n.revisarFeeds([feed('en-vivo')]);
     await esperar();
     expect(envios).toHaveLength(6);
+  });
+
+  it('con la pestaña oculta no avisa de caídas; al volver, un solo resumen', async () => {
+    let ahora = 1_000_000;
+    let visible = true;
+    const envios: string[] = [];
+    const fetchImpl = vi.fn(async (url: string) => {
+      envios.push(url);
+      return { ok: true, status: 200 } as Response;
+    }) as unknown as typeof fetch;
+    const n = new Notificador(fetchImpl, null, () => ahora, () => visible);
+    n.guardar({ ...CONFIG_NOTIF_POR_DEFECTO, ntfy: { activo: true, servidor: 'https://ntfy.sh', tema: 't' } });
+    visible = false;
+    for (let i = 0; i < 20; i++) {
+      ahora += 60_000;
+      n.revisarFeeds([feed('reconectando')]);
+    }
+    await esperar();
+    expect(envios).toHaveLength(0);
+    visible = true;
+    n.revisarFeeds([feed('reconectando')]);
+    await esperar();
+    expect(envios).toHaveLength(1);
+    expect(decodeURIComponent(envios[0])).toContain('pausa');
+    // Se recupera dentro de la gracia: ningún aviso más.
+    ahora += 20_000;
+    n.revisarFeeds([feed('en-vivo')]);
+    await esperar();
+    expect(envios).toHaveLength(1);
+  });
+
+  it('el aviso de recuperado no se repite en cada microcaída', async () => {
+    const { n, envios, avanzar } = montar();
+    for (let i = 0; i < 3; i++) {
+      n.revisarFeeds([feed('reconectando')]);
+      avanzar(GRACIA_FALLO_MS + 1);
+      n.revisarFeeds([feed('reconectando')]);
+      avanzar(1_000);
+      n.revisarFeeds([feed('en-vivo')]);
+      await esperar();
+    }
+    expect(envios).toHaveLength(6); // un fallo y un recuperado (× 3 canales); el resto los frena el anti-spam
   });
 
   it('respeta el anti-spam y los tipos desactivados', async () => {

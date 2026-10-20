@@ -16,7 +16,9 @@ export interface EnvioRegistrado {
 
 const CLAVE = 'athenai.notificaciones';
 /** Un mercado tiene que llevar este tiempo sin datos antes de avisar (evita avisos por microcortes). */
-export const GRACIA_FALLO_MS = 30_000;
+export const GRACIA_FALLO_MS = 60_000;
+/** Pausas de la pestaña más largas que esto se resumen en un solo aviso al volver. */
+const PAUSA_AVISO_MS = 120_000;
 
 const NOMBRE_REGIMEN = { rango: 'rango', tendencia: 'tendencia', raro: 'día raro' } as const;
 
@@ -30,11 +32,14 @@ export class Notificador {
   private distinto = new Map<string, boolean>();
   private regimen = new Map<string, string>();
   private eventosAvisados = new Set<string>();
+  /** Desde cuándo la pestaña está oculta (el navegador congela la página y las conexiones se caen). */
+  private ocultaDesde: number | null = null;
 
   constructor(
     private readonly fetchImpl: typeof fetch = (...a) => fetch(...a),
     private readonly almacen: Pick<Storage, 'getItem' | 'setItem'> | null = typeof localStorage === 'undefined' ? null : localStorage,
     private readonly reloj: () => number = () => Date.now(),
+    private readonly visible: () => boolean = () => typeof document === 'undefined' || document.visibilityState !== 'hidden',
   ) {
     this.config = this.leer();
   }
@@ -135,6 +140,19 @@ export class Notificador {
   /** Revisa los feeds (llamar cada vez que llegan, ≈ 1 Hz). */
   revisarFeeds(feeds: readonly EstadoFeed[]): void {
     const ahora = this.reloj();
+    // Con la pestaña oculta (otra pestaña, teléfono bloqueado) el navegador frena la página: las caídas de ese
+    // tramo no son fallos de la fuente. No se avisa; al volver, un solo resumen y otra vez el tiempo de gracia.
+    if (!this.visible()) {
+      this.ocultaDesde ??= ahora;
+      return;
+    }
+    if (this.ocultaDesde !== null) {
+      const pausa = ahora - this.ocultaDesde;
+      this.ocultaDesde = null;
+      this.caidos.clear();
+      if (pausa >= PAUSA_AVISO_MS && feeds.length)
+        void this.enviar({ tipo: 'fallo', clave: 'pausa-pestana', titulo: 'La pestaña estuvo en pausa', texto: `Durante ${Math.round(pausa / 60_000)} min el navegador congeló la página (pestaña en segundo plano o teléfono bloqueado). Ese tramo queda como hueco en los datos. Para grabar 24/7 hace falta el VPS.`, prioridad: 'normal' });
+    }
     for (const f of feeds) {
       const id = `${f.proveedor}:${f.simbolo}`;
       const nombre = `${f.simbolo} (${f.proveedor})`;
@@ -149,7 +167,7 @@ export class Notificador {
         }
       } else if (f.conexion === 'en-vivo' && c) {
         this.caidos.delete(id);
-        if (c.avisado) void this.enviar({ tipo: 'fallo', clave: `ok:${id}:${ahora}`, titulo: `${nombre}: recuperado`, texto: `Vuelve a recibir datos tras ${Math.round((ahora - c.desde) / 1000)} s sin conexión.`, prioridad: 'normal' });
+        if (c.avisado) void this.enviar({ tipo: 'fallo', clave: `ok:${id}`, titulo: `${nombre}: recuperado`, texto: `Vuelve a recibir datos tras ${Math.round((ahora - c.desde) / 1000)} s sin conexión.`, prioridad: 'normal' });
       }
       // "Hoy es distinto".
       const mem = f.memoria?.memoria;

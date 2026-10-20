@@ -9,8 +9,11 @@
 //
 // Desde el 23-abr-2026 Binance separa los WebSockets de futuros en rutas /public, /market y /private.
 // La ruta antigua ({ws}/stream) solo entrega los streams de /public: el libro llega pero los trades NO.
-// Por eso se abren dos conexiones. Si un endpoint propio (simulador, proxy) no tiene las rutas nuevas,
-// cada conexión vuelve sola a la ruta antigua cuando no recibe nada.
+// Por eso se abren dos conexiones. Con el servidor oficial NUNCA se usa la ruta antigua (no da trades): si un
+// canal no recibe nada se reconecta a la misma ruta con espera creciente. Solo un endpoint propio (simulador,
+// proxy) sin las rutas nuevas prueba una vez la ruta antigua.
+// Si el REST no responde (bloqueo de red, CORS), se abren igual los WebSockets con el tick conocido; el libro
+// espera a que el snapshot llegue (se reintenta en segundo plano).
 //
 // Libro sincronizado con el procedimiento oficial de Binance Futures: se guardan los diffs mientras llega el
 // snapshot, se descartan los que tienen u < lastUpdateId, el primero debe cumplir U ≤ lastUpdateId ≤ u y cada
@@ -18,6 +21,7 @@
 import { OrderBookEngine } from '../urus/order-flow/order-book';
 import { Backoff } from '../urus/realtime/backoff';
 import type { AggTrade, Liquidacion, MensajeMercado } from '../nucleo/tipos';
+import { inferirTick } from '../nucleo/parametros';
 
 export const BINANCE_REST = 'https://fapi.binance.com';
 export const BINANCE_WS = 'wss://fstream.binance.com';
@@ -84,8 +88,10 @@ interface Conexion {
   legado: boolean;
   abiertoEn: number;
   ultimo: number;
-  /** Mensajes recibidos por esta conexión (si es 0 tras abrir, se prueba la otra ruta). */
+  /** Mensajes recibidos por esta conexión. */
   mensajes: number;
+  /** Ya se probó la ruta antigua (solo endpoints propios). */
+  probadoLegado: boolean;
   reintento: ReturnType<typeof setTimeout> | null;
   backoff: Backoff;
 }
@@ -133,7 +139,6 @@ export class FuenteBinance {
   private libros = new Map<string, EstadoLibro>();
   private lotes = new Map<string, AggTrade[]>();
   private timers: ReturnType<typeof setInterval>[] = [];
-  private reintentoInfo: ReturnType<typeof setTimeout> | null = null;
   private readonly backoffInfo = new Backoff({ baseMs: 1_000, maxMs: 30_000, jitter: 'equal', floorMs: 500 });
   private readonly conexiones: Record<Canal, Conexion> = {
     libro: this.nuevaConexion(),
@@ -143,18 +148,23 @@ export class FuenteBinance {
   private anunciado = new Map<string, string>();
   private readonly rest: string;
   private readonly ws: string;
+  /** Servidor oficial de Binance: tiene /public y /market; la ruta antigua no sirve. */
+  private readonly oficial: boolean;
+  /** El REST no respondió: tick estimado y libro pendiente del snapshot. */
+  private sinRest = false;
   private readonly fetchImpl: typeof fetch;
   readonly simbolos: string[];
 
   constructor(private readonly o: OpcionesBinance) {
     this.rest = (o.rest ?? BINANCE_REST).replace(/\/+$/, '');
     this.ws = (o.ws ?? BINANCE_WS).replace(/\/+$/, '');
+    this.oficial = /^wss?:\/\/fstream\.binance\.com$/i.test(this.ws);
     this.fetchImpl = o.fetchImpl ?? ((...a) => fetch(...a));
     this.simbolos = [...new Set(o.simbolos.map((s) => s.toUpperCase()))];
   }
 
   private nuevaConexion(): Conexion {
-    return { sock: null, legado: false, abiertoEn: 0, ultimo: 0, mensajes: 0, reintento: null, backoff: new Backoff({ baseMs: 1_000, maxMs: 30_000, jitter: 'equal', floorMs: 500 }) };
+    return { sock: null, legado: false, probadoLegado: false, abiertoEn: 0, ultimo: 0, mensajes: 0, reintento: null, backoff: new Backoff({ baseMs: 1_000, maxMs: 30_000, jitter: 'equal', floorMs: 500 }) };
   }
 
   /** Diagnóstico de la sincronización del libro (para el Centro de datos y las pruebas). */
@@ -174,11 +184,13 @@ export class FuenteBinance {
     for (const s of this.simbolos) this.anunciar(s, 'conectando', 'Binance USD-M Futures');
     try {
       await this.cargarInfo();
-    } catch (e) {
-      for (const s of this.simbolos) this.anunciar(s, 'error', `No se pudo leer exchangeInfo (REST ${this.rest}): ${e instanceof Error ? e.message : e}`);
-      this.programarInfo();
-      return;
+      this.sinRest = false;
+    } catch {
+      // Sin REST se sigue igual: los WebSockets suelen funcionar aunque el REST esté bloqueado.
+      this.sinRest = true;
+      this.infoEstimada();
     }
+    if (this.detenida) return;
     this.abrir('libro');
     this.abrir('trades');
     const cadaVista = this.o.cadaVistaMs ?? 250;
@@ -193,8 +205,6 @@ export class FuenteBinance {
     this.detenida = true;
     for (const t of this.timers) clearInterval(t);
     this.timers = [];
-    if (this.reintentoInfo) clearTimeout(this.reintentoInfo);
-    this.reintentoInfo = null;
     for (const c of ['libro', 'trades'] as Canal[]) {
       const x = this.conexiones[c];
       if (x.reintento) clearTimeout(x.reintento);
@@ -220,9 +230,9 @@ export class FuenteBinance {
     const l = this.conexiones.libro;
     const t = this.conexiones.trades;
     for (const s of this.libros.keys()) {
-      if (t.mensajes > 0 && l.mensajes > 0) this.anunciar(s, 'en-vivo', `Binance USD-M Futures · libro ${this.rutas().libro} · trades ${this.rutas().trades}`);
-      else if (l.mensajes > 0 && t.sock && Date.now() - t.abiertoEn > 8_000) this.anunciar(s, 'sin-datos', `Llega el libro pero no los trades (${this.rutas().trades}). Probando otra ruta…`);
-      else if (t.mensajes > 0 && l.sock && Date.now() - l.abiertoEn > 8_000) this.anunciar(s, 'sin-datos', `Llegan los trades pero no el libro (${this.rutas().libro}). Probando otra ruta…`);
+      if (t.mensajes > 0 && l.mensajes > 0) this.anunciar(s, 'en-vivo', `Binance USD-M Futures · libro ${this.rutas().libro} · trades ${this.rutas().trades}${this.sinRest ? ' · REST sin respuesta: tick estimado, libro pendiente' : ''}`);
+      else if (l.mensajes > 0 && t.sock && Date.now() - t.abiertoEn > 10_000) this.anunciar(s, 'sin-datos', `Llega el libro pero no los trades (${this.rutas().trades}). Reintentando…`);
+      else if (t.mensajes > 0 && l.sock && Date.now() - l.abiertoEn > 10_000) this.anunciar(s, 'sin-datos', `Llegan los trades pero no el libro (${this.rutas().libro}). Reintentando…`);
     }
   }
 
@@ -262,6 +272,24 @@ export class FuenteBinance {
       });
       this.lotes.set(s, []);
       this.o.onInfo({ simbolo: s, tickSize: tick, precio, volumen24hUsd: volumen });
+    }
+  }
+
+  /** Sin exchangeInfo: tick de la tabla conocida; la agrupación del libro se fija con el primer precio. */
+  private infoEstimada(): void {
+    for (const s of this.simbolos) {
+      if (this.libros.has(s)) continue;
+      this.libros.set(s, {
+        motor: new OrderBookEngine({ symbol: s, tickSize: inferirTick(s, []), maxLevelsPerSide: 3_000 }),
+        grupo: 0,
+        listo: false,
+        pendientes: [],
+        ultimoU: null,
+        snapshotId: null,
+        pidiendoSnapshot: false,
+        resincronizaciones: 0,
+      });
+      this.lotes.set(s, []);
     }
   }
 
@@ -320,10 +348,14 @@ export class FuenteBinance {
     for (const c of ['libro', 'trades'] as Canal[]) {
       const x = this.conexiones[c];
       if (!x.sock) continue;
-      // Una conexión que nunca recibió nada en 10 s: probablemente la ruta no existe en ese servidor.
-      if (x.mensajes === 0 && ahora - x.abiertoEn > 10_000) {
-        x.legado = !x.legado;
-        this.reconectar(c, `Sin datos por ${x.legado ? 'la ruta nueva' : 'la ruta antigua'}; probando ${this.rutas()[c]}`, true);
+      // Una conexión que no recibió nada en 15 s.
+      if (x.mensajes === 0 && ahora - x.abiertoEn > 15_000) {
+        if (!this.oficial && !x.probadoLegado) {
+          // Endpoint propio sin las rutas nuevas: se prueba una sola vez la ruta antigua.
+          x.probadoLegado = true;
+          x.legado = true;
+          this.reconectar(c, `Sin datos por la ruta nueva; probando ${this.rutas()[c]}`, true);
+        } else this.reconectar(c, `Sin datos ${c === 'libro' ? 'del libro' : 'de trades'} por ${this.rutas()[c]}; reintentando`);
         continue;
       }
       // Libro a 100 ms: 20 s sin nada es un corte. Trades: 90 s (activos poco líquidos).
@@ -416,6 +448,8 @@ export class FuenteBinance {
       }
       l.listo = true;
       l.ultimoU = null;
+      this.sinRest = false;
+      this.backoffInfo.reset();
       for (const x of validos) {
         if (l.ultimoU !== null && x.pu !== l.ultimoU) {
           l.pidiendoSnapshot = false;
@@ -428,9 +462,10 @@ export class FuenteBinance {
       if (l.ultimoU === null) l.snapshotId = snap.lastUpdateId;
       this.anunciado.delete(s);
       this.actualizarEstado();
-    } catch (e) {
-      this.anunciar(s, 'error', `Snapshot del libro: ${e instanceof Error ? e.message : e}`);
-      setTimeout(() => void this.pedirSnapshot(s), 3_000);
+    } catch {
+      // El libro queda pendiente pero los trades siguen: no es una caída. Se reintenta con espera creciente.
+      this.sinRest = true;
+      if (!this.detenida) setTimeout(() => void this.pedirSnapshot(s), this.backoffInfo.next());
     } finally {
       l.pidiendoSnapshot = false;
     }
@@ -440,6 +475,8 @@ export class FuenteBinance {
     for (const [s, lote] of this.lotes) {
       if (!lote.length) continue;
       lote.sort((a, b) => a.aggTradeId - b.aggTradeId);
+      const l = this.libros.get(s);
+      if (l && l.grupo === 0) l.grupo = grupoParaPrecio(lote[lote.length - 1].price, inferirTick(s, lote.map((t) => t.price)));
       this.o.onMensaje(s, { tipo: 'trades', trades: lote.splice(0, lote.length) });
     }
   }
@@ -447,7 +484,7 @@ export class FuenteBinance {
   private publicarLibros(): void {
     for (const [s, l] of this.libros) {
       if (!l.listo) continue;
-      this.o.onMensaje(s, { tipo: 'libro', vista: l.motor.getView(200, l.grupo) });
+      this.o.onMensaje(s, { tipo: 'libro', vista: l.motor.getView(200, Math.max(1, l.grupo)) });
     }
   }
 
@@ -479,16 +516,6 @@ export class FuenteBinance {
       },
       inmediato ? 0 : x.backoff.next(),
     );
-  }
-
-  private programarInfo(): void {
-    if (this.detenida || this.reintentoInfo) return;
-    this.reintentoInfo = setTimeout(() => {
-      this.reintentoInfo = null;
-      for (const t of this.timers) clearInterval(t);
-      this.timers = [];
-      void this.iniciar();
-    }, this.backoffInfo.next());
   }
 }
 
