@@ -1,6 +1,8 @@
 # AthenAI · Quant Agentic
 
-Frontend de un sistema de trading cuantitativo agéntico. **Solo frontend y en modo DEMO**: no hay backend, ni APIs reales, ni operativa ni dinero reales. Todos los datos se simulan en el navegador.
+Frontend de un sistema de trading cuantitativo agéntico. Los datos de mercado son reales (Binance Futures por defecto, desde el **Centro de datos**). Los modelos, el Juez y los bots todavía son DEMO. No hay operativa ni dinero reales.
+
+**Hoja de ruta y notas del proyecto:** [`docs/HOJA_DE_RUTA.md`](docs/HOJA_DE_RUTA.md)
 
 React 18 + Vite + TypeScript + Tailwind CSS · Three.js / React Three Fiber · Framer Motion.
 
@@ -9,7 +11,7 @@ npm install
 npm run dev        # servidor local
 npm run build      # typecheck + build de producción en dist/
 npm run lint
-npm test           # 266 pruebas (motores de Urus + núcleo de athenAI)
+npm test           # pruebas (motores de Urus + núcleo de athenAI)
 npm run soak       # prueba de resistencia: 8 h de mercado simulado
 npm run binance-simulado  # Binance USD-M local (REST + WS) para probar la fuente sin internet
 ```
