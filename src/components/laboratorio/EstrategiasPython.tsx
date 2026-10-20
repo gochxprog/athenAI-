@@ -5,6 +5,7 @@ import Insignia from '@/components/ui/Insignia';
 import { NOMBRE_PROVEEDOR } from '@/components/orderflow/OrderFlowChart';
 import { motorOrderFlow } from '@/motores/worker/motorCliente';
 import { laboratorio } from '@/motores/laboratorio/laboratorioCliente';
+import { notificador } from '@/motores/notificaciones/notificador';
 import type { RespuestaLaboratorio } from '@/motores/laboratorio/protocolo';
 import type { Proveedor, ResumenSimbolo } from '@/motores/worker/protocolo';
 import { COSTOS_POR_DEFECTO } from '@/motores/juez/backtest';
@@ -83,6 +84,7 @@ export default function EstrategiasPython() {
         (t) => setProgreso((p) => [...p.slice(-6), t]),
       );
       setResultado(r);
+      notificador.juez(sel.nombre, f.simbolo, r.resultado.veredicto, r.resultado.resumen);
       cambiar({ ensayos: sel.ensayos + r.combos.length, ultimoVeredicto: r.resultado.veredicto });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

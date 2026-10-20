@@ -6,6 +6,10 @@ import { SistemaDemoProvider } from '@/hooks/SistemaDemo';
 import { NavegacionContexto } from '@/hooks/Navegacion';
 import { META_MODULO } from '@/data/metaModulo';
 import type { Modulo } from '@/types/nav';
+import { iniciarNotificaciones } from '@/motores/notificaciones/iniciar';
+
+// Avisos a Discord / Telegram / ntfy desde que se abre la app (no solo al entrar en un módulo).
+iniciarNotificaciones();
 
 // Cada módulo se carga bajo demanda: Three.js y R3F solo se descargan cuando hacen falta.
 const DashboardView = lazy(() => import('@/modules/DashboardView'));
