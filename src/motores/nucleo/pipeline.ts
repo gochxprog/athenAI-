@@ -71,6 +71,24 @@ export interface EstadoGrafico {
   metricas: MetricasFlujo & { barrasCanonicas: number; cvdSesion: number; oiActual: number | null; vwapSesion: number | null };
   features: { ultimas: FilaFeatures[]; total: number };
   memoria: Record<string, number>;
+  heatmap: HeatmapGrafico | null;
+}
+
+/**
+ * Heatmap de liquidez (tipo Bookmap): liquidez pasiva del libro en el tiempo, del historial LHM de Urus.
+ * `datos` es una matriz columna a columna (columna = instante, fila = nivel de precio) con intensidad 0–255
+ * en escala logarítmica entre la mediana (0) y el percentil 99 (255) de los tamaños: solo destacan los muros.
+ */
+export interface HeatmapGrafico {
+  tiempos: number[];
+  /** Paso de precio de cada fila. */
+  paso: number;
+  /** Índice de precio de la fila 0 (precio = idx × paso). */
+  idx0: number;
+  filas: number;
+  datos: Uint8Array;
+  /** Tamaño (en unidades del activo) que corresponde a intensidad 255. */
+  maximo: number;
 }
 
 /** Resumen compacto de un mercado: alimenta las tarjetas Multi-Asset y el resto de módulos de la plataforma. */
@@ -273,7 +291,47 @@ export class Pipeline {
   }
 
   /** Estado para dibujar. `nBarras` y `footprint` limitan el trabajo y el tamaño del mensaje. */
-  estado(opciones: { nBarras: number; footprint: boolean; nivelesFootprint: number }): EstadoGrafico {
+  private cacheHeatmap: { version: number; en: number; h: HeatmapGrafico | null } = { version: -1, en: 0, h: null };
+
+  /** Heatmap de los últimos 30 min de libro (máx. 360 columnas × 360 niveles). Se recalcula como mucho 1 vez/s. */
+  heatmap(ahoraMs: number, maxColumnas = 360, maxFilas = 360): HeatmapGrafico | null {
+    const lhm = this.mercado.lhm;
+    const c = this.cacheHeatmap;
+    if (c.version === lhm.version || ahoraMs - c.en < 1_000) return c.h;
+    const n = lhm.size;
+    const ultima = lhm.last();
+    const paso = this.mercado.libro ? this.mercado.libro.tickSize * this.mercado.libro.group : 0;
+    if (n < 2 || !ultima || !(paso > 0)) return null;
+    const salto = Math.max(1, Math.ceil(n / maxColumnas));
+    const cols: NonNullable<ReturnType<typeof lhm.get>>[] = [];
+    for (let i = (n - 1) % salto; i < n; i += salto) {
+      const col = lhm.get(i);
+      if (col && !col.synthetic) cols.push(col);
+    }
+    if (cols.length < 2) return null;
+    const idx0 = ultima.bestBidIdx - Math.floor(maxFilas / 2);
+    // Escala: percentil 98 de los tamaños (muestra) para que un muro gigante no apague el resto.
+    const muestra: number[] = [];
+    for (const col of cols) for (let k = 0; k < col.sizes.length; k += 3) if (col.sizes[k] > 0) muestra.push(col.sizes[k]);
+    muestra.sort((a, b) => a - b);
+    // Estilo Bookmap: la liquidez "normal" (hasta la mediana) queda oscura; solo brillan los muros.
+    const mediana = muestra.length ? muestra[Math.floor(muestra.length * 0.5)] : 1;
+    const maximo = muestra.length ? Math.max(muestra[Math.floor(muestra.length * 0.99)], mediana * 1.5) : 1;
+    const den = Math.log(maximo / mediana) || 1;
+    const datos = new Uint8Array(cols.length * maxFilas);
+    cols.forEach((col, ci) => {
+      for (let k = 0; k < col.sizes.length; k += 1) {
+        const fila = col.minIdx + k - idx0;
+        if (fila < 0 || fila >= maxFilas || col.sizes[k] <= mediana) continue;
+        datos[ci * maxFilas + fila] = Math.min(255, Math.max(1, Math.round((Math.log(col.sizes[k] / mediana) / den) * 255)));
+      }
+    });
+    const h: HeatmapGrafico = { tiempos: cols.map((x) => x.t), paso, idx0, filas: maxFilas, datos, maximo };
+    this.cacheHeatmap = { version: lhm.version, en: ahoraMs, h };
+    return h;
+  }
+
+  estado(opciones: { nBarras: number; footprint: boolean; nivelesFootprint: number; heatmap?: boolean }): EstadoGrafico {
     const ultimas = this.vista.barras.ultimos(opciones.nBarras);
     const desdeNiveles = ultimas.length - opciones.nivelesFootprint;
     const barras = ultimas.map((b, i) => this.aGrafico(b, opciones.footprint && i >= desdeNiveles, true, this.cvdVista.get(b.n) ?? 0)!);
@@ -326,6 +384,7 @@ export class Pipeline {
       eventos: this.mercado.eventos.ultimos(150).reverse(),
       metricas: { ...this.mercado.metricas(), barrasCanonicas: this.totalFilas, cvdSesion: this.mercado.cvdSesion, oiActual: oiUltimo?.oiContracts ?? null, vwapSesion: this.mercado.vwapSesion },
       features: { ultimas: this.features.ultimos(40).reverse(), total: this.totalFilas },
+      heatmap: opciones.heatmap ? this.heatmap(ahora) : null,
       memoria: { ...this.mercado.memoria(), cinta: this.cinta.tamaño, barrasVista: this.vista.barras.tamaño, barrasCanonicas: this.canonica.barras.tamaño, filasFeatures: this.features.tamaño, cvdVista: this.cvdVista.size },
     };
   }

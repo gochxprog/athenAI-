@@ -209,8 +209,8 @@ class MotorCliente {
     this.enviar({ tipo: 'temporalidad', id });
   }
 
-  vista(nBarras: number, footprint: boolean, nivelesFootprint: number): void {
-    this.enviar({ tipo: 'vista', nBarras, footprint, nivelesFootprint });
+  vista(nBarras: number, footprint: boolean, nivelesFootprint: number, heatmap = false): void {
+    this.enviar({ tipo: 'vista', nBarras, footprint, nivelesFootprint, heatmap });
   }
 
   exportarFeatures(): Promise<{ csv: string; filas: number; simbolo: string | null; proveedor: Proveedor | undefined }> {

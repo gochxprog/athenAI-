@@ -18,16 +18,17 @@ Marca de progreso: ✅ hecho · 🔶 en curso · ⬜ pendiente.
   - big trades, icebergs y stop runs;
   - pools de liquidez (LHM), Open Interest y DOM.
 - ✅ **Features para el ML**:
-  - 37 datos por cada dollar bar, sin mirar al futuro;
+  - 38 datos por cada dollar bar, sin mirar al futuro;
   - se guardan en una "carpeta" por fuente: `athenai-binance`, `athenai-rithmic`, `athenai-urus` y `athenai-simulacion`;
   - se exportan a CSV.
 - ✅ **Gráfico de Order Flow**: velas o Footprint, 1m/5m/15m/Dollar/Volume, CVD, OI, LHM y DOM.
+- ✅ **Bloque B completo**: régimen, "hoy es distinto", día gemelo, cruce entre mercados, heatmap y calendario.
 - ✅ **Bloque A completo**: toda la plataforma lee del mismo chorro, panel de mercados, liquidaciones, huecos, fuentes mezcladas, Vigía y Flujo con motor real.
 
 **Todavía es DEMO (pantallas sin motor detrás)**
 
 - Bots, Juez, Walk-Forward, Monte Carlo, Luck test y modelos (LightGBM, red neuronal). Los contadores de hipótesis/épocas del Panel General y del Laboratorio siguen siendo DEMO hasta los bloques C y D.
-- De los agentes 3D, solo Vigía y Flujo tienen motor; los otros 8 dicen «Sin motor · Bloque X».
+- De los agentes 3D, Vigía, Flujo y Rastreador tienen motor; los otros 7 dicen «Sin motor · Bloque X».
 
 **Regla:** ningún agente aparece "trabajando" si no tiene un motor real detrás. Mientras su motor no exista, se muestra como «Sin motor · próximamente».
 
@@ -104,17 +105,22 @@ No hay un agente por cada detector, porque un solo motor ya calcula todos a la v
 - ✅ **Fuentes mezcladas por activo:** BTC/ETH de Binance + NQ/XAU de Rithmic a la vez. Cada fuente guarda en su carpeta.
 - ✅ **Todo el equipo de agentes en el 3D** (10 agentes en 3 filas, una por capa). Vigía y Flujo trabajando de verdad; el resto «Sin motor · se activa en el Bloque X».
 
-### Bloque B — Memoria del mercado (no predice: recuerda) ⬜
+### Bloque B — Memoria del mercado (no predice: recuerda) ✅
 
-- ⬜ **Detector de régimen.** Modelo HMM de 3 estados: rango / tendencia / día raro.
-  - Entradas: retorno, volatilidad, pendiente del CVD, rango/ATR y ritmo de barras.
-  - Se valida fuera de muestra: los estados deben durar y comportarse distinto.
-  - Es el primer modelo real porque es el más fácil de juzgar.
-- ⬜ **Aviso "hoy es distinto".** Si lo de ahora no se parece a nada de lo grabado, salta la alarma. Gestión de riesgo pura.
-- ⬜ **Día gemelo.** Las ventanas más parecidas a este momento y qué pasó después.
-- ⬜ **BTC vs XAU.** Grabar los dos mercados; un patrón que aparece en ambos es más fiable (prueba de robustez para el Juez).
-- ⬜ **Heatmap de liquidez** tipo Bookmap con el historial de liquidez (el motor LHM ya existe).
-- ⬜ **Calendario de eventos fuertes** (FOMC, CPI, nóminas) como ventanas de no operar.
+Dónde verlo: **Order Flow → pestaña «Memoria del mercado»**, las tarjetas de cada mercado y la barra superior.
+
+- ✅ **Detector de régimen** (agente Rastreador): modelo HMM de 3 estados (rango / tendencia / día raro).
+  - Entradas por dollar bar: eficiencia de 10 barras, rango/ATR, duración y |delta/volumen|.
+  - Aprende **solo de tu data grabada** (la carpeta de la fuente). Necesita **600 barras**.
+  - En vivo usa solo el pasado (filtro forward, sin mirar al futuro).
+  - **Validación fuera de muestra**: entrena con el 70 % más antiguo y prueba en el 30 % siguiente. Dice si "tendencia" anticipa más dirección que "rango" y si "raro" anticipa más volatilidad. Si no, lo dice: «no concluyente».
+  - Se recalcula cada 2 minutos (o con «Recalcular ahora»).
+- ✅ **Aviso "hoy es distinto"**: compara la ventana de las últimas 20 barras con todo lo grabado. Si está más lejos que el 98 % de lo normal, salta el aviso (tarjeta y barra superior) y dice qué es lo raro (volatilidad, liquidaciones, big trades…). Necesita **320 barras**.
+- ✅ **Día gemelo**: los 8 momentos más parecidos a ahora y qué pasó en las 20 barras siguientes (retorno, máxima subida y bajada). Es memoria, no predicción.
+- ✅ **BTC vs XAU (cruce entre mercados)**: correlación de los retornos de 5 min en las últimas 24 h para cada par de mercados y si coinciden en régimen. XAUUSDT y PAXGUSDT (Binance) y GC/MGC (Rithmic) están entre los sugeridos.
+  - ⬜ La prueba "un patrón que aparece en los dos mercados" la hará el Juez (Bloque C).
+- ✅ **Heatmap de liquidez** tipo Bookmap: botón «Heatmap» en el gráfico. Últimos 30 min del libro; solo brillan los muros (lo normal queda oscuro).
+- ✅ **Calendario de eventos fuertes** (Centro de datos): FOMC 2026 precargado, se añaden CPI, nóminas, etc. Ventana de no operar en la barra superior y Feature `ventana_evento`.
 
 ### Bloque C — Tus estrategias y el Juez real ⬜
 

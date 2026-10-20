@@ -21,6 +21,7 @@ const CAPAS: { clave: keyof CapasGrafico; etiqueta: string }[] = [
   { clave: 'cvd', etiqueta: 'CVD' },
   { clave: 'oi', etiqueta: 'OI' },
   { clave: 'absorcion', etiqueta: 'Absorción / Agotamiento' },
+  { clave: 'heatmap', etiqueta: 'Heatmap' },
   { clave: 'lhm', etiqueta: 'LHM' },
   { clave: 'eventos', etiqueta: 'Big trades · Icebergs · Stop runs' },
 ];
@@ -70,14 +71,14 @@ export const NOMBRE_PROVEEDOR: Record<Proveedor, string> = {
  */
 export default function OrderFlowChart({ estado }: { estado: EstadoGrafico | null }) {
   const [temporalidad, setTemporalidad] = useState<IdTemporalidad>(estado?.temporalidad ?? '1m');
-  const [capas, setCapas] = useState<CapasGrafico>({ footprint: false, cvd: true, oi: true, absorcion: true, lhm: true, eventos: true });
+  const [capas, setCapas] = useState<CapasGrafico>({ footprint: false, heatmap: false, cvd: true, oi: true, absorcion: true, lhm: true, eventos: true });
   const { feeds } = useFeeds();
   const navegar = useNavegar();
   const visibleFeed = feeds.feeds.find((f) => f.simbolo === feeds.visible) ?? feeds.feeds[0];
 
   useEffect(() => {
-    motorOrderFlow.vista(capas.footprint ? 140 : 260, capas.footprint, capas.footprint ? 70 : 0);
-  }, [capas.footprint]);
+    motorOrderFlow.vista(capas.footprint ? 140 : 260, capas.footprint, capas.footprint ? 70 : 0, capas.heatmap);
+  }, [capas.footprint, capas.heatmap]);
 
   const cambiarTemporalidad = (id: IdTemporalidad) => {
     setTemporalidad(id);

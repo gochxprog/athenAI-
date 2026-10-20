@@ -1,10 +1,11 @@
 import { decimalesDe } from '@/lib/format';
 import { useEffect, useRef } from 'react';
-import type { BarraGrafico, EstadoGrafico } from '@/motores/nucleo/pipeline';
+import type { BarraGrafico, EstadoGrafico, HeatmapGrafico } from '@/motores/nucleo/pipeline';
 import type { EventoMotor } from '@/motores/nucleo/tipos';
 
 export interface CapasGrafico {
   footprint: boolean;
+  heatmap: boolean;
   cvd: boolean;
   oi: boolean;
   absorcion: boolean;
@@ -36,6 +37,36 @@ const hhmm = (t: number) => {
 const fmt = (v: number, dec = 1) => v.toLocaleString('es-ES', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 const fmtQ = (v: number) => (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2));
 
+/** Heatmap listo para dibujar: la matriz del motor convertida a imagen (blanco con opacidad = liquidez). */
+interface HeatmapImagen {
+  simbolo: string;
+  h: HeatmapGrafico;
+  lienzo: HTMLCanvasElement;
+}
+
+function crearImagenHeatmap(simbolo: string, h: HeatmapGrafico): HeatmapImagen {
+  const cols = h.tiempos.length;
+  const lienzo = document.createElement('canvas');
+  lienzo.width = cols;
+  lienzo.height = h.filas;
+  const c = lienzo.getContext('2d')!;
+  const img = c.createImageData(cols, h.filas);
+  for (let ci = 0; ci < cols; ci += 1) {
+    for (let r = 0; r < h.filas; r += 1) {
+      const v = h.datos[ci * h.filas + r];
+      if (!v) continue;
+      // Fila 0 = precio más bajo: abajo en la imagen.
+      const o = ((h.filas - 1 - r) * cols + ci) * 4;
+      img.data[o] = 255;
+      img.data[o + 1] = 255;
+      img.data[o + 2] = 255;
+      img.data[o + 3] = Math.round(Math.pow(v / 255, 1.3) * 0.7 * 255);
+    }
+  }
+  c.putImageData(img, 0, 0);
+  return { simbolo, h, lienzo };
+}
+
 interface Vista {
   ancho: number;
   /** true hasta que el usuario hace zoom: el ancho se ajusta para llenar el gráfico si hay pocas barras. */
@@ -53,8 +84,12 @@ export default function LienzoOrderFlow({ estado, capas }: { estado: EstadoGrafi
   const capasRef = useRef(capas);
   const vista = useRef<Vista>({ ancho: capas.footprint ? 64 : 9, auto: true, desplazamiento: 0, raton: null, arrastre: null });
   const sucio = useRef(true);
+  const heatmapRef = useRef<HeatmapImagen | null>(null);
 
   estadoRef.current = estado;
+  // El motor solo envía el heatmap cuando cambia: se guarda el último (por activo).
+  if (estado?.heatmap && heatmapRef.current?.h !== estado.heatmap) heatmapRef.current = crearImagenHeatmap(estado.simbolo, estado.heatmap);
+  else if (estado && heatmapRef.current && heatmapRef.current.simbolo !== estado.simbolo) heatmapRef.current = null;
   if (capasRef.current.footprint !== capas.footprint) {
     vista.current.ancho = capas.footprint ? 64 : 9;
     vista.current.auto = true;
@@ -73,7 +108,7 @@ export default function LienzoOrderFlow({ estado, capas }: { estado: EstadoGrafi
       raf = requestAnimationFrame(bucle);
       if (!sucio.current) return;
       sucio.current = false;
-      dibujar(canvas, cont, estadoRef.current, capasRef.current, vista.current);
+      dibujar(canvas, cont, estadoRef.current, capasRef.current, vista.current, heatmapRef.current);
     };
     raf = requestAnimationFrame(bucle);
 
@@ -136,7 +171,7 @@ export default function LienzoOrderFlow({ estado, capas }: { estado: EstadoGrafi
 
 // -----------------------------------------------------------------------------------------------
 
-function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGrafico | null, capas: CapasGrafico, v: Vista): void {
+function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGrafico | null, capas: CapasGrafico, v: Vista, heatmap: HeatmapImagen | null): void {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const W = cont.clientWidth;
   const H = cont.clientHeight;
@@ -230,6 +265,29 @@ function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGra
     ctx.stroke();
     ctx.fillStyle = C.eje;
     ctx.fillText(fmt(p, decimalesDe(pasoEje)), areaW + 6, y);
+  }
+
+  // Heatmap de liquidez (tipo Bookmap): detrás de todo, recortado al panel principal.
+  if (capas.heatmap && heatmap && heatmap.simbolo === estado.simbolo) {
+    const h = heatmap.h;
+    const yArriba = yP((h.idx0 + h.filas - 0.5) * h.paso);
+    const yAbajo = yP((h.idx0 - 0.5) * h.paso);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, areaW, hPrincipal);
+    ctx.clip();
+    ctx.imageSmoothingEnabled = false;
+    // Con Footprint el texto de los niveles manda: el heatmap queda más tenue.
+    ctx.globalAlpha = capas.footprint ? 0.45 : 1;
+    const finVivo = xDeTiempo(estado.ahora) ?? areaW - MARGEN_DERECHO;
+    for (let ci = 0; ci < h.tiempos.length; ci += 1) {
+      const x0 = xDeTiempo(h.tiempos[ci]);
+      if (x0 === null) continue;
+      const x1 = ci + 1 < h.tiempos.length ? xDeTiempo(h.tiempos[ci + 1]) ?? x0 + 1 : finVivo;
+      const w = Math.max(1, x1 - x0 + 0.5);
+      ctx.drawImage(heatmap.lienzo, ci, 0, 1, h.filas, x0, yArriba, w, yAbajo - yArriba);
+    }
+    ctx.restore();
   }
 
   // LHM: pools vivos (línea continua) y huellas de pools barridos (discontinua, se desvanece).

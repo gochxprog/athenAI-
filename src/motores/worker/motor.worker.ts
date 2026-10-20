@@ -46,7 +46,9 @@ let config: ConfigCentro | null = null;
 let almacenes = new Map<Proveedor, AlmacenFeatures>();
 let visible: string | null = null;
 let temporalidad: IdTemporalidad = '1m';
-let opcionesVista = { nBarras: 160, footprint: false, nivelesFootprint: 70 };
+let opcionesVista = { nBarras: 160, footprint: false, nivelesFootprint: 70, heatmap: false };
+/** Último heatmap enviado: solo se reenvía cuando cambia (es la parte más pesada del estado). */
+let ultimoHeatmap: unknown = null;
 let detenerFuentes: (() => void)[] = [];
 let generacion = 0;
 let msAcumulados = 0;
@@ -116,6 +118,8 @@ function publicar(): void {
   if (!a) return;
   const t0 = performance.now();
   const estado = a.pipeline.estado(opcionesVista);
+  if (estado.heatmap === ultimoHeatmap) estado.heatmap = null;
+  else ultimoHeatmap = estado.heatmap;
   const ms = msAcumulados + (performance.now() - t0);
   msAcumulados = 0;
   ctx.postMessage({ tipo: 'estado', estado, msProceso: ms });
@@ -369,6 +373,7 @@ ctx.onmessage = (e) => {
         break;
       case 'ver':
         if (activos.has(m.simbolo)) visible = m.simbolo;
+        ultimoHeatmap = null;
         publicar();
         break;
       case 'temporalidad':
@@ -377,7 +382,8 @@ ctx.onmessage = (e) => {
         publicar();
         break;
       case 'vista':
-        opcionesVista = { nBarras: m.nBarras, footprint: m.footprint, nivelesFootprint: m.nivelesFootprint };
+        opcionesVista = { nBarras: m.nBarras, footprint: m.footprint, nivelesFootprint: m.nivelesFootprint, heatmap: m.heatmap };
+        ultimoHeatmap = null;
         publicar();
         break;
       case 'exportar-features':

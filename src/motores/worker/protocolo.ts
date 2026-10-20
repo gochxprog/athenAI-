@@ -79,7 +79,7 @@ export type MensajeAlMotor =
   | { tipo: 'detener' }
   | { tipo: 'ver'; simbolo: string }
   | { tipo: 'temporalidad'; id: IdTemporalidad }
-  | { tipo: 'vista'; nBarras: number; footprint: boolean; nivelesFootprint: number }
+  | { tipo: 'vista'; nBarras: number; footprint: boolean; nivelesFootprint: number; heatmap: boolean }
   | { tipo: 'exportar-features'; id: number }
   | { tipo: 'memoria-recalcular' }
   | { tipo: 'calendario'; eventos: EventoCalendario[] }

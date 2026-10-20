@@ -156,3 +156,26 @@ describe('Pipeline · calendario de eventos', () => {
     for (const f of filas) expect(f.valores.ventana_evento).toBe(f.cierre >= evento - 600_000 && f.cierre <= evento + 600_000 ? 1 : 0);
   });
 });
+
+describe('Pipeline · heatmap de liquidez', () => {
+  it('convierte el historial LHM en una matriz acotada y la reutiliza si no cambia', () => {
+    const { pipeline } = correr(40, 41);
+    const e = pipeline.estado({ nBarras: 100, footprint: false, nivelesFootprint: 0, heatmap: true });
+    const h = e.heatmap!;
+    expect(h).not.toBeNull();
+    expect(h.tiempos.length).toBeGreaterThan(50);
+    expect(h.tiempos.length).toBeLessThanOrEqual(360);
+    expect(h.datos.length).toBe(h.tiempos.length * h.filas);
+    expect(h.datos.some((v) => v > 200)).toBe(true);
+    // La liquidez normal queda oscura: la mayoría de celdas no brillan.
+    expect(h.datos.filter((v) => v > 0).length).toBeLessThan(h.datos.length * 0.5);
+    for (let i = 1; i < h.tiempos.length; i += 1) expect(h.tiempos[i]).toBeGreaterThan(h.tiempos[i - 1]);
+    // El precio actual cae dentro de las filas.
+    const precio = pipeline.mercado.ultimoPrecio!;
+    const fila = Math.round(precio / h.paso) - h.idx0;
+    expect(fila).toBeGreaterThan(0);
+    expect(fila).toBeLessThan(h.filas);
+    expect(pipeline.estado({ nBarras: 100, footprint: false, nivelesFootprint: 0, heatmap: true }).heatmap).toBe(h);
+    expect(pipeline.estado({ nBarras: 100, footprint: false, nivelesFootprint: 0 }).heatmap).toBeNull();
+  });
+});
