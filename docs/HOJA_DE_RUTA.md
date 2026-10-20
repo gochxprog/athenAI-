@@ -152,10 +152,9 @@ Dónde verlo: **Laboratorio → «Mis estrategias (Python) · real»** (lo de an
   - Botón de prueba por canal, anti-spam e historial.
   - Mientras la plataforma corra en el navegador, los avisos solo salen con la pestaña abierta (24/7 → VPS, Bloque F).
 - ✅ **Cerebro orgánico** en el Panel General: la red se arruga y se aplasta (deformación exagerada, con lóbulos). Cada dato que entra lo golpea hacia dentro, cada señal que sale lo empuja hacia fuera, y rebota como una gelatina.
-- ✅ **Panel General con datos reales**: tarjetas pequeñas.
-  - «Lo que entra»: mercados, grabación, memoria del mercado, próximo evento.
-  - «Lo que sale»: Laboratorio/Juez, agentes, notificaciones, salud del motor.
-  - Se quitaron las épocas, el "loss" y el registro inventados.
+- ✅ **Carteles del cerebro** (Panel General), todos con datos reales:
+  - «Lo que siente»: pulso del flujo (presión compra/venta, trades/s, CVD 1 min), señales en vivo (cada evento de los motores golpea el cerebro), Features fuera de lo normal (z frente a las 200 barras previas) y contexto (régimen, «hoy es distinto», próximo evento).
+  - «Lo que concluye»: lectura del momento (frase hecha con reglas), día gemelo, señal actual de tus estrategias juzgadas (Largo / Corto / Fuera, cada 30 s) y alertas.
 
 ### Próximo (antes de los motores de IA) ⬜
 
@@ -188,6 +187,54 @@ Dónde verlo: **Laboratorio → «Mis estrategias (Python) · real»** (lo de an
 - ⬜ Puente Rithmic (R|Protocol).
 - ⬜ Python para investigar y entrenar.
 - ⬜ Redis o colas de mensajes solo si hay varios procesos.
+
+---
+
+## 4b. Motores: hechos y por hacer
+
+### Hechos ✅
+
+| Grupo | Motor | Qué da |
+|---|---|---|
+| Datos | Fuentes Binance, Rithmic (puente), Urus, Simulación | Trades, libro, OI y liquidaciones en vivo |
+| | Vigía | Huecos y cortes marcados (`hueco`) |
+| | Barras | Dollar bars (canónicas), 1m/5m/15m, volumen |
+| | Almacén | Una carpeta (IndexedDB) por fuente |
+| Order flow (Urus) | Footprint y Microstructure | Imbalances, stacked, POC, delta-POC |
+| | Absorción y Agotamiento | Scores 0–100 por lado |
+| | Big trades, Icebergs, Stop runs | Eventos con magnitud |
+| | Open Interest | ΔOI, cuadrante precio/OI, flush |
+| | Libro (DOM) | OBI, MicroPrice |
+| | Liquidez (LHM) | Pools, barridos, heatmap |
+| | SessionCVD, Liquidaciones | CVD de sesión, largos/cortos liquidados |
+| Features | Pipeline point-in-time | 38 Features por barra, sin mirar al futuro |
+| | Calendario | Ventanas de no operar |
+| Memoria | Régimen (HMM) | Rango / tendencia / día raro |
+| | Gemelos (kNN) | Día gemelo y «hoy es distinto» |
+| | Cruce | Correlación entre mercados |
+| Investigación | Lectura del momento | Frase por reglas (la sustituyen los modelos de D) |
+| | Features extremas | z y percentil de la última barra |
+| Validación | Juez | Backtest, Walk-Forward purgado, Monte Carlo, Luck test, robustez, Deflated Sharpe, PBO |
+| | Laboratorio | Python (Pyodide) + prueba anti-futuro + señal en vivo |
+| Salida | Notificador, Papers | Discord / Telegram / ntfy; informe de cada prueba |
+
+### Por hacer ⬜ (uno por uno, en este orden; investigar antes cada uno)
+
+| # | Motor | Qué hará | Qué investigar |
+|---|---|---|---|
+| D1 | **Etiquetador** | Marca cada barra con lo que pasó después: toca ganancia, stop o se acaba el tiempo | Triple barrera (López de Prado, *Advances in Financial ML*, cap. 3); barreras con ATR |
+| D2 | **Pesos por solapamiento** | Las etiquetas que se pisan en el tiempo cuentan menos | Unicidad media, *sequential bootstrap* (cap. 4) |
+| D3 | **Selección de Features** | Quita las repetidas y las que son ruido | Clustering por correlación, importancia por permutación (MDA) con validación purgada (cap. 8) |
+| D4 | **Machine learning** | Un modelo por mercado que da la probabilidad de ganar | LightGBM, calibración de probabilidades, CV purgada con embargo |
+| D5 | **Meta-modelo** | Decide si tomar una señal y con qué tamaño | Meta-labeling (cap. 3.6), tamaño por probabilidad (cap. 10) |
+| D6 | **Detector de cambios** | Avisa en cuanto el mercado cambia de comportamiento | Filtro CUSUM, *Bayesian online changepoint detection* |
+| D7 | **Toxicidad del flujo** (opcional) | Nuevas Features: flujo informado e impacto | VPIN, lambda de Kyle, iliquidez de Amihud |
+| D8 | **Deep learning** | Red sobre secuencias de barras / footprint; solo si supera a D4 en el Juez | TCN, LSTM o Transformer pequeño; CNN sobre footprint |
+| D9 | **Inferencia** | Ejecutar los modelos entrenados dentro del motor | ONNX Runtime Web (navegador) / Node (VPS) |
+| E1 | **Simulador de ejecución** | Llenados realistas en Paper | Posición en la cola de órdenes limit, slippage |
+| E2 | **Guardián** | Límites de pérdida, correlación, apagado de emergencia, desvío frente al Juez | Riesgo de cartera, *drawdown control* |
+| E3 | **Ejecutor** | Órdenes limit pasivas | Colocación óptima de limit, cancelación |
+| E4 | **Sintetizador** | Informe semanal en español | Plantillas + opcional API de Claude |
 
 ---
 
