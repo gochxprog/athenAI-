@@ -4,7 +4,8 @@
 import type { EstadoGrafico } from '../nucleo/pipeline';
 import type { IdTemporalidad } from '../nucleo/tipos';
 import { BINANCE_REST, BINANCE_WS } from '../fuentes/binance';
-import type { ConfigCentro, EntradaRegistro, EstadoFeed, MensajeAlMotor, MensajeDelMotor, Proveedor, ResumenSimbolo } from './protocolo';
+import { EVENTOS_PREDEFINIDOS, type EventoCalendario } from '../nucleo/calendario';
+import type { ConfigCentro, CruceMercados, EntradaRegistro, EstadoFeed, MensajeAlMotor, MensajeDelMotor, Proveedor, ResumenSimbolo } from './protocolo';
 
 type Oyente = (estado: EstadoGrafico, msProceso: number) => void;
 
@@ -14,11 +15,24 @@ export interface EstadoFeeds {
   visible: string | null;
   feeds: EstadoFeed[];
   enCola: number;
+  /** Correlación entre cada par de mercados (5 min, últimas 24 h). */
+  cruces: CruceMercados[];
 }
 
 type OyenteFeeds = (f: EstadoFeeds, registro: readonly EntradaRegistro[]) => void;
 
 const CLAVE = 'athenai.centro-de-datos';
+const CLAVE_CALENDARIO = 'athenai.calendario';
+
+function leerCalendario(): EventoCalendario[] {
+  try {
+    const x = JSON.parse(localStorage.getItem(CLAVE_CALENDARIO) ?? 'null') as EventoCalendario[] | null;
+    if (Array.isArray(x)) return x;
+  } catch {
+    // Sin almacenamiento local: eventos predefinidos.
+  }
+  return EVENTOS_PREDEFINIDOS;
+}
 
 export const CONFIG_POR_DEFECTO: ConfigCentro = {
   activos: [{ simbolo: 'BTCUSDT', proveedor: 'binance' }],
@@ -70,9 +84,11 @@ class MotorCliente {
   private ultimo: { estado: EstadoGrafico; ms: number } | null = null;
   private pendientes = new Map<number, { ok: (x: unknown) => void; mal: (e: Error) => void }>();
   private siguienteId = 1;
-  feeds: EstadoFeeds = { proveedores: [], visible: null, feeds: [], enCola: 0 };
+  feeds: EstadoFeeds = { proveedores: [], visible: null, feeds: [], enCola: 0, cruces: [] };
   registro: EntradaRegistro[] = [];
   guardada: ConfigGuardada = leerConfig();
+  calendario: EventoCalendario[] = leerCalendario();
+  private oyentesCalendario = new Set<(e: EventoCalendario[]) => void>();
   error: string | null = null;
 
   get config(): ConfigCentro {
@@ -90,7 +106,7 @@ class MotorCliente {
           for (const o of this.oyentes) o(m.estado, m.msProceso);
           break;
         case 'feeds':
-          this.feeds = { proveedores: m.proveedores, visible: m.visible, feeds: m.feeds, enCola: m.enCola };
+          this.feeds = { proveedores: m.proveedores, visible: m.visible, feeds: m.feeds, enCola: m.enCola, cruces: m.cruces };
           this.avisarFeeds();
           break;
         case 'registro':
@@ -115,6 +131,7 @@ class MotorCliente {
       this.error = e.message || 'Error en el motor';
     };
     this.worker = w;
+    w.postMessage({ tipo: 'calendario', eventos: this.calendario } satisfies MensajeAlMotor);
     w.postMessage({ tipo: 'aplicar', config: this.config } satisfies MensajeAlMotor);
     return w;
   }
@@ -155,6 +172,24 @@ class MotorCliente {
     guardarConfig(this.guardada);
     this.ultimo = null;
     this.enviar({ tipo: 'aplicar', config });
+  }
+
+  /** Guarda el calendario de eventos fuertes y lo pasa al motor (Feature `ventana_evento`). */
+  usarCalendario(eventos: EventoCalendario[]): void {
+    this.calendario = [...eventos].sort((a, b) => a.t - b.t);
+    try {
+      localStorage.setItem(CLAVE_CALENDARIO, JSON.stringify(this.calendario));
+    } catch {
+      // Almacenamiento bloqueado: vale para esta sesión.
+    }
+    this.enviar({ tipo: 'calendario', eventos: this.calendario });
+    for (const o of this.oyentesCalendario) o(this.calendario);
+  }
+
+  suscribirCalendario(o: (e: EventoCalendario[]) => void): () => void {
+    this.oyentesCalendario.add(o);
+    o(this.calendario);
+    return () => this.oyentesCalendario.delete(o);
   }
 
   recalcularMemoria(): void {

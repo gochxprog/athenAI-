@@ -3,7 +3,13 @@ import type { EstadoConexion, IdTemporalidad } from '../nucleo/tipos';
 import type { Proveedor, ResumenSimbolo } from '../almacen/almacen';
 import type { CredencialesRithmic } from '../fuentes/rithmicPuente';
 import type { ResultadoRegimen } from '../memoria/regimen';
+import type { EventoCalendario } from '../nucleo/calendario';
+
+export type { EventoCalendario };
 import type { ResultadoMemoria } from '../memoria/gemelos';
+import type { CruceMercados } from '../memoria/cruce';
+
+export type { CruceMercados };
 
 /** Memoria del mercado de un activo (Bloque B): régimen, "hoy es distinto" y día gemelo. */
 export interface MemoriaFeed {
@@ -76,6 +82,7 @@ export type MensajeAlMotor =
   | { tipo: 'vista'; nBarras: number; footprint: boolean; nivelesFootprint: number }
   | { tipo: 'exportar-features'; id: number }
   | { tipo: 'memoria-recalcular' }
+  | { tipo: 'calendario'; eventos: EventoCalendario[] }
   | { tipo: 'almacen-resumen'; id: number }
   | { tipo: 'almacen-exportar'; id: number; proveedor: Proveedor; simbolo: string }
   | { tipo: 'almacen-borrar'; id: number; proveedor: Proveedor };
@@ -83,7 +90,7 @@ export type MensajeAlMotor =
 /** Worker → UI */
 export type MensajeDelMotor =
   | { tipo: 'estado'; estado: EstadoGrafico; msProceso: number }
-  | { tipo: 'feeds'; proveedores: Proveedor[]; visible: string | null; feeds: EstadoFeed[]; enCola: number }
+  | { tipo: 'feeds'; proveedores: Proveedor[]; visible: string | null; feeds: EstadoFeed[]; enCola: number; cruces: CruceMercados[] }
   | { tipo: 'registro'; entrada: EntradaRegistro }
   | { tipo: 'respuesta'; id: number; ok: boolean; datos?: unknown; error?: string }
   | { tipo: 'error'; mensaje: string };

@@ -4,6 +4,7 @@ import { motorOrderFlow } from '@/motores/worker/motorCliente';
 import type { EstadoFeed } from '@/motores/worker/protocolo';
 import { conSigno, decimalesDe, num } from '@/lib/format';
 import { NOMBRE_PROVEEDOR, useFeeds } from './OrderFlowChart';
+import { faltaPara, useCalendario } from '@/hooks/useCalendario';
 
 const ESTADO: Record<string, string> = {
   conectando: 'Conectando',
@@ -33,8 +34,16 @@ const usdK = (v: number) => (v >= 1e6 ? `${num(v / 1e6, 1)} M` : v >= 1e3 ? `${n
  */
 export default function ResumenMercados({ alElegir }: { alElegir?: (simbolo: string) => void }) {
   const { feeds } = useFeeds();
+  const { proximo, enCurso, ahora } = useCalendario();
   if (!feeds.feeds.length) return null;
+  const evento = enCurso ?? proximo;
   return (
+    <div className="space-y-2">
+      {evento && (
+        <p className={`text-[10.5px] ${enCurso ? 'text-white' : 'text-plata-500'}`} data-proximo-evento>
+          {enCurso ? `Ventana de no operar: ${enCurso.nombre}` : `Próximo evento fuerte: ${evento.nombre} · ${faltaPara(evento.t, ahora)}`}
+        </p>
+      )}
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" data-resumen-mercados>
       {feeds.feeds.map((f) => (
         <Tarjeta
@@ -47,6 +56,7 @@ export default function ResumenMercados({ alElegir }: { alElegir?: (simbolo: str
           }}
         />
       ))}
+    </div>
     </div>
   );
 }

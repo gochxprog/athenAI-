@@ -9,6 +9,7 @@ import Insignia from '@/components/ui/Insignia';
 import { NOMBRE_PROVEEDOR, useFeeds } from '@/components/orderflow/OrderFlowChart';
 import { descargarCsv, motorOrderFlow } from '@/motores/worker/motorCliente';
 import { GATEWAYS_RITHMIC, SISTEMAS_RITHMIC } from '@/motores/fuentes/rithmicPuente';
+import CalendarioEventos from '@/components/datos/CalendarioEventos';
 import { diagnosticarBinance, type ResultadoPrueba } from '@/motores/fuentes/binance';
 import type { ConfigCentro, EstadoFeed, Proveedor, ResumenSimbolo } from '@/motores/worker/protocolo';
 import { hora, num } from '@/lib/format';
@@ -21,14 +22,14 @@ const PROVEEDORES: { id: Proveedor; icono: typeof Radio; nota: string; descripci
     icono: Radio,
     nota: 'Por defecto · datos públicos',
     descripcion: 'Futuros perpetuos USD-M: aggTrades, libro L2 sincronizado y Open Interest. No necesita API key para datos de mercado.',
-    sugeridos: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT'],
+    sugeridos: ['BTCUSDT', 'ETHUSDT', 'XAUUSDT', 'SOLUSDT', 'BNBUSDT', 'PAXGUSDT'],
   },
   {
     id: 'rithmic',
     icono: KeyRound,
     nota: 'CME · COMEX · NYMEX',
     descripcion: 'Futuros regulados (ES, NQ, CL, GC…) con tus credenciales de Rithmic, a través del puente R|Protocol de tu VPS.',
-    sugeridos: ['ESZ6', 'NQZ6', 'MESZ6', 'MNQZ6', 'CLZ6', 'GCZ6'],
+    sugeridos: ['ESZ6', 'NQZ6', 'GCZ6', 'MGCZ6', 'MNQZ6', 'CLZ6'],
   },
   {
     id: 'urus',
@@ -232,6 +233,8 @@ export default function DatosView() {
       </div>
 
       <Feeds feeds={feeds.feeds} visible={feeds.visible} enCola={feeds.enCola} />
+
+      <CalendarioEventos />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <Almacenamiento activas={feeds.proveedores} />

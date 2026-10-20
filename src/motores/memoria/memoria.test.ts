@@ -122,3 +122,47 @@ describe('Memoria: día gemelo y "hoy es distinto"', () => {
     expect(buscarMemoria(filas)).toBeNull();
   });
 });
+
+describe('Cruce entre mercados', () => {
+  it('mide la correlación de retornos de 5 min alineando series con horarios distintos', async () => {
+    const { cruzarMercados } = await import('./cruce');
+    const r = crearAleatorio(4);
+    const ahora = 1_000_000_000_000;
+    const a: { cierre: number; close: number }[] = [];
+    const b: { cierre: number; close: number }[] = [];
+    const c: { cierre: number; close: number }[] = [];
+    let pa = 100;
+    let pb = 50;
+    let pc = 10;
+    for (let t = ahora - 86_400_000; t <= ahora; t += 60_000) {
+      const comun = normal(r) * 0.001;
+      pa *= 1 + comun + normal(r) * 0.0002;
+      pb *= 1 + comun + normal(r) * 0.0002;
+      pc *= 1 + normal(r) * 0.001;
+      a.push({ cierre: t + 7_000, close: pa });
+      b.push({ cierre: t + 41_000, close: pb });
+      c.push({ cierre: t + 13_000, close: pc });
+    }
+    const res = cruzarMercados(
+      [
+        { simbolo: 'BTC', puntos: a },
+        { simbolo: 'ETH', puntos: b },
+        { simbolo: 'XAU', puntos: c },
+      ],
+      ahora,
+    );
+    // Cierres desfasados ~34 s dentro de cada tramo de 5 min: la correlación medida baja algo respecto a la real.
+    expect(res.find((x) => x.b === 'ETH')!.correlacion!).toBeGreaterThan(0.7);
+    expect(Math.abs(res.find((x) => x.a === 'BTC' && x.b === 'XAU')!.correlacion!)).toBeLessThan(0.3);
+    expect(res.every((x) => x.puntos > 250)).toBe(true);
+  });
+
+  it('no inventa datos cuando un mercado está cerrado', async () => {
+    const { cruzarMercados } = await import('./cruce');
+    const ahora = 1_000_000_000_000;
+    const abierto = Array.from({ length: 300 }, (_, i) => ({ cierre: ahora - 86_400_000 + i * 300_000, close: 100 + i }));
+    const cerrado = [{ cierre: ahora - 86_400_000, close: 10 }];
+    const [x] = cruzarMercados([{ simbolo: 'A', puntos: abierto }, { simbolo: 'B', puntos: cerrado }], ahora);
+    expect(x.correlacion).toBeNull();
+  });
+});

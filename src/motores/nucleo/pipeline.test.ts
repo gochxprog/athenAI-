@@ -140,3 +140,19 @@ describe('Pipeline · calidad de datos, liquidaciones y resumen', () => {
     expect(r.aperturaSesion).toBeGreaterThan(0);
   });
 });
+
+describe('Pipeline · calendario de eventos', () => {
+  it('marca ventana_evento = 1 solo en las filas que cierran dentro de la ventana de un evento de alto impacto', () => {
+    const p = new Pipeline();
+    const inicio = Date.UTC(2026, 9, 20, 6, 0, 0);
+    const evento = inicio + 40 * 60_000;
+    p.calendario = [
+      { id: 'x', nombre: 'FOMC', t: evento, impacto: 'alto', antesMin: 10, despuesMin: 10 },
+      { id: 'y', nombre: 'medio', t: inicio + 70 * 60_000, impacto: 'medio', antesMin: 5, despuesMin: 5 },
+    ];
+    const { filas } = correr(90, 31, p);
+    const dentro = filas.filter((f) => f.valores.ventana_evento === 1);
+    expect(dentro.length).toBeGreaterThan(0);
+    for (const f of filas) expect(f.valores.ventana_evento).toBe(f.cierre >= evento - 600_000 && f.cierre <= evento + 600_000 ? 1 : 0);
+  });
+});

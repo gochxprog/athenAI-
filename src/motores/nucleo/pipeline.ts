@@ -8,6 +8,7 @@ import { SerieBarras, type BarraAnalizada } from './serieBarras';
 import { MotorMercado, type MetricasFlujo } from './motorMercado';
 import { construirFila, type FilaFeatures } from './features';
 import { parametrosPorDefecto, type ParametrosSimbolo } from './parametros';
+import { eventoEnVentana, type EventoCalendario } from './calendario';
 import { type EstadoConexion, type EventoMotor, type IdTemporalidad, type MensajeMercado } from './tipos';
 
 export interface NivelGrafico {
@@ -126,6 +127,8 @@ export class Pipeline {
   private golpes = new Anillo<{ t: number; p: number; q: number; compra: boolean }>(20_000);
   /** Hubo un corte (reconexión, resincronización, error) desde la última fila: la próxima se marca con hueco = 1. */
   private huecoPendiente = false;
+  /** Eventos fuertes del calendario (fechas conocidas de antemano). */
+  calendario: EventoCalendario[] = [];
   conexion: EstadoConexion = 'detenido';
   detalleConexion = '';
 
@@ -222,6 +225,7 @@ export class Pipeline {
     const previas = this.canonica.barras.ultimos(121).slice(0, -1);
     const { fila } = construirFila(b, previas, this.mercado, this.cvdCanonico);
     fila.valores.hueco = this.huecoPendiente ? 1 : 0;
+    fila.valores.ventana_evento = eventoEnVentana(this.calendario.filter((e) => e.impacto === 'alto'), b.cierre) ? 1 : 0;
     this.huecoPendiente = false;
     this.cvdCanonico.push(this.mercado.cvdSesion);
     if (this.cvdCanonico.length > 64) this.cvdCanonico = this.cvdCanonico.slice(-32);

@@ -1,4 +1,4 @@
-import { Brain, History, RefreshCw, TriangleAlert } from 'lucide-react';
+import { Brain, GitCompareArrows, History, RefreshCw, TriangleAlert } from 'lucide-react';
 import Panel from '@/components/ui/Panel';
 import { motorOrderFlow } from '@/motores/worker/motorCliente';
 import type { EstadoFeed } from '@/motores/worker/protocolo';
@@ -133,6 +133,8 @@ export default function MemoriaMercado() {
         </Panel>
       </div>
 
+      <CruceEntreMercados />
+
       <Panel titulo="Día gemelo · los momentos más parecidos a ahora y qué pasó después" icono={History} cuerpo="overflow-x-auto px-4 py-2">
         {!mem && <p className="py-4 text-center text-xs text-plata-500">Aún no hay suficiente historia grabada.</p>}
         {mem && !mem.gemelos.length && <p className="py-4 text-center text-xs text-plata-500">Aún no hay ventanas parecidas con 20 barras de futuro conocido.</p>}
@@ -170,5 +172,52 @@ export default function MemoriaMercado() {
         )}
       </Panel>
     </div>
+  );
+}
+
+/** Correlación y régimen de cada par de mercados (por ejemplo BTC frente a XAU). */
+function CruceEntreMercados() {
+  const { feeds } = useFeeds();
+  const regimen = (s: string) => feeds.feeds.find((f) => f.simbolo === s)?.memoria?.regimen?.actual ?? null;
+  return (
+    <Panel titulo="Cruce entre mercados" icono={GitCompareArrows} accion={<span className="text-[10px] text-plata-500">retornos de 5 min · últimas 24 h</span>} cuerpo="overflow-x-auto px-4 py-2">
+      {feeds.feeds.length < 2 && <p className="py-3 text-xs text-plata-500">Asigna al menos dos mercados en el Centro de datos (por ejemplo BTCUSDT y XAUUSDT, o BTC de Binance y GC de Rithmic).</p>}
+      {feeds.feeds.length >= 2 && !feeds.cruces.length && <p className="py-3 text-xs text-plata-500">Calculando con lo grabado…</p>}
+      {feeds.cruces.length > 0 && (
+        <table className="w-full min-w-[560px] text-left text-xs" data-cruces>
+          <thead>
+            <tr className="text-[9.5px] uppercase tracking-[0.14em] text-plata-500">
+              <th className="py-2 font-normal">Par</th>
+              <th className="py-2 text-right font-normal">Correlación</th>
+              <th className="py-2 text-right font-normal">Puntos</th>
+              <th className="py-2 font-normal pl-4">Régimen</th>
+              <th className="py-2 font-normal">Coinciden</th>
+            </tr>
+          </thead>
+          <tbody>
+            {feeds.cruces.map((c) => {
+              const ra = regimen(c.a);
+              const rb = regimen(c.b);
+              return (
+                <tr key={`${c.a}-${c.b}`} className="border-t border-borde-suave">
+                  <td className="py-1.5 font-mono text-white">
+                    {c.a} · {c.b}
+                  </td>
+                  <td className="cifra py-1.5 text-right text-plata-100">{c.correlacion === null ? '—' : conSigno(c.correlacion, 2)}</td>
+                  <td className="cifra py-1.5 text-right text-plata-500">{num(c.puntos)}</td>
+                  <td className="py-1.5 pl-4 text-plata-300">
+                    {ra ? NOMBRE_REGIMEN[ra] : '—'} / {rb ? NOMBRE_REGIMEN[rb] : '—'}
+                  </td>
+                  <td className="py-1.5 text-plata-200">{ra && rb ? (ra === rb ? 'sí' : 'no') : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      <p className="py-2 text-[10.5px] text-plata-500">
+        Un patrón que se repite en dos mercados poco correlacionados (como BTC y el oro) vale más que uno que solo sale en uno: el Juez (Bloque C) lo usará como prueba de robustez. Con correlación alta, los dos mercados cuentan casi como una sola apuesta.
+      </p>
+    </Panel>
   );
 }

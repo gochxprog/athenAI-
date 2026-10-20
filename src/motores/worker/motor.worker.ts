@@ -13,6 +13,8 @@ import { iniciarSesionRithmic } from '../fuentes/rithmicPuente';
 import { AlmacenFeatures, type FilaGuardada } from '../almacen/almacen';
 import { detectarRegimen, MIN_BARRAS_REGIMEN } from '../memoria/regimen';
 import { buscarMemoria, MIN_VENTANAS } from '../memoria/gemelos';
+import { cruzarMercados, type CruceMercados, type SerieCierres } from '../memoria/cruce';
+import type { EventoCalendario } from '../nucleo/calendario';
 import type { IdTemporalidad, MensajeMercado } from '../nucleo/tipos';
 import type { ConfigCentro, EstadoFeed, MemoriaFeed, MensajeAlMotor, MensajeDelMotor, Proveedor } from './protocolo';
 
@@ -38,6 +40,7 @@ interface Activo {
 }
 
 let activos = new Map<string, Activo>();
+let calendario: EventoCalendario[] = [];
 let config: ConfigCentro | null = null;
 /** Una carpeta (base IndexedDB) por fuente en uso. */
 let almacenes = new Map<Proveedor, AlmacenFeatures>();
@@ -54,6 +57,7 @@ const registrar = (texto: string) => ctx.postMessage({ tipo: 'registro', entrada
 function crearActivo(proveedor: Proveedor, parametros: ParametrosSimbolo, calibrado: boolean): Activo {
   const pipeline = new Pipeline(parametros);
   pipeline.cambiarTemporalidad(temporalidad);
+  pipeline.calendario = calendario;
   const almacen = almacenes.get(proveedor);
   const a: Activo = { proveedor, pipeline, calibrado, sesion: null, trades: 0, latenciaMs: null, filas: 0, cortes: 0, historial: [], cvdHist: [], ritmo: [], filasVentana: 0, segVentana: 0, memoria: null };
   if (calibrado && almacen && config?.guardar) a.sesion = almacen.nuevaSesion(parametros.simbolo, parametros, Date.now()).catch(() => -1);
@@ -163,7 +167,7 @@ function publicarFeeds(): void {
     return f;
   });
   const enCola = [...almacenes.values()].reduce((x, al) => x + al.enCola, 0);
-  ctx.postMessage({ tipo: 'feeds', proveedores: [...new Set([...activos.values()].map((a) => a.proveedor))], visible, feeds, enCola });
+  ctx.postMessage({ tipo: 'feeds', proveedores: [...new Set([...activos.values()].map((a) => a.proveedor))], visible, feeds, enCola, cruces });
 }
 
 function detenerTodo(): void {
@@ -194,6 +198,7 @@ async function aplicar(c: ConfigCentro): Promise<void> {
   almacenes = new Map(c.guardar ? [...grupos.keys()].map((p) => [p, new AlmacenFeatures(p)] as const) : []);
   // Pipeline limpio: no queda nada de la configuración anterior.
   activos = new Map();
+  cruces = [];
   for (const x of lista) activos.set(x.simbolo, crearActivo(x.proveedor, parametrosPorDefecto(x.simbolo), x.proveedor === 'simulacion'));
   if (!visible || !activos.has(visible)) visible = lista[0]?.simbolo ?? null;
   const descripcion = [...grupos].map(([p, ss]) => `${NOMBRE[p]}: ${ss.join(', ')}`).join(' · ');
@@ -276,6 +281,7 @@ async function iniciarFuente(proveedor: Proveedor, simbolos: string[], c: Config
 const CADA_MEMORIA_MS = 120_000;
 const MAX_FILAS_MEMORIA = 20_000;
 let calculandoMemoria = false;
+let cruces: CruceMercados[] = [];
 let ultimaMemoria = 0;
 
 /** Recalcula régimen y memoria de todos los activos, uno detrás de otro, con lo grabado en su carpeta. */
@@ -283,6 +289,7 @@ async function calcularMemoria(): Promise<void> {
   if (calculandoMemoria) return;
   calculandoMemoria = true;
   const gen = generacion;
+  const series: SerieCierres[] = [];
   try {
     for (const [simbolo, a] of [...activos]) {
       if (gen !== generacion) return;
@@ -296,6 +303,7 @@ async function calcularMemoria(): Promise<void> {
       }
       if (gen !== generacion || activos.get(simbolo) !== a) continue;
       filas = filas.slice(-MAX_FILAS_MEMORIA);
+      series.push({ simbolo, puntos: filas.map((f) => ({ cierre: f.cierre, close: f.close })) });
       const t0 = performance.now();
       try {
         const regimen = detectarRegimen(filas);
@@ -312,6 +320,10 @@ async function calcularMemoria(): Promise<void> {
       }
       msAcumulados += performance.now() - t0;
     }
+    if (gen === generacion && series.length >= 2) {
+      const ahora = Math.max(...series.map((x) => x.puntos[x.puntos.length - 1]?.cierre ?? 0));
+      cruces = cruzarMercados(series, ahora);
+    } else if (series.length < 2) cruces = [];
   } finally {
     calculandoMemoria = false;
     ultimaMemoria = Date.now();
@@ -347,6 +359,10 @@ ctx.onmessage = (e) => {
         registrar('Fuente detenida');
         publicar();
         publicarFeeds();
+        break;
+      case 'calendario':
+        calendario = m.eventos;
+        for (const a of activos.values()) a.pipeline.calendario = calendario;
         break;
       case 'memoria-recalcular':
         void calcularMemoria();

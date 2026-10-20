@@ -11,7 +11,7 @@ import type { EventoMotor } from './tipos';
 export interface DefinicionFeature {
   clave: string;
   nombre: string;
-  grupo: 'Calidad de datos' | 'Flujo' | 'Footprint' | 'Absorción / Agotamiento' | 'Big trades' | 'Icebergs / Stop runs' | 'Open Interest' | 'Libro (DOM)' | 'Liquidez (LHM)' | 'Precio';
+  grupo: 'Calidad de datos' | 'Contexto' | 'Flujo' | 'Footprint' | 'Absorción / Agotamiento' | 'Big trades' | 'Icebergs / Stop runs' | 'Open Interest' | 'Libro (DOM)' | 'Liquidez (LHM)' | 'Precio';
   motor: string;
   descripcion: string;
 }
@@ -53,6 +53,7 @@ export const DEFINICIONES_FEATURES: DefinicionFeature[] = [
   { clave: 'pool_ask_dist_atr', nombre: 'Pool ask más cercano', grupo: 'Liquidez (LHM)', motor: 'LiquidityPoolEngine (Urus)', descripcion: 'Distancia al pool vendedor más cercano / ATR' },
   { clave: 'pool_bid_dist_atr', nombre: 'Pool bid más cercano', grupo: 'Liquidez (LHM)', motor: 'LiquidityPoolEngine (Urus)', descripcion: 'Distancia al pool comprador más cercano / ATR' },
   { clave: 'pools_barridos', nombre: 'Pools barridos', grupo: 'Liquidez (LHM)', motor: 'LiquidityPoolEngine (Urus)', descripcion: 'Pools de liquidez absorbidos por el precio durante la barra' },
+  { clave: 'ventana_evento', nombre: 'Ventana de evento fuerte', grupo: 'Contexto', motor: 'Calendario', descripcion: '1 si la barra cierra dentro de la ventana de un evento de alto impacto (FOMC, CPI…): zona de no operar' },
   { clave: 'hueco', nombre: 'Hueco de datos', grupo: 'Calidad de datos', motor: 'Vigía', descripcion: '1 si durante la barra se cortó la conexión o se resincronizó el libro: no entrenar con esta fila sin revisarla' },
 ];
 
