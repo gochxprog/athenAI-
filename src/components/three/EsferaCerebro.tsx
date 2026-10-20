@@ -83,14 +83,15 @@ const DEFORMACION = /* glsl */ `
   vec3 deformar(vec3 p) {
     float r = length(p);
     vec3 d = p / max(r, 1e-4);
-    float n = snoise(d * 1.2 + vec3(0.0, uTiempo * 0.16, 0.0)) * 0.62
-            + snoise(d * 2.7 - vec3(uTiempo * 0.23)) * 0.28
-            + snoise(d * 5.6 + vec3(uTiempo * 0.37, 0.0, 0.0)) * 0.1;
+    // Lóbulos grandes que se mueven + arrugas medianas + rugosidad fina.
+    float n = snoise(d * 0.9 + vec3(0.0, uTiempo * 0.2, 0.0)) * 0.7
+            + snoise(d * 2.2 - vec3(uTiempo * 0.27)) * 0.32
+            + snoise(d * 4.8 + vec3(uTiempo * 0.41, 0.0, 0.0)) * 0.12;
     // Cada golpe hunde o abomba una zona (campana gaussiana sobre la esfera) y rebota amortiguado.
     float g = 0.0;
     for (int i = 0; i < 6; i++) {
       float c = dot(d, uGolpeDir[i]);
-      g += uGolpeAmp[i] * exp(-(1.0 - c) * 7.0);
+      g += uGolpeAmp[i] * exp(-(1.0 - c) * 5.0);
     }
     vec3 q = p * (1.0 + uDeform * n + g);
     // Se aplasta y se estira despacio, como algo vivo.
@@ -423,8 +424,8 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
       uCerca: { value: 0 },
       uLejos: { value: 1 },
       uTiempo: { value: 0 },
-      uDeform: { value: 0.1 * movimiento },
-      uAplaste: { value: 0.06 * movimiento },
+      uDeform: { value: 0.26 * movimiento },
+      uAplaste: { value: 0.13 * movimiento },
       uGolpeDir: { value: Array.from({ length: GOLPES }, () => new THREE.Vector3(0, 1, 0)) },
       uGolpeAmp: { value: new Array(GOLPES).fill(0) as number[] },
     };
@@ -479,7 +480,7 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
 
     // Membrana orgánica (bordes y reflejos) que envuelve la red y se arruga con ella.
     const matMembrana = new THREE.ShaderMaterial({
-      uniforms: { ...uniforms, uOpacidad: { value: 0.35 } },
+      uniforms: { ...uniforms, uOpacidad: { value: 0.6 } },
       vertexShader: VERTEX_MEMBRANA,
       fragmentShader: FRAGMENT_MEMBRANA,
       transparent: true,
@@ -602,7 +603,7 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
           destello(nodoCercano(tmp), 0.9);
           // Sale una señal: empuja desde dentro hacia fuera.
           cerebro.worldToLocal(local.copy(tmp));
-          golpear(local, 0.06 + Math.random() * 0.05, reloj.elapsedTime, 900);
+          golpear(local, 0.1 + Math.random() * 0.08, reloj.elapsedTime, 900);
         }
         return;
       }
@@ -632,7 +633,7 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
             curva.getPoint(1, p.entrada);
             // El dato llega y golpea la membrana hacia dentro en ese punto.
             cerebro.worldToLocal(local.copy(p.entrada));
-            golpear(local, -(0.07 + Math.random() * 0.06), reloj.elapsedTime);
+            golpear(local, -(0.12 + Math.random() * 0.1), reloj.elapsedTime);
             const n = nodoCercano(p.entrada);
             destello(n, 1.4);
             lanzarImpulso(n);
@@ -799,7 +800,7 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
       }
 
       // De vez en cuando, un golpe fuerte al azar (de dentro o de fuera).
-      if (Math.random() < dt * 0.35 * act) golpear(tmp.randomDirection(), (Math.random() < 0.5 ? -1 : 1) * (0.12 + Math.random() * 0.08), t, 300);
+      if (Math.random() < dt * 0.5 * act) golpear(tmp.randomDirection(), (Math.random() < 0.5 ? -1 : 1) * (0.22 + Math.random() * 0.15), t, 300);
       actualizarGolpes(dt);
       actualizarSenales(dt);
       actualizarImpulsos(dt);
