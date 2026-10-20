@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
 // -----------------------------------------------------------------------------
-// Cerebro de Deep Learning: esfera de partículas (nodos = neuronas, líneas = sinapsis)
+// Cerebro de Deep Learning: red de partículas (nodos = neuronas, líneas = sinapsis) dentro de una membrana
+// orgánica que se arruga y se aplasta despacio,
 // con haces de señal que entran desde las Fuentes de datos y salen hacia el Motor.
 // Three.js puro: un único render loop, sin re-renders de React.
 // -----------------------------------------------------------------------------
@@ -22,21 +23,95 @@ const POOL_IMPULSOS = 160;
 const RITMO_ENTRADA = 16; // partículas / s
 const RITMO_SALIDA = 9;
 const RITMO_IMPULSOS = 22;
+const GOLPES = 6;
 const TIEMPO_NUCLEO = 0.7;
 const AUTO_ROTACION = 0.07;
 const FOV = 36;
 
+// Deformación orgánica compartida por nodos, sinapsis, impulsos y membrana: ruido 3D (simplex, Ashima Arts / Stefan
+// Gustavson, licencia MIT) que arruga la superficie y un "aplastamiento" lento. Así toda la red se deforma junta.
+const DEFORMACION = /* glsl */ `
+  uniform float uTiempo;
+  uniform float uDeform;
+  uniform float uAplaste;
+  // Golpes: dirección (unitaria) y amplitud actual (con signo: + hacia fuera, − hacia dentro).
+  uniform vec3 uGolpeDir[6];
+  uniform float uGolpeAmp[6];
+  vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+  vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+  vec4 permute(vec4 x) { return mod289(((x * 34.0) + 1.0) * x); }
+  vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+  float snoise(vec3 v) {
+    const vec2 C = vec2(1.0 / 6.0, 1.0 / 3.0);
+    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+    vec3 i = floor(v + dot(v, C.yyy));
+    vec3 x0 = v - i + dot(i, C.xxx);
+    vec3 g = step(x0.yzx, x0.xyz);
+    vec3 l = 1.0 - g;
+    vec3 i1 = min(g.xyz, l.zxy);
+    vec3 i2 = max(g.xyz, l.zxy);
+    vec3 x1 = x0 - i1 + C.xxx;
+    vec3 x2 = x0 - i2 + C.yyy;
+    vec3 x3 = x0 - D.yyy;
+    i = mod289(i);
+    vec4 p = permute(permute(permute(i.z + vec4(0.0, i1.z, i2.z, 1.0)) + i.y + vec4(0.0, i1.y, i2.y, 1.0)) + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+    float n_ = 0.142857142857;
+    vec3 ns = n_ * D.wyz - D.xzx;
+    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+    vec4 x_ = floor(j * ns.z);
+    vec4 y_ = floor(j - 7.0 * x_);
+    vec4 x = x_ * ns.x + ns.yyyy;
+    vec4 y = y_ * ns.x + ns.yyyy;
+    vec4 h = 1.0 - abs(x) - abs(y);
+    vec4 b0 = vec4(x.xy, y.xy);
+    vec4 b1 = vec4(x.zw, y.zw);
+    vec4 s0 = floor(b0) * 2.0 + 1.0;
+    vec4 s1 = floor(b1) * 2.0 + 1.0;
+    vec4 sh = -step(h, vec4(0.0));
+    vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
+    vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+    vec3 p0 = vec3(a0.xy, h.x);
+    vec3 p1 = vec3(a0.zw, h.y);
+    vec3 p2 = vec3(a1.xy, h.z);
+    vec3 p3 = vec3(a1.zw, h.w);
+    vec4 norm = taylorInvSqrt(vec4(dot(p0, p0), dot(p1, p1), dot(p2, p2), dot(p3, p3)));
+    p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+    vec4 m = max(0.6 - vec4(dot(x0, x0), dot(x1, x1), dot(x2, x2), dot(x3, x3)), 0.0);
+    m = m * m;
+    return 42.0 * dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
+  }
+  vec3 deformar(vec3 p) {
+    float r = length(p);
+    vec3 d = p / max(r, 1e-4);
+    float n = snoise(d * 1.2 + vec3(0.0, uTiempo * 0.16, 0.0)) * 0.62
+            + snoise(d * 2.7 - vec3(uTiempo * 0.23)) * 0.28
+            + snoise(d * 5.6 + vec3(uTiempo * 0.37, 0.0, 0.0)) * 0.1;
+    // Cada golpe hunde o abomba una zona (campana gaussiana sobre la esfera) y rebota amortiguado.
+    float g = 0.0;
+    for (int i = 0; i < 6; i++) {
+      float c = dot(d, uGolpeDir[i]);
+      g += uGolpeAmp[i] * exp(-(1.0 - c) * 7.0);
+    }
+    vec3 q = p * (1.0 + uDeform * n + g);
+    // Se aplasta y se estira despacio, como algo vivo.
+    float s = sin(uTiempo * 0.5) * uAplaste;
+    q.y *= 1.0 - s;
+    q.xz *= 1.0 + s * 0.55;
+    return q;
+  }
+`;
+
 const VERTEX_NODOS = /* glsl */ `
+  ${DEFORMACION}
   uniform float uEscala;
   uniform float uCerca;
   uniform float uLejos;
-  uniform float uTiempo;
   attribute float aTam;
   attribute float aBase;
   attribute float aBrillo;
   varying float vAlfa;
   void main() {
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    vec4 mv = modelViewMatrix * vec4(deformar(position), 1.0);
     float prof = -mv.z;
     float atenuacion = 1.0 - smoothstep(uCerca, uLejos, prof) * 0.78;
     // Onda de activación que recorre la esfera de polo a polo.
@@ -57,6 +132,73 @@ const VERTEX_SENAL = /* glsl */ `
     vAlfa = aAlfa;
     gl_PointSize = aTam * uEscala / -mv.z;
     gl_Position = projectionMatrix * mv;
+  }
+`;
+
+/** Impulsos que recorren las sinapsis: mismas coordenadas locales del cerebro, así que se deforman igual. */
+const VERTEX_IMPULSOS = /* glsl */ `
+  ${DEFORMACION}
+  uniform float uEscala;
+  attribute float aAlfa;
+  attribute float aTam;
+  varying float vAlfa;
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(deformar(position), 1.0);
+    vAlfa = aAlfa;
+    gl_PointSize = aTam * uEscala / -mv.z;
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+
+const VERTEX_SINAPSIS = /* glsl */ `
+  ${DEFORMACION}
+  void main() {
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(deformar(position), 1.0);
+  }
+`;
+
+const FRAGMENT_SINAPSIS = /* glsl */ `
+  uniform float uOpacidad;
+  void main() {
+    gl_FragColor = vec4(vec3(0.85), uOpacidad);
+  }
+`;
+
+/** Membrana translúcida: solo se ven sus bordes y reflejos (como una burbuja de líquido). */
+const VERTEX_MEMBRANA = /* glsl */ `
+  ${DEFORMACION}
+  varying vec3 vNormal;
+  varying vec3 vVista;
+  void main() {
+    vec3 p = deformar(position);
+    // Normal de la superficie deformada por diferencias finitas.
+    vec3 n0 = normalize(position);
+    vec3 t1 = normalize(cross(n0, abs(n0.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+    vec3 t2 = cross(n0, t1);
+    float e = 0.02;
+    vec3 pa = deformar(position + t1 * e) - p;
+    vec3 pb = deformar(position + t2 * e) - p;
+    vec3 n = normalize(cross(pa, pb));
+    if (dot(n, n0) < 0.0) n = -n;
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    vNormal = normalize(normalMatrix * n);
+    vVista = normalize(-mv.xyz);
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+
+const FRAGMENT_MEMBRANA = /* glsl */ `
+  uniform float uOpacidad;
+  varying vec3 vNormal;
+  varying vec3 vVista;
+  void main() {
+    float f = 1.0 - abs(dot(normalize(vNormal), normalize(vVista)));
+    float borde = pow(f, 3.2);
+    // Reflejos alargados de una luz arriba a la izquierda.
+    vec3 luz = normalize(vec3(-0.5, 0.8, 0.6));
+    float brillo = pow(max(dot(reflect(-luz, normalize(vNormal)), normalize(vVista)), 0.0), 36.0);
+    float a = (borde * 0.75 + brillo * 0.9) * uOpacidad;
+    gl_FragColor = vec4(vec3(1.0), a);
   }
 `;
 
@@ -281,6 +423,37 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
       uCerca: { value: 0 },
       uLejos: { value: 1 },
       uTiempo: { value: 0 },
+      uDeform: { value: 0.1 * movimiento },
+      uAplaste: { value: 0.06 * movimiento },
+      uGolpeDir: { value: Array.from({ length: GOLPES }, () => new THREE.Vector3(0, 1, 0)) },
+      uGolpeAmp: { value: new Array(GOLPES).fill(0) as number[] },
+    };
+
+    // Golpes: muelle amortiguado. Entran datos → golpe hacia dentro donde llegan; sale señal → empuje hacia fuera.
+    type Golpe = { vivo: boolean; t: number; fuerza: number; dir: THREE.Vector3 };
+    const golpes: Golpe[] = Array.from({ length: GOLPES }, () => ({ vivo: false, t: 0, fuerza: 0, dir: new THREE.Vector3() }));
+    let ultimoGolpe = 0;
+    const golpear = (dirLocal: THREE.Vector3, fuerza: number, ahora: number, minimoMs = 450) => {
+      if (ahora - ultimoGolpe < minimoMs / 1000) return;
+      const g = golpes.find((x) => !x.vivo) ?? golpes.reduce((a, b) => (a.t > b.t ? a : b));
+      g.vivo = true;
+      g.t = 0;
+      g.fuerza = fuerza * movimiento;
+      g.dir.copy(dirLocal).normalize();
+      ultimoGolpe = ahora;
+    };
+    const actualizarGolpes = (dt: number) => {
+      for (let i = 0; i < GOLPES; i++) {
+        const g = golpes[i];
+        if (g.vivo) {
+          g.t += dt;
+          // Sube rápido, rebota 2–3 veces y se acomoda.
+          const amp = g.fuerza * (1 - Math.exp(-g.t * 18)) * Math.exp(-g.t * 2.1) * Math.cos(g.t * 9);
+          if (g.t > 3) g.vivo = false;
+          uniforms.uGolpeAmp.value[i] = g.vivo ? amp : 0;
+          uniforms.uGolpeDir.value[i].copy(g.dir);
+        } else uniforms.uGolpeAmp.value[i] = 0;
+      }
     };
     const matNodos = new THREE.ShaderMaterial({
       uniforms,
@@ -294,8 +467,27 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
 
     const geoSinapsis = new THREE.BufferGeometry();
     geoSinapsis.setAttribute('position', new THREE.BufferAttribute(red.lineas, 3));
-    const matSinapsis = new THREE.LineBasicMaterial({ color: 0xd9dbdf, transparent: true, opacity: 0.15, depthWrite: false, blending: THREE.AdditiveBlending });
+    const matSinapsis = new THREE.ShaderMaterial({
+      uniforms: { ...uniforms, uOpacidad: { value: 0.15 } },
+      vertexShader: VERTEX_SINAPSIS,
+      fragmentShader: FRAGMENT_SINAPSIS,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
     cerebro.add(new THREE.LineSegments(geoSinapsis, matSinapsis));
+
+    // Membrana orgánica (bordes y reflejos) que envuelve la red y se arruga con ella.
+    const matMembrana = new THREE.ShaderMaterial({
+      uniforms: { ...uniforms, uOpacidad: { value: 0.35 } },
+      vertexShader: VERTEX_MEMBRANA,
+      fragmentShader: FRAGMENT_MEMBRANA,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const geoMembrana = new THREE.IcosahedronGeometry(RADIO * 1.04, 48);
+    cerebro.add(new THREE.Mesh(geoMembrana, matMembrana));
 
     // Anillos orbitales finos
     const matAnillo = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.08, depthWrite: false });
@@ -348,7 +540,8 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
     geoImp.setAttribute('position', attrPosImp);
     geoImp.setAttribute('aAlfa', attrAlfaImp);
     geoImp.setAttribute('aTam', new THREE.BufferAttribute(new Float32Array(POOL_IMPULSOS).fill(2.2), 1));
-    const impulsosPts = new THREE.Points(geoImp, matSenal);
+    const matImpulsos = new THREE.ShaderMaterial({ uniforms, vertexShader: VERTEX_IMPULSOS, fragmentShader: FRAGMENT_PUNTO, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    const impulsosPts = new THREE.Points(geoImp, matImpulsos);
     impulsosPts.frustumCulled = false;
     cerebro.add(impulsosPts);
 
@@ -407,6 +600,9 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
         if (salida) {
           lista[p.curva].getPoint(0, tmp);
           destello(nodoCercano(tmp), 0.9);
+          // Sale una señal: empuja desde dentro hacia fuera.
+          cerebro.worldToLocal(local.copy(tmp));
+          golpear(local, 0.06 + Math.random() * 0.05, reloj.elapsedTime, 900);
         }
         return;
       }
@@ -434,6 +630,9 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
               continue;
             }
             curva.getPoint(1, p.entrada);
+            // El dato llega y golpea la membrana hacia dentro en ese punto.
+            cerebro.worldToLocal(local.copy(p.entrada));
+            golpear(local, -(0.07 + Math.random() * 0.06), reloj.elapsedTime);
             const n = nodoCercano(p.entrada);
             destello(n, 1.4);
             lanzarImpulso(n);
@@ -599,6 +798,9 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
         accImpulsos -= 1;
       }
 
+      // De vez en cuando, un golpe fuerte al azar (de dentro o de fuera).
+      if (Math.random() < dt * 0.35 * act) golpear(tmp.randomDirection(), (Math.random() < 0.5 ? -1 : 1) * (0.12 + Math.random() * 0.08), t, 300);
+      actualizarGolpes(dt);
       actualizarSenales(dt);
       actualizarImpulsos(dt);
 
@@ -624,7 +826,7 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
         const obj = o as THREE.Mesh;
         obj.geometry?.dispose();
       });
-      [matNodos, matSinapsis, matEntrada, matSalida, matSenal, matAnillo, nucleo.material].forEach((m) => m.dispose());
+      [matNodos, matSinapsis, matMembrana, matImpulsos, matEntrada, matSalida, matSenal, matAnillo, nucleo.material].forEach((m) => m.dispose());
       halo.dispose();
       renderer.dispose();
       canvas.remove();
