@@ -14,7 +14,7 @@ function tomar(sim: SimuladorDemo): Instantanea {
   return {
     ahora: new Date(),
     mercado: { ...sim.mercado, barras: sim.mercado.barras.map((b) => ({ ...b })), historial: [...sim.mercado.historial] },
-    motor: { ...sim.motor },
+    motor: { ...sim.motor, idsPrueba: [...sim.motor.idsPrueba] },
     eventos: sim.eventos,
   };
 }

@@ -7,12 +7,14 @@ import { META_MODULO } from '@/data/metaModulo';
 import DashboardView from '@/modules/DashboardView';
 import InvestigacionView from '@/modules/InvestigacionView';
 import ConocimientoView from '@/modules/ConocimientoView';
+import LaboratorioView from '@/modules/LaboratorioView';
 import type { Modulo } from '@/types/nav';
 
 const VISTAS: Partial<Record<Modulo, ComponentType>> = {
   panel: DashboardView,
   investigacion: InvestigacionView,
   conocimiento: ConocimientoView,
+  laboratorio: LaboratorioView,
 };
 
 export default function App() {

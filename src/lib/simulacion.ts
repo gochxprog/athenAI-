@@ -35,6 +35,7 @@ export interface EstadoMotor {
   epoca: number;
   loss: number;
   valLoss: number;
+  idsPrueba: number[];
 }
 
 export type TipoEvento = 'datos' | 'modelo' | 'juez' | 'bot' | 'patron';
@@ -116,7 +117,7 @@ export class SimuladorDemo {
       conectado: true,
       grabando: true,
     };
-    this.motor = { ...CONTADORES_INICIALES, epoca: 47.2, loss: 0, valLoss: 0 };
+    this.motor = { ...CONTADORES_INICIALES, epoca: 47.2, loss: 0, valLoss: 0, idsPrueba: this.pruebaIds };
     this.actualizarLoss();
 
     // Historia del día: simula los últimos 45 minutos para que el log arranque con contenido coherente.

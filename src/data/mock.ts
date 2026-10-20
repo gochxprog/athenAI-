@@ -186,15 +186,20 @@ export const ESTRATEGIAS: Estrategia[] = [
   { id: 'E-074', nombre: 'Seguimiento de delta en la sesión de Asia', origen: 'H-1188', modelo: 'LGBM-Flow-02', veredicto: 'Rechazada', winRate: 0.468, profitFactor: 0.83, expectancy: -9.6, maxDD: -5_070, sharpe: 0.12, sortino: 0.14, overfitting: 29, trades: 187, pValor: 0.41, fecha: '25-sep', motivo: 'Win rate bajo (46,8%)', semilla: 74 },
 ];
 
+/** Capital de referencia de los backtests del Juez (USD). */
+export const CAPITAL_BACKTEST = 35_000;
+
 // --- Reglas del Juez (bloqueadas: los modelos no pueden modificarlas) --------
 export const REGLAS_JUEZ = [
   { regla: 'Sharpe Out-of-Sample (Walk-Forward)', umbral: '≥ 1,00' },
   { regla: 'Degradación In-Sample → Out-of-Sample', umbral: '≤ 35%' },
+  { regla: 'Win Rate fuera de muestra', umbral: '≥ 55%' },
+  { regla: 'Ratio R:R neto de costos', umbral: '≥ 1,10' },
   { regla: 'Profit Factor neto de costos', umbral: '≥ 1,30' },
   { regla: 'Max Drawdown sobre capital', umbral: '≤ 12%' },
   { regla: 'Luck test (permutación, 1.000 shuffles)', umbral: 'p ≤ 0,05' },
   { regla: 'Probabilidad de sobreajuste (PBO)', umbral: '≤ 25%' },
-  { regla: 'Mínimo de operaciones Out-of-Sample', umbral: '≥ 80' },
+  { regla: 'Mínimo de operaciones en la muestra', umbral: '≥ 80' },
   { regla: 'Costos: comisión taker + slippage', umbral: '0,04% + 1 tick' },
 ];
 
