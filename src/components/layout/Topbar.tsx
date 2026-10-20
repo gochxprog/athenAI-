@@ -2,10 +2,20 @@ import { useSistema } from '@/hooks/SistemaDemo';
 import { fechaLarga, hora } from '@/lib/format';
 import Punto from '@/components/ui/Punto';
 import Insignia from '@/components/ui/Insignia';
+import { NOMBRE_PROVEEDOR, useFeeds } from '@/components/orderflow/OrderFlowChart';
+import { useNavegar } from '@/hooks/Navegacion';
 
 export default function Topbar({ titulo, seccion }: { titulo: string; seccion: string }) {
-  const { ahora, mercado } = useSistema();
-  const enVivo = mercado.conectado;
+  const { ahora } = useSistema();
+  const { feeds } = useFeeds();
+  const navegar = useNavegar();
+  // Estado REAL de la fuente del Centro de datos (no de la simulación).
+  const total = feeds.feeds.length;
+  const vivos = feeds.feeds.filter((f) => f.conexion === 'en-vivo').length;
+  const conError = feeds.feeds.some((f) => f.conexion === 'error');
+  const detenido = !total || feeds.feeds.every((f) => f.conexion === 'detenido');
+  const texto = detenido ? 'Sin conexión' : vivos === total ? 'En vivo' : vivos > 0 ? `En vivo ${vivos}/${total}` : conError ? 'Error de conexión' : 'Conectando';
+  const fuente = feeds.proveedor ? NOMBRE_PROVEEDOR[feeds.proveedor] : '';
 
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-borde-suave bg-black/85 pl-16 pr-4 backdrop-blur-xl md:px-6">
@@ -24,10 +34,18 @@ export default function Topbar({ titulo, seccion }: { titulo: string; seccion: s
           <p className="cifra text-sm text-white">{hora(ahora)}</p>
         </div>
         <div className="hidden h-8 w-px bg-borde sm:block" />
-        <div className="flex items-center gap-2 rounded-full border border-borde px-3 py-1.5">
-          <Punto estado={enVivo ? 'activo' : 'detenido'} />
-          <span className="text-[10px] font-medium uppercase tracking-etiqueta text-plata-200">{enVivo ? 'En vivo' : 'Standby'}</span>
-        </div>
+        <button
+          onClick={() => navegar('datos')}
+          title={feeds.feeds.map((f) => `${f.simbolo}: ${f.conexion}${f.detalle ? ` · ${f.detalle}` : ''}`).join('\n') || 'Abrir el Centro de datos'}
+          data-estado-fuente
+          className="flex items-center gap-2 rounded-full border border-borde px-3 py-1.5 hover:border-plata-400"
+        >
+          <Punto estado={vivos > 0 ? 'activo' : detenido || conError ? 'detenido' : 'espera'} />
+          <span className="text-[10px] font-medium uppercase tracking-etiqueta text-plata-200">
+            {fuente && <span className="hidden text-plata-400 lg:inline">{fuente} · </span>}
+            {texto}
+          </span>
+        </button>
         <Insignia variante="tenue" className="hidden md:inline-flex">DEMO</Insignia>
       </div>
     </header>
