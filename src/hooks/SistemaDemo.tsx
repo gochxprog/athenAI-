@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { SimuladorDemo, type EstadoMercado, type EstadoMotor, type Evento } from '@/lib/simulacion';
 import { motorOrderFlow, type EstadoFeeds } from '@/motores/worker/motorCliente';
 import type { EntradaRegistro, EstadoFeed, Proveedor } from '@/motores/worker/protocolo';
@@ -14,7 +14,6 @@ interface Instantanea {
   eventos: Evento[];
 }
 
-const Contexto = createContext<Instantanea | null>(null);
 
 const NOMBRE: Record<Proveedor, string> = { binance: 'Binance Futures', rithmic: 'Rithmic', urus: 'Servidor Urus', simulacion: 'Simulación' };
 
@@ -63,34 +62,65 @@ function tomar(sim: SimuladorDemo, feeds: EstadoFeeds, registro: readonly Entrad
   };
 }
 
-/** Un único reloj de 1 s: mercado real del motor + contadores DEMO de modelos/Juez + registro. */
-export function SistemaDemoProvider({ children }: { children: ReactNode }) {
-  const sim = useRef<SimuladorDemo>();
-  if (!sim.current) sim.current = new SimuladorDemo();
-  const feeds = useRef<{ f: EstadoFeeds; r: readonly EntradaRegistro[] }>({ f: motorOrderFlow.feeds, r: motorOrderFlow.registro });
-  const [estado, setEstado] = useState(() => tomar(sim.current!, feeds.current.f, feeds.current.r));
+// Simulador DEMO de las pantallas que aún no tienen motor real (Laboratorio DEMO, Investigación, Estrategias,
+// Paper, Decisiones, Conocimiento). Solo corre mientras alguna de esas pantallas está abierta: el resto de la
+// plataforma (Panel, Order Flow, Datos, Agentes) no lo usa y no se redibuja cada segundo por él.
+let sim: SimuladorDemo | null = null;
+let instantanea: Instantanea | null = null;
+let reloj: ReturnType<typeof setInterval> | null = null;
+let quitarFeeds: (() => void) | null = null;
+let feeds: { f: EstadoFeeds; r: readonly EntradaRegistro[] } = { f: motorOrderFlow.feeds, r: motorOrderFlow.registro };
+const oyentes = new Set<() => void>();
 
-  useEffect(() => {
-    const quitar = motorOrderFlow.suscribirFeeds((f, r) => {
-      feeds.current = { f, r };
+function suscribir(o: () => void): () => void {
+  oyentes.add(o);
+  if (!reloj) {
+    sim ??= new SimuladorDemo();
+    quitarFeeds = motorOrderFlow.suscribirFeeds((f, r) => {
+      feeds = { f, r };
     });
-    const id = setInterval(() => {
-      sim.current!.tick();
-      setEstado(tomar(sim.current!, feeds.current.f, feeds.current.r));
+    reloj = setInterval(() => {
+      sim!.tick();
+      instantanea = tomar(sim!, feeds.f, feeds.r);
+      for (const x of oyentes) x();
     }, 1000);
-    return () => {
-      clearInterval(id);
-      quitar();
-    };
-  }, []);
-
-  return <Contexto.Provider value={estado}>{children}</Contexto.Provider>;
+  }
+  return () => {
+    oyentes.delete(o);
+    if (!oyentes.size && reloj) {
+      clearInterval(reloj);
+      reloj = null;
+      quitarFeeds?.();
+      quitarFeeds = null;
+    }
+  };
 }
 
-export function useSistema() {
-  const ctx = useContext(Contexto);
-  if (!ctx) throw new Error('useSistema debe usarse dentro de SistemaDemoProvider');
-  return ctx;
+function leer(): Instantanea {
+  if (!instantanea) {
+    sim ??= new SimuladorDemo();
+    instantanea = tomar(sim, feeds.f, feeds.r);
+  }
+  return instantanea;
+}
+
+/** Se mantiene por compatibilidad: ya no hace nada (el simulador arranca solo cuando una pantalla DEMO lo usa). */
+export function SistemaDemoProvider({ children }: { children: ReactNode }) {
+  return <>{children}</>;
+}
+
+export function useSistema(): Instantanea {
+  return useSyncExternalStore(suscribir, leer);
+}
+
+/** Hora local, actualizada cada segundo (sin depender del simulador). */
+export function useReloj(): Date {
+  const [ahora, setAhora] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setAhora(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return ahora;
 }
 
 export function useMercado() {

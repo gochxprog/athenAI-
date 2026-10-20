@@ -1,4 +1,4 @@
-import { useSistema } from '@/hooks/SistemaDemo';
+import { useReloj } from '@/hooks/SistemaDemo';
 import { fechaLarga, hora } from '@/lib/format';
 import Punto from '@/components/ui/Punto';
 import Insignia from '@/components/ui/Insignia';
@@ -7,7 +7,7 @@ import { useNavegar } from '@/hooks/Navegacion';
 import { useCalendario } from '@/hooks/useCalendario';
 
 export default function Topbar({ titulo, seccion }: { titulo: string; seccion: string }) {
-  const { ahora } = useSistema();
+  const ahora = useReloj();
   const { feeds } = useFeeds();
   const navegar = useNavegar();
   // Estado REAL de la fuente del Centro de datos (no de la simulación).

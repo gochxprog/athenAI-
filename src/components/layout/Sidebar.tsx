@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Lock, Menu, X } from 'lucide-react';
 import { MENU } from '@/data/menu';
-import { BOTS, ESTRATEGIAS, HIPOTESIS, MAQUINAS, PATRONES, AGENTES } from '@/data/mock';
-import { useSistema } from '@/hooks/SistemaDemo';
+import { AGENTES } from '@/data/mock';
+import { useFeeds } from '@/components/orderflow/OrderFlowChart';
+import { leerEstrategias } from '@/components/laboratorio/plantillas';
 import Punto, { type EstadoPunto } from '@/components/ui/Punto';
 import type { Modulo } from '@/types/nav';
 
@@ -14,20 +15,24 @@ interface Props {
 
 export default function Sidebar({ activo, onSeleccion }: Props) {
   const [abierta, setAbierta] = useState(false);
-  const { motor, mercado } = useSistema();
+  const { feeds } = useFeeds();
+  const vivos = feeds.feeds.some((f) => f.conexion === 'en-vivo');
+  const grabando = feeds.feeds.some((f) => f.guardando && f.conexion === 'en-vivo');
+  const estrategias = leerEstrategias();
 
+  // Números y puntos reales; las pantallas que aún son DEMO quedan en espera y sin número.
   const info: Partial<Record<Modulo, { n?: number; e: EstadoPunto }>> = {
-    panel: { e: 'activo' },
-    orderflow: { e: 'activo' },
-    laboratorio: { n: motor.pruebas, e: 'activo' },
-    investigacion: { n: HIPOTESIS.length, e: 'activo' },
-    estrategias: { n: ESTRATEGIAS.length, e: 'espera' },
-    conocimiento: { n: PATRONES.length, e: 'activo' },
-    agentes: { n: AGENTES.filter((a) => a.real).length, e: 'activo' },
-    paper: { n: BOTS.filter((b) => b.estado === 'Ejecutando').length, e: 'activo' },
+    panel: { e: vivos ? 'activo' : 'detenido' },
+    orderflow: { e: vivos ? 'activo' : 'detenido' },
+    laboratorio: { n: estrategias.filter((x) => x.ultimoVeredicto).length, e: 'activo' },
+    investigacion: { e: 'espera' },
+    estrategias: { n: estrategias.length, e: 'espera' },
+    conocimiento: { e: 'espera' },
+    agentes: { n: AGENTES.filter((a) => a.real).length, e: vivos ? 'activo' : 'espera' },
+    paper: { e: 'espera' },
     decisiones: { e: 'espera' },
-    maquinas: { n: MAQUINAS.filter((m) => m.estado === 'Operativa').length, e: 'activo' },
-    datos: { e: mercado.grabando ? 'activo' : 'detenido' },
+    maquinas: { e: 'espera' },
+    datos: { e: grabando ? 'activo' : vivos ? 'espera' : 'detenido' },
   };
 
   const contenido = (

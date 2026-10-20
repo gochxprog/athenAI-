@@ -399,7 +399,7 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
     const movimiento = reducido ? 0.3 : 1;
 
     renderer.setClearColor(0x000000, 0);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     const canvas = renderer.domElement;
     canvas.style.display = 'block';
     canvas.style.width = '100%';
@@ -491,7 +491,7 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     });
-    const geoMembrana = new THREE.IcosahedronGeometry(RADIO * 1.04, 48);
+    const geoMembrana = new THREE.IcosahedronGeometry(RADIO * 1.04, 20);
     cerebro.add(new THREE.Mesh(geoMembrana, matMembrana));
 
     // Anillos orbitales finos
@@ -769,8 +769,19 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
     let frame = 0;
     let eventosVistos = eventosRef.current;
 
+    // Fuera de pantalla (scroll) no se dibuja: ahorra GPU y batería.
+    let enVista = true;
+    const vista = new IntersectionObserver(([e]) => {
+      enVista = e.isIntersecting;
+    });
+    vista.observe(cont);
+
     const tick = () => {
       frame = requestAnimationFrame(tick);
+      if (!enVista) {
+        reloj.getDelta();
+        return;
+      }
       const dt = Math.min(reloj.getDelta(), 0.05);
       const t = reloj.elapsedTime;
       const act = actividadRef.current * movimiento;
@@ -830,6 +841,7 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
 
     return () => {
       cancelAnimationFrame(frame);
+      vista.disconnect();
       observador.disconnect();
       refAnclas.rehacer = () => {};
       canvas.removeEventListener('pointerdown', alPresionar);
