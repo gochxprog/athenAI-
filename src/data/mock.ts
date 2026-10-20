@@ -321,12 +321,12 @@ export interface Maquina {
 }
 
 export const MAQUINAS: Maquina[] = [
-  { id: 'srv-dl-01', rol: 'Entrenamiento Deep Learning (Cerebro)', estado: 'Operativa', cpu: 71, ram: 64, gpu: 88, procesos: 3, costoHora: 1.21, region: 'eu-central' },
-  { id: 'srv-ml-01', rol: 'Laboratorio ML (RF / LightGBM)', estado: 'Operativa', cpu: 83, ram: 57, gpu: null, procesos: 6, costoHora: 0.42, region: 'eu-central' },
-  { id: 'srv-juez-01', rol: 'Juez: Backtest · Walk-Forward · Monte Carlo', estado: 'Operativa', cpu: 92, ram: 48, gpu: null, procesos: 12, costoHora: 0.68, region: 'eu-central' },
-  { id: 'srv-recorder', rol: 'Recorder de Order Flow (Binance USD-M)', estado: 'Operativa', cpu: 24, ram: 31, gpu: null, procesos: 2, costoHora: 0.09, region: 'ap-northeast' },
-  { id: 'srv-bots-01', rol: 'Ejecución de bots (Paper Trading)', estado: 'Operativa', cpu: 18, ram: 22, gpu: null, procesos: 4, costoHora: 0.09, region: 'ap-northeast' },
-  { id: 'srv-db-01', rol: 'Base de datos de series temporales', estado: 'Standby', cpu: 9, ram: 41, gpu: null, procesos: 1, costoHora: 0.17, region: 'eu-central' },
+  { id: 'srv-dl-01', rol: 'Entrenamiento Deep Learning (Cerebro)', estado: 'Operativa', cpu: 71, ram: 64, gpu: 88, procesos: 3, costoHora: 1.815, region: 'eu-central' },
+  { id: 'srv-ml-01', rol: 'Laboratorio ML (RF / LightGBM)', estado: 'Operativa', cpu: 83, ram: 57, gpu: null, procesos: 6, costoHora: 0.63, region: 'eu-central' },
+  { id: 'srv-juez-01', rol: 'Juez: Backtest · Walk-Forward · Monte Carlo', estado: 'Operativa', cpu: 92, ram: 48, gpu: null, procesos: 12, costoHora: 1.02, region: 'eu-central' },
+  { id: 'srv-recorder', rol: 'Recorder de Order Flow (Binance USD-M)', estado: 'Operativa', cpu: 24, ram: 31, gpu: null, procesos: 2, costoHora: 0.135, region: 'ap-northeast' },
+  { id: 'srv-bots-01', rol: 'Ejecución de bots (Paper Trading)', estado: 'Operativa', cpu: 18, ram: 22, gpu: null, procesos: 4, costoHora: 0.135, region: 'ap-northeast' },
+  { id: 'srv-db-01', rol: 'Base de datos de series temporales', estado: 'Standby', cpu: 9, ram: 41, gpu: null, procesos: 1, costoHora: 0.255, region: 'eu-central' },
 ];
 
 export const COSTOS_MES = [
@@ -346,7 +346,9 @@ export const COSTO_POR_AGENTE = [
   { agente: 'Flujo', horas: 720, monto: 39.4 },
 ];
 
-export const PRESUPUESTO_MES = 2_500;
+export const PRESUPUESTO_MES = 4_000;
+/** Días transcurridos del mes en la DEMO (20 de octubre). */
+export const DIAS_MES_TRANSCURRIDOS = 20;
 
 export interface Feature {
   nombre: string;

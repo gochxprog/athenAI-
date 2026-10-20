@@ -98,7 +98,7 @@ export default function Sidebar({ activo, onSeleccion }: Props) {
     <>
       <button
         onClick={() => setAbierta(true)}
-        className="fixed left-3 top-3 z-30 rounded-lg border border-borde bg-black/80 p-2 text-plata-300 backdrop-blur md:hidden"
+        className="fixed left-3 top-3 z-40 rounded-lg border border-borde bg-black/80 p-2 text-plata-300 backdrop-blur md:hidden"
         aria-label="Abrir menú"
       >
         <Menu size={20} />

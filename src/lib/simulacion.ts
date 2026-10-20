@@ -197,7 +197,8 @@ export class SimuladorDemo {
 
     this.segundosVentana += 1;
     if (this.segundosVentana >= 10) {
-      m.ritmo = [...m.ritmo.slice(1), this.barrasVentana * 6];
+      const previo = m.ritmo[m.ritmo.length - 1];
+      m.ritmo = [...m.ritmo.slice(1), previo * 0.65 + this.barrasVentana * 6 * 0.35];
       this.segundosVentana = 0;
       this.barrasVentana = 0;
     }

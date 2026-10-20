@@ -13,4 +13,8 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  build: {
+    // three.js por sí solo ronda los 690 kB; se carga aparte y solo en los módulos 3D.
+    chunkSizeWarningLimit: 800,
+  },
 });
