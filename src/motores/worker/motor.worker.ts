@@ -5,6 +5,7 @@
 // las Features nuevas de cada activo se guardan en la "carpeta" de SU fuente, nunca mezcladas.
 import { Pipeline } from '../nucleo/pipeline';
 import { filasACsv } from '../nucleo/features';
+import { featuresExtremas } from '../investigacion/extremos';
 import { inferirTick, parametrosParaSimbolo, parametrosPorDefecto, type ParametrosSimbolo } from '../nucleo/parametros';
 import { GeneradorDemo } from '../fuentes/demo';
 import { FuenteUrus } from '../fuentes/urusSSE';
@@ -157,6 +158,8 @@ function publicarFeeds(): void {
       cvdVelocidad: a.cvdHist.length >= 61 ? a.cvdHist[a.cvdHist.length - 1] - a.cvdHist[0] : null,
       resumen: r,
       memoria: a.memoria,
+      eventos: p.mercado.eventos.ultimos(6).reverse(),
+      extremas: featuresExtremas(p.features.ultimos(201), 3),
       conexion: p.conexion,
       detalle: p.detalleConexion,
       tradesPorSeg: a.trades / seg,

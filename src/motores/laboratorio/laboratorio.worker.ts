@@ -5,9 +5,9 @@ import { AlmacenFeatures, type FilaGuardada } from '../almacen/almacen';
 import { juzgar } from '../juez/juez';
 import { normalizarPosiciones } from '../juez/backtest';
 import { ejecutarEstrategia, mensajeError, type PyodideMinimo } from './python';
-import type { MensajeLaboratorio, PeticionLaboratorio } from './protocolo';
+import type { MensajeLaboratorio, MensajeSenales, PeticionLaboratorio, PeticionSenales, SenalEstrategia } from './protocolo';
 
-const ctx = self as unknown as { postMessage: (m: MensajeLaboratorio) => void; onmessage: ((e: MessageEvent<PeticionLaboratorio>) => void) | null };
+const ctx = self as unknown as { postMessage: (m: MensajeLaboratorio | MensajeSenales) => void; onmessage: ((e: MessageEvent<PeticionLaboratorio | PeticionSenales>) => void) | null };
 
 let pyodide: Promise<PyodideMinimo> | null = null;
 
@@ -31,7 +31,41 @@ async function leer(proveedor: PeticionLaboratorio['proveedor'], simbolo: string
 /** Huecos: barras marcadas por el Vigía o primer barra de una nueva sesión de captura. */
 const huecosDe = (filas: FilaGuardada[]) => filas.map((f, i) => f.valores.hueco === 1 || (i > 0 && f.sesion !== filas[i - 1].sesion));
 
+/** Filas que se dan a la estrategia para calcular su señal actual (contexto suficiente para sus ventanas). */
+const FILAS_SENAL = 1_500;
+
+/** Señal actual de cada estrategia: se ejecuta con la variante elegida por el Juez sobre las últimas filas. */
+async function senales(p: PeticionSenales): Promise<void> {
+  const py = await cargarPython();
+  const salida: SenalEstrategia[] = [];
+  for (const x of p.estrategias) {
+    try {
+      const al = new AlmacenFeatures(x.proveedor);
+      let filas: FilaGuardada[];
+      try {
+        filas = (await al.leerUltimas(x.simbolo, FILAS_SENAL)).filter((f) => Number.isFinite(f.close) && f.close > 0);
+      } finally {
+        al.cerrar();
+      }
+      if (!filas.length) {
+        salida.push({ id: x.id, posicion: null, t: null, error: `Sin filas guardadas de ${x.simbolo}` });
+        continue;
+      }
+      const fijo = `${x.codigo}\nPARAMETROS = ${JSON.stringify(Object.fromEntries(Object.entries(x.combo).map(([k, v]) => [k, [v]])))}\n`;
+      const pos = ejecutarEstrategia(py, fijo, filas).posiciones[0];
+      salida.push({ id: x.id, posicion: pos[pos.length - 1] ?? 0, t: filas[filas.length - 1].cierre });
+    } catch (err) {
+      salida.push({ id: x.id, posicion: null, t: null, error: mensajeError(err) });
+    }
+  }
+  ctx.postMessage({ tipo: 'senales', id: p.id, senales: salida });
+}
+
 ctx.onmessage = async (e) => {
+  if (e.data.tipo === 'senales') {
+    await senales(e.data);
+    return;
+  }
   const p = e.data;
   const t0 = performance.now();
   const progreso = (texto: string) => ctx.postMessage({ tipo: 'progreso', id: p.id, texto });

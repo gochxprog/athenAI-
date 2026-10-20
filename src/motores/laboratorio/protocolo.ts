@@ -3,6 +3,7 @@ import type { Combo, ResultadoJuez } from '../juez/juez';
 import type { Proveedor } from '../almacen/almacen';
 
 export interface PeticionLaboratorio {
+  tipo?: 'juzgar';
   id: number;
   codigo: string;
   proveedor: Proveedor;
@@ -31,3 +32,29 @@ export type MensajeLaboratorio =
   | { tipo: 'progreso'; id: number; texto: string }
   | { tipo: 'resultado'; id: number; respuesta: RespuestaLaboratorio }
   | { tipo: 'error'; id: number; mensaje: string };
+
+/** Estrategia juzgada cuya señal actual se quiere conocer (con la variante que eligió el Juez). */
+export interface EstrategiaEnVivo {
+  id: string;
+  codigo: string;
+  combo: Combo;
+  proveedor: Proveedor;
+  simbolo: string;
+}
+
+export interface PeticionSenales {
+  tipo: 'senales';
+  id: number;
+  estrategias: EstrategiaEnVivo[];
+}
+
+export interface SenalEstrategia {
+  id: string;
+  /** Posición en la última barra guardada (1 largo, −1 corto, 0 fuera); null si no se pudo calcular. */
+  posicion: number | null;
+  /** Cierre de esa barra (ms). */
+  t: number | null;
+  error?: string;
+}
+
+export type MensajeSenales = { tipo: 'senales'; id: number; senales: SenalEstrategia[] };

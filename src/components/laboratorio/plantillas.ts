@@ -1,4 +1,6 @@
 // Plantillas de estrategia en Python. Solo usan Features de la fila actual y de filas anteriores.
+import type { Proveedor } from '@/motores/almacen/almacen';
+import type { Combo } from '@/motores/juez/juez';
 
 export interface EstrategiaGuardada {
   id: string;
@@ -7,6 +9,8 @@ export interface EstrategiaGuardada {
   /** Variantes probadas en total con esta idea (alimenta el Deflated Sharpe: probar mucho tiene coste). */
   ensayos: number;
   ultimoVeredicto?: string;
+  /** Mercado y variante de la última prueba del Juez (para calcular su señal en vivo). */
+  juzgada?: { proveedor: Proveedor; simbolo: string; combo: Combo };
   actualizada: number;
 }
 

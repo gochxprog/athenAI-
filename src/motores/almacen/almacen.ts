@@ -130,6 +130,25 @@ export class AlmacenFeatures {
     return (await promesa(tx.objectStore('filas').getAll(rango(simbolo)))) as FilaGuardada[];
   }
 
+  /** Últimas `n` filas de un símbolo, en orden cronológico (recorre el índice hacia atrás). */
+  async leerUltimas(simbolo: string, n: number): Promise<FilaGuardada[]> {
+    await this.vaciar();
+    const db = await this.abrir();
+    const tx = db.transaction('filas', 'readonly');
+    const salida: FilaGuardada[] = [];
+    await new Promise<void>((ok, mal) => {
+      const c = tx.objectStore('filas').openCursor(rango(simbolo), 'prev');
+      c.onsuccess = () => {
+        const cur = c.result;
+        if (!cur || salida.length >= n) return ok();
+        salida.push(cur.value as FilaGuardada);
+        cur.continue();
+      };
+      c.onerror = () => mal(c.error);
+    });
+    return salida.reverse();
+  }
+
   /** Borra la "carpeta" completa de este proveedor. */
   async borrar(): Promise<void> {
     this.pendientes = [];

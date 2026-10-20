@@ -362,16 +362,20 @@ interface Props {
   /** Intensidad del flujo (0 … 1); 0 deja la esfera en reposo. */
   actividad?: number;
   onListo?: (info: { nodos: number; sinapsis: number }) => void;
+  /** Contador de eventos reales (absorción, iceberg, liquidación…): cada aumento es un golpe fuerte. */
+  eventos?: number;
   className?: string;
 }
 
-export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer = [0.62, 0, -0.62], actividad = 1, onListo, className = '' }: Props) {
+export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer = [0.62, 0, -0.62], actividad = 1, onListo, eventos = 0, className = '' }: Props) {
   const contRef = useRef<HTMLDivElement>(null);
   const anclas = useRef({ izq: anclasIzq, der: anclasDer, rehacer: () => {} });
   const actividadRef = useRef(actividad);
   const listoRef = useRef(onListo);
   actividadRef.current = actividad;
   listoRef.current = onListo;
+  const eventosRef = useRef(eventos);
+  eventosRef.current = eventos;
 
   useEffect(() => {
     anclas.current.izq = anclasIzq;
@@ -763,6 +767,7 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
     let accSalida = 0;
     let accImpulsos = 0;
     let frame = 0;
+    let eventosVistos = eventosRef.current;
 
     const tick = () => {
       frame = requestAnimationFrame(tick);
@@ -799,6 +804,14 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
         accImpulsos -= 1;
       }
 
+      // Evento real detectado por los motores: golpe fuerte hacia dentro y una ráfaga de datos.
+      if (eventosRef.current !== eventosVistos) {
+        const nuevos = Math.min(4, Math.max(1, eventosRef.current - eventosVistos));
+        eventosVistos = eventosRef.current;
+        golpear(tmp.randomDirection(), -(0.3 + 0.06 * nuevos), t, 0);
+        for (let i = 0; i < 2 + nuevos; i++) emitir(false);
+        for (let i = 0; i < 4 * nuevos; i++) lanzarImpulso(Math.floor(Math.random() * red.total));
+      }
       // De vez en cuando, un golpe fuerte al azar (de dentro o de fuera).
       if (Math.random() < dt * 0.5 * act) golpear(tmp.randomDirection(), (Math.random() < 0.5 ? -1 : 1) * (0.22 + Math.random() * 0.15), t, 300);
       actualizarGolpes(dt);

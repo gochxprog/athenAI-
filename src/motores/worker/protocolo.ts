@@ -8,6 +8,10 @@ import type { EventoCalendario } from '../nucleo/calendario';
 export type { EventoCalendario };
 import type { ResultadoMemoria } from '../memoria/gemelos';
 import type { CruceMercados } from '../memoria/cruce';
+import type { EventoMotor } from '../nucleo/tipos';
+import type { FeatureExtrema } from '../investigacion/extremos';
+
+export type { EventoMotor, FeatureExtrema };
 
 export type { CruceMercados };
 
@@ -66,6 +70,10 @@ export interface EstadoFeed {
   cvdVelocidad: number | null;
   resumen: ResumenFlujo;
   memoria: MemoriaFeed | null;
+  /** Últimos eventos de los motores (más reciente primero). */
+  eventos: EventoMotor[];
+  /** Features más fuera de lo normal en la última barra. */
+  extremas: FeatureExtrema[];
 }
 
 export interface EntradaRegistro {

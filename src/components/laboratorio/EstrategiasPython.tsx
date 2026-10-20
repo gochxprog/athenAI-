@@ -95,7 +95,7 @@ export default function EstrategiasPython() {
       setPaper(paper);
       setVersionPapers((v) => v + 1);
       notificador.juez(sel.nombre, f.simbolo, r.resultado.veredicto, r.resultado.resumen);
-      cambiar({ ensayos: sel.ensayos + r.combos.length, ultimoVeredicto: r.resultado.veredicto });
+      cambiar({ ensayos: sel.ensayos + r.combos.length, ultimoVeredicto: r.resultado.veredicto, juzgada: { proveedor: f.proveedor, simbolo: f.simbolo, combo: r.combos[r.resultado.dentroMuestra.combo] ?? {} } });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
