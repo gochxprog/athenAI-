@@ -6,11 +6,13 @@ import { SistemaDemoProvider } from '@/hooks/SistemaDemo';
 import { META_MODULO } from '@/data/metaModulo';
 import DashboardView from '@/modules/DashboardView';
 import InvestigacionView from '@/modules/InvestigacionView';
+import ConocimientoView from '@/modules/ConocimientoView';
 import type { Modulo } from '@/types/nav';
 
 const VISTAS: Partial<Record<Modulo, ComponentType>> = {
   panel: DashboardView,
   investigacion: InvestigacionView,
+  conocimiento: ConocimientoView,
 };
 
 export default function App() {

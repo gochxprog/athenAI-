@@ -8,7 +8,7 @@ interface Props {
   grosor?: number;
   dibujar?: boolean;
   className?: string;
-  marcas?: number[]; // índices a resaltar con un punto
+  marcas?: number[]; // índices a resaltar con una línea vertical
   base?: number; // línea de referencia horizontal
 }
 
@@ -34,20 +34,23 @@ export default function Sparkline({ datos, alto = 40, area = true, grosor = 1, d
       </defs>
       {base !== undefined && <line x1="0" x2={W} y1={y(base)} y2={y(base)} stroke="rgba(255,255,255,0.18)" strokeDasharray="1.5 2" vectorEffect="non-scaling-stroke" />}
       {area && <path d={`${d}L${W},${alto}L0,${alto}Z`} fill={`url(#${id})`} />}
-      <motion.path
+      {marcas.map((i) => (
+        <line key={i} x1={x(i)} x2={x(i)} y1={0} y2={alto} stroke="#fff" strokeOpacity={0.35} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+      ))}
+      {dibujar && (
+        <clipPath id={`${id}-clip`}>
+          <motion.rect x={0} y={0} height={alto} initial={{ width: 0 }} animate={{ width: W }} transition={{ duration: 1.4, ease: 'easeInOut' }} />
+        </clipPath>
+      )}
+      <path
         d={d}
         fill="none"
         stroke="#fff"
         strokeOpacity={0.85}
         strokeWidth={grosor}
         vectorEffect="non-scaling-stroke"
-        initial={dibujar ? { pathLength: 0 } : false}
-        animate={{ pathLength: 1 }}
-        transition={{ duration: 1.4, ease: 'easeInOut' }}
+        clipPath={dibujar ? `url(#${id}-clip)` : undefined}
       />
-      {marcas.map((i) => (
-        <circle key={i} cx={x(i)} cy={y(datos[i])} r={1.4} fill="#fff" vectorEffect="non-scaling-stroke" />
-      ))}
     </svg>
   );
 }
