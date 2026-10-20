@@ -22,13 +22,14 @@ Marca de progreso: ✅ hecho · 🔶 en curso · ⬜ pendiente.
   - se guardan en una "carpeta" por fuente: `athenai-binance`, `athenai-rithmic`, `athenai-urus` y `athenai-simulacion`;
   - se exportan a CSV.
 - ✅ **Gráfico de Order Flow**: velas o Footprint, 1m/5m/15m/Dollar/Volume, CVD, OI, LHM y DOM.
+- ✅ **Bloque C completo**: estrategias en Python con prueba anti-futuro y el Juez real (Walk-Forward, Monte Carlo, Luck test, robustez, Deflated Sharpe, PBO).
 - ✅ **Bloque B completo**: régimen, "hoy es distinto", día gemelo, cruce entre mercados, heatmap y calendario.
 - ✅ **Bloque A completo**: toda la plataforma lee del mismo chorro, panel de mercados, liquidaciones, huecos, fuentes mezcladas, Vigía y Flujo con motor real.
 
 **Todavía es DEMO (pantallas sin motor detrás)**
 
-- Bots, Juez, Walk-Forward, Monte Carlo, Luck test y modelos (LightGBM, red neuronal). Los contadores de hipótesis/épocas del Panel General y del Laboratorio siguen siendo DEMO hasta los bloques C y D.
-- De los agentes 3D, Vigía, Flujo y Rastreador tienen motor; los otros 7 dicen «Sin motor · Bloque X».
+- Bots y modelos (LightGBM, red neuronal). Los contadores de hipótesis/épocas del Panel General y la pestaña «Ejemplos DEMO» del Laboratorio siguen siendo DEMO hasta los bloques D y E.
+- De los agentes 3D, Vigía, Flujo, Rastreador, Programador y Juez tienen motor; los otros 5 dicen «Sin motor · Bloque X».
 
 **Regla:** ningún agente aparece "trabajando" si no tiene un motor real detrás. Mientras su motor no exista, se muestra como «Sin motor · próximamente».
 
@@ -61,8 +62,8 @@ Ejemplo: una escudería de Fórmula 1. Los agentes son ingenieros, mecánicos y 
 | 1 · Detectores | **Vigía** | Vigila conexiones, latencia y huecos en los datos | Centro de datos / feeds | A |
 | | **Flujo** | Lee el Order Flow: imbalances, stacking/pulling, absorción, agotamiento, CVD, liquidaciones | Motores de Urus | A |
 | | **Rastreador** | Régimen del mercado y memoria (día gemelo, "hoy es distinto") | Memoria del mercado (HMM + similitud) | B ✅ |
-| 2 · Contexto y decisión | **Programador** | Corre las estrategias que escribes en Python | Editor + Pyodide | C |
-| | **Juez** | Prueba todo y da el veredicto | Motor de validación | C |
+| 2 · Contexto y decisión | **Programador** | Corre las estrategias que escribes en Python | Editor + Pyodide | C ✅ |
+| | **Juez** | Prueba todo y da el veredicto | Motor de validación | C ✅ |
 | | **Etiquetador** | Marca en el pasado "qué pasó después" | Triple barrera | D |
 | | **Lector** | Entrena los modelos y separa Features útiles del ruido | LightGBM / red neuronal | D |
 | | **Sintetizador** | Resume lo aprendido; informe semanal | Informes | E |
@@ -118,23 +119,30 @@ Dónde verlo: **Order Flow → pestaña «Memoria del mercado»**, las tarjetas 
 - ✅ **Aviso "hoy es distinto"**: compara la ventana de las últimas 20 barras con todo lo grabado. Si está más lejos que el 98 % de lo normal, salta el aviso (tarjeta y barra superior) y dice qué es lo raro (volatilidad, liquidaciones, big trades…). Necesita **320 barras**.
 - ✅ **Día gemelo**: los 8 momentos más parecidos a ahora y qué pasó en las 20 barras siguientes (retorno, máxima subida y bajada). Es memoria, no predicción.
 - ✅ **BTC vs XAU (cruce entre mercados)**: correlación de los retornos de 5 min en las últimas 24 h para cada par de mercados y si coinciden en régimen. XAUUSDT y PAXGUSDT (Binance) y GC/MGC (Rithmic) están entre los sugeridos.
-  - ⬜ La prueba "un patrón que aparece en los dos mercados" la hará el Juez (Bloque C).
+  - ✅ La prueba "el patrón aparece en los dos mercados" la hace el Juez (regla «Otro mercado», Bloque C).
 - ✅ **Heatmap de liquidez** tipo Bookmap: botón «Heatmap» en el gráfico. Últimos 30 min del libro; solo brillan los muros (lo normal queda oscuro).
 - ✅ **Calendario de eventos fuertes** (Centro de datos): FOMC 2026 precargado, se añaden CPI, nóminas, etc. Ventana de no operar en la barra superior y Feature `ventana_evento`.
 
-### Bloque C — Tus estrategias y el Juez real ⬜
+### Bloque C — Tus estrategias y el Juez real ✅
 
-- ⬜ **Editor de estrategias en Python** (Pyodide, dentro del navegador) que lee las Features guardadas.
-- ⬜ **Batería de pruebas del Juez:**
-  - **Backtest con costos y slippage** reales;
-  - **Walk-Forward purgado con embargo**: entrenar en un tramo, probar en el siguiente que el modelo nunca vio, sin solaparse;
-  - **Monte Carlo** de la secuencia de operaciones: el peor escenario razonable;
-  - **Luck test**: contra miles de estrategias al azar;
-  - **Robustez**: variar parámetros ±, otros periodos y otro mercado (XAU);
-  - **Número mínimo de operaciones**;
-  - **Deflated Sharpe y PBO**: descuentan la suerte de haber probado muchas ideas.
-- ⬜ **Métricas que entrega:** ganancia, drawdown máximo, Sharpe, % de aciertos, factor de beneficio, nº de operaciones y veredicto (Aprobada / Rechazada y por qué).
-- ⬜ **Aviso** cuando los datos no alcanzan para que la prueba signifique algo.
+Dónde verlo: **Laboratorio → «Mis estrategias (Python) · real»** (lo de antes sigue en «Ejemplos DEMO»).
+
+- ✅ **Editor de estrategias en Python**, con Python dentro del navegador (Pyodide, incluido en la app: funciona sin internet). Sin numpy: Python estándar.
+  - Contrato: `estrategia(filas, p)` devuelve una posición por fila (1 largo, −1 corto, 0 fuera). `PARAMETROS` (opcional) es la rejilla de valores.
+  - 3 plantillas para empezar: absorción en el bid, momentum de CVD y reversión tras agotamiento.
+  - Lista de Features con un clic para insertarlas; las estrategias se guardan en este navegador.
+  - Usa los datos de la carpeta de la fuente (Centro de datos). Botón «Cancelar» por si el código se queda en un bucle.
+- ✅ **Prueba anti-futuro**: la estrategia se ejecuta otra vez con los datos recortados en 8 puntos; si cambia alguna posición pasada, está mirando el futuro y se rechaza.
+- ✅ **Batería de pruebas del Juez** (reglas fijas):
+  - backtest con comisión y deslizamiento por lado; la posición decidida al cierre de una barra rige en la siguiente; nunca se mantiene posición a través de un hueco;
+  - **Walk-Forward purgado con embargo**: el 30 % inicial solo para elegir parámetros; 5 tramos fuera de muestra, cada uno con parámetros elegidos solo con lo anterior (20 barras de embargo);
+  - **Monte Carlo** (2.000 órdenes de las operaciones): P5 / P50 / P95 y probabilidad de una caída > 25 %;
+  - **Luck test** (1.000 versiones desplazadas al azar con la misma exposición): p-valor;
+  - **robustez**: costos ×2, parámetros vecinos, estabilidad entre tramos y **otro mercado** (por ejemplo BTC frente a XAU: el patrón que aparece en los dos);
+  - **Deflated Sharpe** (descuenta todas las variantes probadas con esa idea, también en ejecuciones anteriores) y **PBO** (CSCV).
+- ✅ **Métricas**: retorno, Sharpe anualizado, drawdown máximo, % de aciertos, factor de beneficio, operaciones, retorno medio y tiempo en mercado. Fuera de muestra (lo que cuenta) frente a dentro (optimista).
+- ✅ **Veredicto**: APROBADA / RECHAZADA (con los motivos) / DATOS INSUFICIENTES (mínimo 500 barras y 30 operaciones fuera de muestra).
+- ✅ Agentes **Programador** y **Juez** con motor real.
 - ⬜ Opcional: describir la estrategia en español y que una IA (Claude) escriba el código en Python. Necesita una API key de Anthropic, con costo por uso.
 
 ### Bloque D — Los motores de inteligencia artificial ⬜

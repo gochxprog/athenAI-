@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { BookMarked, Boxes, Cpu, Database, Dices, Gauge, Gavel, Layers, LineChart, ListOrdered, Lock, ShieldCheck, Shuffle, TreePine, XCircle, type LucideIcon } from 'lucide-react';
 import Encabezado from '@/components/ui/Encabezado';
+import EstrategiasPython from '@/components/laboratorio/EstrategiasPython';
 import Panel from '@/components/ui/Panel';
 import Insignia, { InsigniaVeredicto } from '@/components/ui/Insignia';
 import Barra from '@/components/ui/Barra';
@@ -28,6 +29,43 @@ const PESTANAS: { id: Pestana; titulo: string; icono: LucideIcon; descripcion: s
 ];
 
 export default function LaboratorioView() {
+  const [modo, setModo] = useState<'python' | 'demo'>('python');
+  return (
+    <div className="space-y-4">
+      <div className="flex w-fit gap-1 rounded-xl border border-borde p-1" role="tablist" aria-label="Modo del laboratorio">
+        {(
+          [
+            ['python', 'Mis estrategias (Python) · real'],
+            ['demo', 'Ejemplos DEMO'],
+          ] as const
+        ).map(([m, t]) => (
+          <button key={m} role="tab" aria-selected={modo === m} onClick={() => setModo(m)} className={`rounded-lg px-3.5 py-2 text-xs ${modo === m ? 'bg-white text-black' : 'text-plata-300 hover:text-white'}`}>
+            {t}
+          </button>
+        ))}
+      </div>
+      {modo === 'python' ? (
+        <>
+          <Encabezado
+            modulo="Laboratorio"
+            titulo="Tus estrategias y el Juez"
+            fuente="DATOS REALES"
+            descripcion="Escribe una estrategia en Python sobre tus Features guardadas. El Juez la prueba con Walk-Forward, Monte Carlo, Luck test y robustez, con reglas fijas que nadie puede cambiar, y te da el veredicto con todas las métricas."
+          >
+            <Insignia variante="contorno">
+              <Lock size={10} /> Reglas del Juez bloqueadas
+            </Insignia>
+          </Encabezado>
+          <EstrategiasPython />
+        </>
+      ) : (
+        <LaboratorioDemo />
+      )}
+    </div>
+  );
+}
+
+function LaboratorioDemo() {
   const [id, setId] = useState('E-087');
   const [pestana, setPestana] = useState<Pestana>('equity');
   const e = ESTRATEGIAS.find((x) => x.id === id)!;
@@ -39,8 +77,8 @@ export default function LaboratorioView() {
     <div className="space-y-4">
       <Encabezado
         modulo="Laboratorio"
-        titulo="Backtest Engine y Juez"
-        descripcion="Aquí viven los modelos de Machine Learning clásico y el Juez. Backtest, Walk-Forward, Monte Carlo y el luck test validan: nunca predicen. Las reglas del Juez están bloqueadas y ningún modelo puede modificarlas."
+        titulo="Ejemplos del Juez (DEMO)"
+        descripcion="Estrategias y resultados de ejemplo con datos simulados, para ver cómo se presentan las pruebas. Aquí viven los modelos de Machine Learning clásico y el Juez. Backtest, Walk-Forward, Monte Carlo y el luck test validan: nunca predicen. Las reglas del Juez están bloqueadas y ningún modelo puede modificarlas."
       >
         <Insignia variante="contorno">
           <Lock size={10} /> Reglas del Juez bloqueadas

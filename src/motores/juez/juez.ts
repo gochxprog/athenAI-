@@ -145,7 +145,8 @@ export function pboCscv(retornos: readonly (readonly number[])[], bloques = 8): 
   return malos / combos.length;
 }
 
-const pctTxt = (v: number) => `${(v * 100).toFixed(1)} %`;
+const pctTxt = (v: number) => `${(v * 100).toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`;
+const dec = (v: number, d: number) => v.toLocaleString('es-ES', { minimumFractionDigits: d, maximumFractionDigits: d });
 
 export function juzgar(e: EntradaJuez): ResultadoJuez {
   const n = e.cierres.length;
@@ -285,11 +286,11 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
     { nombre: 'No mira al futuro', ok: e.antiFuturo ? e.antiFuturo.ok : null, valor: e.antiFuturo?.detalle ?? 'no comprobado', umbral: 'posiciones idénticas con y sin datos posteriores', explicacion: 'Si la posición de hoy cambia al añadir datos de mañana, la estrategia hace trampa.' },
     { nombre: 'Gana fuera de muestra (Walk-Forward)', ok: oos.retornoTotal > 0, valor: pctTxt(oos.retornoTotal), umbral: '> 0 %', explicacion: 'Solo cuentan los tramos que la estrategia no vio al elegir sus parámetros.' },
     { nombre: 'Estable entre tramos', ok: tramosPositivos >= 0.6, valor: `${Math.round(tramosPositivos * tramos.length)}/${tramos.length} tramos positivos`, umbral: '≥ 60 %', explicacion: 'Una ventaja real no depende de un solo periodo.' },
-    { nombre: 'Luck test', ok: suerte ? suerte.p <= 0.05 : null, valor: suerte ? `p = ${suerte.p.toFixed(3)}` : '—', umbral: 'p ≤ 0,05', explicacion: 'El azar con la misma exposición no debe igualarla más de 1 de cada 20 veces.' },
+    { nombre: 'Luck test', ok: suerte ? suerte.p <= 0.05 : null, valor: suerte ? `p = ${dec(suerte.p, 3)}` : '—', umbral: 'p ≤ 0,05', explicacion: 'El azar con la misma exposición no debe igualarla más de 1 de cada 20 veces.' },
     { nombre: 'Drawdown máximo', ok: oos.maxDrawdown <= 0.2, valor: pctTxt(oos.maxDrawdown), umbral: '≤ 20 %', explicacion: 'Peor caída desde un máximo, fuera de muestra.' },
     { nombre: 'Monte Carlo: riesgo de ruina', ok: monteCarlo ? monteCarlo.probDd25 <= 0.1 : null, valor: monteCarlo ? `${pctTxt(monteCarlo.probDd25)} de caídas > 25 %` : '—', umbral: '≤ 10 %', explicacion: 'Barajando las operaciones, la mala suerte no debe quemar la cuenta.' },
     { nombre: 'Aguanta costos ×2', ok: costosDobles > 0, valor: pctTxt(costosDobles), umbral: '> 0 %', explicacion: 'Con el doble de comisión y deslizamiento debe seguir ganando.' },
-    { nombre: 'Deflated Sharpe', ok: dsr === null ? null : dsr >= 0.95, valor: dsr === null ? '—' : dsr.toFixed(3), umbral: '≥ 0,95', explicacion: `Descuenta haber probado ${ensayos} ${ensayos === 1 ? 'variante' : 'variantes'}.` },
+    { nombre: 'Deflated Sharpe', ok: dsr === null ? null : dsr >= 0.95, valor: dsr === null ? '—' : dec(dsr, 3), umbral: '≥ 0,95', explicacion: `Descuenta haber probado ${ensayos} ${ensayos === 1 ? 'variante' : 'variantes'}.` },
     { nombre: 'PBO (sobreajuste)', ok: pbo === null ? null : pbo <= 0.25, valor: pbo === null ? 'una sola variante' : pctTxt(pbo), umbral: '≤ 25 %', explicacion: 'Probabilidad de que la mejor variante dentro de muestra sea mediocre fuera.' },
     { nombre: 'Parámetros vecinos', ok: vecinosPositivos === null ? null : vecinosPositivos >= 0.6, valor: vecinosPositivos === null ? '—' : pctTxt(vecinosPositivos), umbral: '≥ 60 % ganan', explicacion: 'Si cambiar un poco un parámetro la rompe, es sobreajuste.' },
     { nombre: 'Otro mercado', ok: otroMercado ? otroMercado.retornoTotal > 0 : null, valor: otroMercado ? `${otroMercado.simbolo}: ${pctTxt(otroMercado.retornoTotal)}` : 'no probado', umbral: '> 0 %', explicacion: 'Un patrón que también funciona en otro mercado (BTC y XAU) es más fiable.' },

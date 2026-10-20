@@ -11,6 +11,7 @@ import { NOMBRE_PROVEEDOR, useFeeds } from '@/components/orderflow/OrderFlowChar
 import { AGENTES, CAPAS, type Agente, type AgenteId } from '@/data/mock';
 import type { EstadoFeed } from '@/motores/worker/protocolo';
 import { conSigno, decimalesDe, num } from '@/lib/format';
+import { leerEstrategias } from '@/components/laboratorio/plantillas';
 
 const ESTADO_FEED: Record<string, string> = {
   conectando: 'conectando',
@@ -71,6 +72,17 @@ function lineasRastreador(feeds: EstadoFeed[]): string[] {
   return out;
 }
 
+/** Programador y Juez: lo que pasó en el Laboratorio (estrategias guardadas en este navegador). */
+function lineasLaboratorio(id: 'programador' | 'juez'): LineaConsola[] {
+  const xs = leerEstrategias();
+  const probadas = xs.filter((x) => x.ultimoVeredicto);
+  if (id === 'programador') {
+    return xs.map((x) => ({ id: `prog-${x.id}`, hora: new Date(x.actualizada), texto: `«${x.nombre}»: ${x.ensayos} ${x.ensayos === 1 ? 'variante ejecutada' : 'variantes ejecutadas'} en Python${x.ultimoVeredicto ? '' : ' · todavía sin probar'}` }));
+  }
+  if (!probadas.length) return [{ id: 'juez-0', hora: new Date(), texto: 'Sin estrategias juzgadas todavía. Escribe una en Laboratorio → Mis estrategias y pulsa «Probar con el Juez».' }];
+  return probadas.map((x) => ({ id: `juez-${x.id}`, hora: new Date(x.actualizada), texto: `«${x.nombre}»: ${x.ultimoVeredicto} · ${x.ensayos} ${x.ensayos === 1 ? 'variante probada' : 'variantes probadas'} (el Deflated Sharpe las descuenta)` }));
+}
+
 function lineasSinMotor(a: Agente): LineaConsola[] {
   const t = new Date();
   return [
@@ -116,6 +128,11 @@ export default function AgentesView() {
     if (!a.real) return `Sin motor · Bloque ${a.bloque}`;
     if (!feeds.feeds.length) return 'Sin fuente';
     if (a.id === 'vigia') return `Vigilando ${vivos}/${feeds.feeds.length} feeds`;
+    if (a.id === 'programador') return `${leerEstrategias().length} estrategias`;
+    if (a.id === 'juez') {
+      const xs = leerEstrategias().filter((x) => x.ultimoVeredicto);
+      return xs.length ? `${xs.filter((x) => x.ultimoVeredicto === 'APROBADA').length}/${xs.length} aprobadas` : 'Esperando estrategias';
+    }
     if (a.id === 'rastreador') {
       const listos = feeds.feeds.filter((f) => f.memoria?.regimen).length;
       return listos ? `Régimen en ${listos}/${feeds.feeds.length} mercados` : 'Esperando historia';
@@ -130,6 +147,7 @@ export default function AgentesView() {
       const reg = registro.slice(0, 20).map((e, i) => ({ id: `reg-${e.t}-${i}`, hora: new Date(e.t), texto: e.texto }));
       return [...consolas.vigia, ...reg].sort((x, y) => y.hora.getTime() - x.hora.getTime()).slice(0, 60);
     }
+    if (a.id === 'programador' || a.id === 'juez') return lineasLaboratorio(a.id);
     return a.id === 'rastreador' ? consolas.rastreador : consolas.flujo;
   };
   const etiquetaDatos = feeds.feeds.length ? `Datos de mercado · ${feeds.feeds.map((f) => f.simbolo).join(' · ')}` : 'Sin fuente de datos';
