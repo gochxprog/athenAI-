@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { BookMarked, Boxes, Cpu, Database, Dices, Gauge, Gavel, Layers, LineChart, ListOrdered, Lock, ShieldCheck, Shuffle, TreePine, XCircle, type LucideIcon } from 'lucide-react';
+import { BookMarked, Boxes, Cpu, Database, Gauge, Gavel, Layers, LineChart, ListOrdered, Lock, ShieldCheck, Shuffle, TreePine, XCircle, type LucideIcon } from 'lucide-react';
 import Encabezado from '@/components/ui/Encabezado';
 import EstrategiasPython from '@/components/laboratorio/EstrategiasPython';
 import Panel from '@/components/ui/Panel';
@@ -8,7 +8,6 @@ import Insignia, { InsigniaVeredicto } from '@/components/ui/Insignia';
 import Barra from '@/components/ui/Barra';
 import BarrasH from '@/components/charts/BarrasH';
 import CurvaEquity from '@/components/charts/CurvaEquity';
-import MonteCarloAnimado from '@/components/charts/MonteCarloAnimado';
 import LuckTestAnimado from '@/components/charts/LuckTestAnimado';
 import { useSistema, usePulso } from '@/hooks/SistemaDemo';
 import { CAPITAL_BACKTEST, ESTRATEGIAS, FEATURES, MODELOS, RECHAZOS_JUEZ, REGLAS_JUEZ, type Estrategia } from '@/data/mock';
@@ -16,11 +15,10 @@ import { simularEstrategia } from '@/lib/backtest';
 import { crearAleatorio } from '@/lib/random';
 import { num, pct, usd } from '@/lib/format';
 
-type Pestana = 'equity' | 'montecarlo' | 'luck' | 'juez' | 'ml';
+type Pestana = 'equity' | 'luck' | 'juez' | 'ml';
 
 const PESTANAS: { id: Pestana; titulo: string; icono: LucideIcon; descripcion: string }[] = [
   { id: 'equity', titulo: 'Curva de equity', icono: LineChart, descripcion: 'Entrenamiento (In-Sample) frente a validación del Juez (Out-of-Sample), con su drawdown.' },
-  { id: 'montecarlo', titulo: 'Monte Carlo', icono: Dices, descripcion: 'Miles de reordenamientos de las operaciones reales para medir el rango de resultados y el riesgo.' },
   { id: 'luck', titulo: 'Luck test', icono: Shuffle, descripcion: 'Se compara la estrategia con 1.000 versiones aleatorias para descartar que el resultado sea suerte.' },
   { id: 'juez', titulo: 'Juez y rechazos', icono: Gavel, descripcion: 'Reglas bloqueadas, motivos de rechazo acumulados y pruebas en curso.' },
   { id: 'ml', titulo: 'Núcleo ML', icono: Cpu, descripcion: 'Modelos de Machine Learning clásico que proponen hipótesis desde los datos.' },
@@ -69,7 +67,7 @@ function LaboratorioDemo() {
   const e = ESTRATEGIAS.find((x) => x.id === id)!;
   const sim = useMemo(() => simularEstrategia(e), [e]);
   const actual = PESTANAS.find((p) => p.id === pestana)!;
-  const porEstrategia = pestana === 'equity' || pestana === 'montecarlo' || pestana === 'luck';
+  const porEstrategia = pestana === 'equity' || pestana === 'luck';
 
   return (
     <div className="space-y-4">
@@ -145,7 +143,6 @@ function LaboratorioDemo() {
         >
           <p className="mb-4 text-[11px] text-plata-500 md:hidden">{actual.descripcion}</p>
           {pestana === 'equity' && <CurvaEquity sim={sim} clave={e.id} />}
-          {pestana === 'montecarlo' && <MonteCarloAnimado sim={sim} clave={e.id} />}
           {pestana === 'luck' && <LuckTestAnimado e={e} />}
           {pestana === 'juez' && <JuezYRechazos />}
           {pestana === 'ml' && (

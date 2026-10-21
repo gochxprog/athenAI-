@@ -12,8 +12,9 @@
 import { crearAleatorio } from '@/lib/random';
 import { normalInversa } from '@/lib/backtest';
 import { costoPorLado } from './costos';
+import { monteCarlo, RUINA_MAXIMA, type ConfigMc, type ResultadoMc } from './monteCarlo';
 import { walkForward, type ClaseWfe, type ConfigWfo, type ObjetivoWfo, type VentanaResultado } from './walkForward';
-import { aplicarHuecos, backtest, COSTOS_POR_DEFECTO, maxDrawdown, metricas, sharpeBarras, type Costos, type Metricas, type Operacion } from './backtest';
+import { aplicarHuecos, backtest, COSTOS_POR_DEFECTO, metricas, sharpeBarras, type Costos, type Metricas, type Operacion } from './backtest';
 
 export type Combo = Record<string, number | string | boolean>;
 
@@ -37,6 +38,8 @@ export interface EntradaJuez {
   semilla?: number;
   /** Ventanas y objetivo del Walk-Forward (por defecto: automáticos y Sharpe). */
   wfo?: ConfigWfo;
+  /** Simulaciones, método, umbral de ruina y capital del Monte Carlo. */
+  monteCarlo?: ConfigMc;
 }
 
 /** Una ventana del Walk-Forward; `desde`/`hasta` = su tramo OOS. */
@@ -70,18 +73,9 @@ export interface ResultadoJuez {
   operacionesOos: Operacion[];
   /** Índice de la barra donde empieza la parte fuera de muestra. */
   inicioOos: number;
-  monteCarlo: {
-    p5: number;
-    p50: number;
-    p95: number;
-    ddP95: number;
-    probDd25: number;
-    muestras: number[];
-    /** 60 trayectorias de capital de ejemplo (máx. 120 puntos cada una) para dibujarlas. */
-    caminos: number[][];
-    /** Bandas por paso (mismos puntos que los caminos). */
-    bandas: { p5: number[]; p50: number[]; p95: number[] };
-  } | null;
+  monteCarlo: ResultadoMc | null;
+  /** Avisos que no rechazan pero hay que mirar (p. ej. el orden de las operaciones pesa mucho). */
+  alertas: string[];
   suerte: { p: number; real: number; simulaciones: number[] } | null;
   robustez: { costosDobles: number; vecinosPositivos: number | null; tramosPositivos: number; otroMercado: (Metricas & { simbolo: string }) | null };
   deflatedSharpe: number | null;
@@ -192,46 +186,8 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
   const costosDobles = retDobles.slice(inicioOos).reduce((a, x) => a * (1 + x), 1) - 1;
   const tramosPositivos = tramos.length ? tramos.filter((t) => t.retorno > 0).length / tramos.length : 0;
 
-  // Monte Carlo de las operaciones fuera de muestra.
-  let monteCarlo: ResultadoJuez['monteCarlo'] = null;
-  if (opsOos.length >= 5) {
-    const finales: number[] = [];
-    const dds: number[] = [];
-    // Puntos que se guardan de cada curva (máx. 120) para dibujar trayectorias y bandas.
-    const pasos = opsOos.length + 1;
-    const idx = Array.from({ length: Math.min(120, pasos) }, (_, k) => Math.round((k / (Math.min(120, pasos) - 1 || 1)) * (pasos - 1)));
-    const columnas: number[][] = idx.map(() => []);
-    const caminos: number[][] = [];
-    for (let s = 0; s < 2_000; s += 1) {
-      let cap = 1;
-      const curva = [1];
-      for (let i = 0; i < opsOos.length; i += 1) {
-        cap *= 1 + opsOos[Math.floor(r() * opsOos.length)].retorno;
-        curva.push(cap);
-      }
-      finales.push(cap - 1);
-      dds.push(maxDrawdown(curva));
-      idx.forEach((k, j) => columnas[j].push(curva[k]));
-      if (s < 60) caminos.push(idx.map((k) => curva[k]));
-    }
-    const pctl = (xs: number[], q: number) => {
-      const o = [...xs].sort((a, b) => a - b);
-      return o[Math.min(o.length - 1, Math.floor(o.length * q))];
-    };
-    const bandas = { p5: columnas.map((c) => pctl(c, 0.05)), p50: columnas.map((c) => pctl(c, 0.5)), p95: columnas.map((c) => pctl(c, 0.95)) };
-    const ord = [...finales].sort((a, b) => a - b);
-    const ordDd = [...dds].sort((a, b) => a - b);
-    monteCarlo = {
-      p5: ord[Math.floor(ord.length * 0.05)],
-      p50: ord[Math.floor(ord.length * 0.5)],
-      p95: ord[Math.floor(ord.length * 0.95)],
-      ddP95: ordDd[Math.floor(ordDd.length * 0.95)],
-      probDd25: dds.filter((d) => d > 0.25).length / dds.length,
-      muestras: ord.filter((_, i) => i % 10 === 0),
-      caminos,
-      bandas,
-    };
-  }
+  // Motor 4 · Monte Carlo de las operaciones fuera de muestra.
+  const mc = opsOos.length >= 5 ? monteCarlo(opsOos.map((o) => o.retorno), r, e.monteCarlo) : null;
 
   // Luck test: la misma secuencia de posiciones fuera de muestra desplazada al azar (circular).
   let suerte: ResultadoJuez['suerte'] = null;
@@ -295,13 +251,15 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
     { nombre: 'Estable entre tramos', ok: tramosPositivos >= 0.6, valor: `${Math.round(tramosPositivos * tramos.length)}/${tramos.length} tramos positivos`, umbral: '≥ 60 %', explicacion: 'Una ventaja real no depende de un solo periodo.' },
     { nombre: 'Luck test', ok: suerte ? suerte.p <= 0.05 : null, valor: suerte ? `p = ${dec(suerte.p, 3)}` : '—', umbral: 'p ≤ 0,05', explicacion: 'El azar con la misma exposición no debe igualarla más de 1 de cada 20 veces.' },
     { nombre: 'Drawdown máximo', ok: oos.maxDrawdown <= 0.2, valor: pctTxt(oos.maxDrawdown), umbral: '≤ 20 %', explicacion: 'Peor caída desde un máximo, fuera de muestra.' },
-    { nombre: 'Monte Carlo: riesgo de ruina', ok: monteCarlo ? monteCarlo.probDd25 <= 0.1 : null, valor: monteCarlo ? `${pctTxt(monteCarlo.probDd25)} de caídas > 25 %` : '—', umbral: '≤ 10 %', explicacion: 'Barajando las operaciones, la mala suerte no debe quemar la cuenta.' },
+    { nombre: 'Monte Carlo: riesgo de ruina', ok: mc ? mc.probRuina <= RUINA_MAXIMA : null, valor: mc ? `${pctTxt(mc.probRuina)} de simulaciones caen ≥ ${pctTxt(mc.umbralRuina)}` : '—', umbral: '≤ 5 %', explicacion: 'Reordenando las operaciones miles de veces, la mala suerte no debe quemar la cuenta.' },
     { nombre: 'Aguanta costos ×2', ok: costosDobles > 0, valor: pctTxt(costosDobles), umbral: '> 0 %', explicacion: 'Con el doble de comisión y deslizamiento debe seguir ganando.' },
     { nombre: 'Deflated Sharpe', ok: dsr === null ? null : dsr >= 0.95, valor: dsr === null ? '—' : dec(dsr, 3), umbral: '≥ 0,95', explicacion: `Descuenta haber probado ${ensayos} ${ensayos === 1 ? 'variante' : 'variantes'}.` },
     { nombre: 'PBO (sobreajuste)', ok: pbo === null ? null : pbo <= 0.25, valor: pbo === null ? 'una sola variante' : pctTxt(pbo), umbral: '≤ 25 %', explicacion: 'Probabilidad de que la mejor variante dentro de muestra sea mediocre fuera.' },
     { nombre: 'Parámetros vecinos', ok: vecinosPositivos === null ? null : vecinosPositivos >= 0.6, valor: vecinosPositivos === null ? '—' : pctTxt(vecinosPositivos), umbral: '≥ 60 % ganan', explicacion: 'Si cambiar un poco un parámetro la rompe, es sobreajuste.' },
     { nombre: 'Otro mercado', ok: otroMercado ? otroMercado.retornoTotal > 0 : null, valor: otroMercado ? `${otroMercado.simbolo}: ${pctTxt(otroMercado.retornoTotal)}` : 'no probado', umbral: '> 0 %', explicacion: 'Un patrón que también funciona en otro mercado (BTC y XAU) es más fiable.' },
   ];
+  const alertas: string[] = [];
+  if (mc?.alertaOrden) alertas.push(`Monte Carlo: la peor caída probable (P95 ${pctTxt(mc.ddP95)}) es más del doble que la del backtest (${pctTxt(mc.ddOriginal)}). Si las pérdidas llegan seguidas, dolerá mucho más de lo que muestra el backtest.`);
   const insuficiente = reglas[0].ok === false;
   const falladas = reglas.filter((x) => x.ok === false);
   const veredicto = insuficiente ? 'DATOS INSUFICIENTES' : falladas.length ? 'RECHAZADA' : 'APROBADA';
@@ -323,7 +281,8 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
     equityOos,
     operacionesOos: opsOos,
     inicioOos,
-    monteCarlo,
+    monteCarlo: mc,
+    alertas,
     suerte,
     robustez: { costosDobles, vecinosPositivos, tramosPositivos, otroMercado },
     deflatedSharpe: dsr,

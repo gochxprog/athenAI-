@@ -2,6 +2,7 @@ import type { Costos } from '../juez/backtest';
 import type { Combo, ResultadoJuez } from '../juez/juez';
 import type { Proveedor } from '../almacen/almacen';
 import type { ConfigWfo } from '../juez/walkForward';
+import type { ConfigMc } from '../juez/monteCarlo';
 
 export interface PeticionLaboratorio {
   tipo?: 'juzgar';
@@ -16,6 +17,8 @@ export interface PeticionLaboratorio {
   ensayosPrevios: number;
   /** Walk-Forward: objetivo y tamaños de ventana (ausente = automático). */
   wfo?: ConfigWfo;
+  /** Monte Carlo: simulaciones, método, umbral de ruina y capital (ausente = por defecto). */
+  monteCarlo?: ConfigMc;
 }
 
 export interface RespuestaLaboratorio {

@@ -275,6 +275,94 @@ function SeccionWalkForward({ r }: { r: RespuestaLaboratorio }) {
   );
 }
 
+/** Porcentaje sin signo (probabilidades y umbrales). */
+const pctSin = (v: number, d = 1) => `${num(v * 100, d)} %`;
+const usdTxt = (v: number) => `${Math.round(v).toLocaleString('es-ES')} USD`;
+
+/** Motor 4 · Monte Carlo: miles de órdenes distintas de las mismas operaciones. */
+function SeccionMonteCarlo({ r }: { r: RespuestaLaboratorio }) {
+  const mc = r.resultado.monteCarlo;
+  if (!mc) return (
+    <Panel titulo="Motor 4 · Monte Carlo" cuerpo="p-4">
+      <p className="text-xs text-plata-500">Hacen falta al menos 5 operaciones fuera de muestra.</p>
+    </Panel>
+  );
+  const cap = mc.capitalInicial ?? 10_000;
+  const ruina = mc.probRuina ?? 0;
+  return (
+    <Panel titulo="Motor 4 · Monte Carlo" accion={<span className="text-[10px] text-plata-500">{num(mc.simulaciones ?? 2000)} simulaciones · {mc.metodo === 'shuffle' ? 'sin reemplazo (shuffle)' : 'con reemplazo (bootstrap)'} · {num(mc.operaciones ?? 0)} operaciones</span>} cuerpo="space-y-4 p-4">
+      <Explicacion
+        que="tomar tus operaciones y barajarlas miles de veces para ver otros órdenes posibles. El backtest es solo uno de esos órdenes."
+        sirve="saber cuánto podrías llegar a perder si las pérdidas te llegan seguidas, y la probabilidad de quemar la cuenta."
+        mirar={`la probabilidad de ruina (caer ${pctSin(mc.umbralRuina ?? 0.3, 0)} o más): debe ser ≤ 5 %. Y la peor caída probable (DD P95): ¿la aguantarías?`}
+      />
+      {mc.alertaOrden && (
+        <p className="rounded-lg border border-white/40 px-3 py-2 text-[11.5px] text-white" data-alerta-mc>
+          ⚠ La peor caída probable ({pct(-mc.ddP95)}) es más del doble que la del backtest ({pct(-(mc.ddOriginal ?? 0))}). Si las pérdidas se agrupan, dolerá mucho más de lo que muestra el backtest.
+        </p>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-mc>
+        {[
+          ['Probabilidad de ruina', pctSin(ruina, 1), `caídas ≥ ${pctSin(mc.umbralRuina ?? 0.3, 0)} · máx. 5 %`],
+          ['Peor caída probable (DD P95)', pct(-mc.ddP95), `backtest: ${pct(-(mc.ddOriginal ?? 0))}`],
+          ['Resultado pesimista (P5)', pct(mc.p5), `${usdTxt(cap)} → ${usdTxt(cap * (1 + mc.p5))}`],
+          ['Resultado típico (P50)', pct(mc.p50), `${usdTxt(cap)} → ${usdTxt(cap * (1 + mc.p50))}`],
+        ].map(([k, v, nota]) => (
+          <div key={k} className="rounded-lg border border-borde-suave px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-plata-500">{k}</p>
+            <p className="cifra text-xl font-light text-white">{v}</p>
+            <p className="text-[10.5px] text-plata-400">{nota}</p>
+          </div>
+        ))}
+      </div>
+      {mc.caminos?.length > 0 && (
+        <div>
+          <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-plata-500">60 curvas simuladas y bandas P5 · P50 · P95</p>
+          <AbanicoTrayectorias datos={{ caminos: mc.caminos, bandas: mc.bandas }} alto={200} />
+          <p className="mt-1 text-[10px] text-plata-500">Toca o pasa el ratón por una línea para ver sus métricas.</p>
+        </div>
+      )}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.14em] text-plata-500">Retorno final de cada simulación</p>
+          <Histograma
+            valores={mc.muestras}
+            marcas={[
+              { v: mc.p5, etiqueta: `P5 ${pct(mc.p5)}` },
+              { v: mc.p50, etiqueta: `P50 ${pct(mc.p50)}`, fuerte: true },
+              { v: mc.p95, etiqueta: `P95 ${pct(mc.p95)}` },
+            ]}
+          />
+        </div>
+        {mc.muestrasDd?.length > 0 && (
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.14em] text-plata-500">Caída máxima de cada simulación</p>
+            <Histograma
+              valores={mc.muestrasDd}
+              marcas={[
+                { v: mc.ddP95, etiqueta: `DD P95 ${pct(mc.ddP95)}`, fuerte: true },
+                { v: mc.umbralRuina, etiqueta: `Ruina ${pctSin(mc.umbralRuina, 0)}` },
+              ]}
+            />
+          </div>
+        )}
+      </div>
+      <details className="rounded-lg border border-borde-suave px-3 py-2 text-[11px] text-plata-300">
+        <summary className="cursor-pointer text-plata-100">Cómo se calcula</summary>
+        <ul className="mt-2 list-disc space-y-1 pl-4">
+          <li>Entrada: el retorno de cada operación fuera de muestra (T₁ … T_N).</li>
+          <li>Bootstrap (con reemplazo): se eligen N operaciones al azar, cada una con probabilidad 1/N; una puede repetirse. Shuffle (sin reemplazo): las mismas operaciones en otro orden.</li>
+          <li>Capital(k, i) = Capital(k, i − 1) × (1 + T(k, i)), empezando en {usdTxt(cap)}.</li>
+          <li>Drawdown(k, t) = (Pico − Capital) ÷ Pico; MaxDD(k) = el mayor de la simulación.</li>
+          <li>Probabilidad de ruina = simulaciones con MaxDD ≥ {pctSin(mc.umbralRuina ?? 0.3, 0)} ÷ {num(mc.simulaciones ?? 2000)}. Si pasa del 5 %, el Juez rechaza.</li>
+          <li>Percentiles con interpolación lineal: P5 pesimista (el 95 % de las veces sale mejor), P50 mediana, P95 optimista.</li>
+          <li>Alerta si el DD P95 es más del doble que el drawdown de las operaciones en su orden real.</li>
+        </ul>
+      </details>
+    </Panel>
+  );
+}
+
 /** Motor 2 · Métricas: fuera de muestra (lo que cuenta) frente a dentro (optimista). */
 function SeccionMetricas({ r }: { r: RespuestaLaboratorio }) {
   const j = r.resultado;
@@ -333,6 +421,11 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
         <p className={`text-[10px] uppercase tracking-[0.16em] ${aprobada ? 'text-black/60' : 'text-plata-500'}`}>Veredicto del Juez</p>
         <p className={`mt-1 text-2xl font-light ${aprobada ? '' : 'text-white'}`}>{j.veredicto}</p>
         <p className={`mt-1 text-sm ${aprobada ? '' : 'text-plata-200'}`}>{j.resumen}</p>
+        {(j.alertas ?? []).map((a) => (
+          <p key={a} className={`mt-1 text-[11.5px] ${aprobada ? 'text-black/80' : 'text-plata-100'}`} data-alerta>
+            ⚠ {a}
+          </p>
+        ))}
         <p className={`mt-2 text-[10.5px] ${aprobada ? 'text-black/60' : 'text-plata-500'}`}>
           {num(r.filas)} dollar bars ({fecha(r.desde)} → {fecha(r.hasta)}) · fuera de muestra desde {fecha(r.inicioOosT)} · {r.combos.length} {r.combos.length === 1 ? 'variante' : 'variantes'} · {j.ensayos} probadas en total · {num(r.segundos, 1)} s
         </p>
@@ -341,6 +434,7 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
       <SeccionBacktest r={r} />
       <SeccionMetricas r={r} />
       <SeccionWalkForward r={r} />
+      <SeccionMonteCarlo r={r} />
 
       <Panel titulo="Reglas del Juez" cuerpo="overflow-x-auto px-4 py-2">
         <table className="w-full min-w-[720px] text-left text-xs">
@@ -359,31 +453,6 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
       </Panel>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Panel titulo="Monte Carlo · 2.000 órdenes de las operaciones" accion={<span className="text-[10px] text-plata-500">retorno final</span>}>
-          {j.monteCarlo ? (
-            <>
-              {j.monteCarlo.caminos?.length > 0 && (
-                <div className="mb-3">
-                  <AbanicoTrayectorias datos={{ caminos: j.monteCarlo.caminos, bandas: j.monteCarlo.bandas }} alto={200} />
-                  <p className="mt-1 text-[10px] text-plata-500">Toca o pasa el ratón por una línea para ver sus métricas.</p>
-                </div>
-              )}
-              <Histograma
-                valores={j.monteCarlo.muestras}
-                marcas={[
-                  { v: j.monteCarlo.p5, etiqueta: `P5 ${pct(j.monteCarlo.p5)}` },
-                  { v: j.monteCarlo.p50, etiqueta: `P50 ${pct(j.monteCarlo.p50)}`, fuerte: true },
-                  { v: j.monteCarlo.p95, etiqueta: `P95 ${pct(j.monteCarlo.p95)}` },
-                ]}
-              />
-              <p className="mt-2 text-[11px] text-plata-300">
-                Peor caída esperable (P95): {pct(-j.monteCarlo.ddP95)} · probabilidad de una caída mayor del 25 %: {num(j.monteCarlo.probDd25 * 100, 1)} %
-              </p>
-            </>
-          ) : (
-            <p className="text-xs text-plata-500">Menos de 5 operaciones fuera de muestra.</p>
-          )}
-        </Panel>
         <Panel titulo="Luck test · 1.000 versiones al azar" accion={<span className="text-[10px] text-plata-500">misma exposición, desplazada en el tiempo</span>}>
           {j.suerte ? (
             <>

@@ -10,6 +10,7 @@ import type { RespuestaLaboratorio } from '@/motores/laboratorio/protocolo';
 import type { Proveedor, ResumenSimbolo } from '@/motores/worker/protocolo';
 import { COSTOS_POR_DEFECTO } from '@/motores/juez/backtest';
 import { NOMBRE_OBJETIVO, type ObjetivoWfo } from '@/motores/juez/walkForward';
+import { MC_POR_DEFECTO, type MetodoMc } from '@/motores/juez/monteCarlo';
 import { DEFINICIONES_FEATURES } from '@/motores/nucleo/features';
 import { num } from '@/lib/format';
 import { guardarEstrategias, leerEstrategias, PLANTILLAS, type EstrategiaGuardada } from './plantillas';
@@ -35,6 +36,10 @@ export default function EstrategiasPython() {
   const [objetivoWfo, setObjetivoWfo] = useState<ObjetivoWfo>('sharpe');
   const [lIs, setLIs] = useState(0);
   const [lOos, setLOos] = useState(0);
+  const [metodoMc, setMetodoMc] = useState<MetodoMc>(MC_POR_DEFECTO.metodo);
+  const [simulaciones, setSimulaciones] = useState(MC_POR_DEFECTO.simulaciones);
+  const [ruinaPct, setRuinaPct] = useState(MC_POR_DEFECTO.umbralRuina * 100);
+  const [capital, setCapital] = useState(MC_POR_DEFECTO.capitalInicial);
   const [corriendo, setCorriendo] = useState(false);
   const [progreso, setProgreso] = useState<string[]>([]);
   const [resultado, setResultado] = useState<RespuestaLaboratorio | null>(null);
@@ -90,7 +95,7 @@ export default function EstrategiasPython() {
     setProgreso([]);
     try {
       const r = await laboratorio.ejecutar(
-        { codigo: sel.codigo, proveedor: f.proveedor, simbolo: f.simbolo, otro: o && { proveedor: o.proveedor, simbolo: o.simbolo }, costos: { comisionPb: comision, deslizamientoPb: deslizamiento }, ensayosPrevios: sel.ensayos, wfo: { objetivo: objetivoWfo, lIs, lOos } },
+        { codigo: sel.codigo, proveedor: f.proveedor, simbolo: f.simbolo, otro: o && { proveedor: o.proveedor, simbolo: o.simbolo }, costos: { comisionPb: comision, deslizamientoPb: deslizamiento }, ensayosPrevios: sel.ensayos, wfo: { objetivo: objetivoWfo, lIs, lOos }, monteCarlo: { metodo: metodoMc, simulaciones: Math.min(10_000, Math.max(100, simulaciones)), umbralRuina: ruinaPct / 100, capitalInicial: capital } },
         (t) => setProgreso((p) => [...p.slice(-6), t]),
       );
       setResultado(r);
@@ -226,7 +231,7 @@ export default function EstrategiasPython() {
           </label>
         </div>
         <details className="text-[11px] text-plata-400">
-          <summary className="cursor-pointer text-plata-300">Avanzado · Walk-Forward</summary>
+          <summary className="cursor-pointer text-plata-300">Avanzado · Walk-Forward y Monte Carlo</summary>
           <div className="mt-2 flex flex-wrap items-end gap-3">
             <label className="block">
               <span className="etiqueta">Objetivo para elegir parámetros</span>
@@ -245,6 +250,25 @@ export default function EstrategiasPython() {
             <label className="block">
               <span className="etiqueta">OOS (barras, 0 = auto)</span>
               <input type="number" min={0} step={100} value={lOos} onChange={(e) => setLOos(Number(e.target.value))} aria-label="Barras OOS" className="mt-1 w-24 rounded-md border border-borde bg-black px-2 py-1.5 font-mono text-[11px] text-plata-100" />
+            </label>
+            <label className="block">
+              <span className="etiqueta">Monte Carlo · método</span>
+              <select value={metodoMc} onChange={(e) => setMetodoMc(e.target.value as MetodoMc)} aria-label="Método Monte Carlo" className="mt-1 block rounded-md border border-borde bg-black px-2 py-1.5 text-[11px] text-plata-100">
+                <option value="bootstrap">Con reemplazo (bootstrap)</option>
+                <option value="shuffle">Sin reemplazo (shuffle)</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="etiqueta">Simulaciones</span>
+              <input type="number" min={0} step={1000} value={simulaciones} onChange={(e) => setSimulaciones(Number(e.target.value))} aria-label="Simulaciones" className="mt-1 w-24 rounded-md border border-borde bg-black px-2 py-1.5 font-mono text-[11px] text-plata-100" />
+            </label>
+            <label className="block">
+              <span className="etiqueta">Ruina (% de caída)</span>
+              <input type="number" min={0} step={5} value={ruinaPct} onChange={(e) => setRuinaPct(Number(e.target.value))} aria-label="Umbral de ruina" className="mt-1 w-24 rounded-md border border-borde bg-black px-2 py-1.5 font-mono text-[11px] text-plata-100" />
+            </label>
+            <label className="block">
+              <span className="etiqueta">Capital inicial (USD)</span>
+              <input type="number" min={0} step={1000} value={capital} onChange={(e) => setCapital(Number(e.target.value))} aria-label="Capital inicial" className="mt-1 w-24 rounded-md border border-borde bg-black px-2 py-1.5 font-mono text-[11px] text-plata-100" />
             </label>
           </div>
         </details>

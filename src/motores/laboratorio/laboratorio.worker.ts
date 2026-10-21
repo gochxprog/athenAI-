@@ -91,6 +91,7 @@ ctx.onmessage = async (e) => {
       huecos: huecosDe(filas),
       funding: fundingIncluido ? funding : undefined,
       wfo: p.wfo,
+      monteCarlo: p.monteCarlo,
       combos: ejec.combos,
       posiciones: ejec.posiciones,
       costos: p.costos,
