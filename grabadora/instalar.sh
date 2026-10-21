@@ -11,7 +11,7 @@ PUERTO="${2:-8080}"
 APP=/opt/athenai-grabadora
 DATOS=/var/lib/athenai-grabadora
 AQUI="$(cd "$(dirname "$0")" && pwd)"
-# Si ya se aseguró (asegurar.sh), la grabadora sigue escuchando solo en 127.0.0.1 detrás de Caddy + Tailscale.
+# Si ya se aseguró (asegurar.sh), la grabadora sigue escuchando solo en 127.0.0.1 detrás de Caddy (HTTPS).
 SEGURO=/etc/athenai/seguro.conf
 NOMBRE_SEGURO=""
 if [ -f "$SEGURO" ]; then NOMBRE_SEGURO="$(sed -n 's/^NOMBRE=//p' "$SEGURO")"; fi
@@ -74,7 +74,7 @@ systemctl daemon-reload
 systemctl enable athenai-grabadora >/dev/null
 systemctl restart athenai-grabadora
 
-# 5) Cortafuegos: abre el puerto si ufw está activo (nunca si está asegurada: entonces solo se entra por Tailscale).
+# 5) Cortafuegos: abre el puerto si ufw está activo (nunca si está asegurada: entonces se entra por https).
 if [ -z "$NOMBRE_SEGURO" ] && command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then ufw allow "$PUERTO"/tcp >/dev/null; fi
 
 # 6) Resultado.
@@ -88,7 +88,7 @@ else
 fi
 echo
 if [ -n "$NOMBRE_SEGURO" ]; then
-  echo "   Dirección:  https://$NOMBRE_SEGURO.duckdns.org   (privada: con Tailscale encendido)"
+  echo "   Dirección:  https://$NOMBRE_SEGURO.duckdns.org   (con candado; entra con tu clave)"
   echo "   Clave:      $(cat "$DATOS/clave.txt" 2>/dev/null || echo '(aún no creada)')"
   echo "   Ver el registro:  journalctl -u athenai-grabadora -f"
   exit 0

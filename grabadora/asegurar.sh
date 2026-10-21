@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Deja la plataforma del VPS PRIVADA y con candado (HTTPS):
-#   1. Tailscale: red privada; solo tus aparatos (con la app) llegan al VPS.
-#   2. DuckDNS: el nombre <nombre>.duckdns.org apunta a la IP PRIVADA de Tailscale del VPS (100.x.y.z).
-#   3. Caddy: HTTPS con certificado real de Let's Encrypt (reto DNS de DuckDNS: no hace falta abrir puertos).
-#   4. La grabadora escucha solo en 127.0.0.1 (detrás de Caddy) y la página pide la clave (/entrar).
-#   5. Cortafuegos (ufw): SSH abierto siempre; HTTPS solo por Tailscale; el resto cerrado.
+# Deja la plataforma del VPS con NOMBRE y CANDADO (HTTPS), protegida con tu clave. Sin apps extra.
+#   1. DuckDNS: el nombre <nombre>.duckdns.org apunta a la IP pública de tu VPS.
+#   2. Caddy: HTTPS con certificado real de Let's Encrypt (reto DNS de DuckDNS).
+#   3. La grabadora escucha solo en 127.0.0.1 (detrás de Caddy) y la página pide la clave (/entrar),
+#      con bloqueo tras 5 intentos malos.
+#   4. Cortafuegos (ufw): SSH y HTTPS abiertos; el puerto viejo (8080) y lo demás, cerrados.
+#   Si quedó Tailscale de la versión anterior, se apaga y se desinstala.
 #
 # Uso:       sudo bash asegurar.sh <nombre> <token>        (nombre = lo que va antes de .duckdns.org)
 # Deshacer:  sudo bash asegurar.sh --deshacer               (vuelve a http://IP:PUERTO, sin borrar datos)
@@ -33,6 +34,20 @@ if [ "$SIMULAR" != "1" ] && [ "$(id -u)" -ne 0 ]; then echo "Ejecútalo con sudo
 PUERTO="$(sed -n 's/^Environment=PUERTO=//p' "$UNIDAD" 2>/dev/null || true)"
 PUERTO="${PUERTO:-8080}"
 
+# Quita Tailscale si quedó de la versión anterior (ya no se usa).
+quitar_tailscale() {
+  if command -v tailscale >/dev/null 2>&1 || systemctl list-unit-files 2>/dev/null | grep -q '^tailscaled'; then
+    echo "== Quitando Tailscale (ya no hace falta)…"
+    correr tailscale down || true
+    correr systemctl disable --now tailscaled || true
+    correr apt-get remove -y tailscale || true
+  fi
+  if command -v ufw >/dev/null 2>&1; then
+    correr ufw delete allow in on tailscale0 >/dev/null 2>&1 || true
+    correr ufw delete allow 41641/udp >/dev/null 2>&1 || true
+  fi
+}
+
 # ---------------------------------------------------------------------------------------------------------------
 if [ "${1:-}" = "--deshacer" ]; then
   echo "== Deshaciendo: la plataforma vuelve a http://IP:$PUERTO (los datos no se tocan)"
@@ -41,8 +56,9 @@ if [ "${1:-}" = "--deshacer" ]; then
   correr systemctl daemon-reload
   correr systemctl restart athenai-grabadora
   correr systemctl disable --now caddy-athenai || true
+  quitar_tailscale
   if command -v ufw >/dev/null 2>&1; then correr ufw allow "$PUERTO"/tcp; fi
-  echo "== Listo. Tailscale sigue instalado (sudo tailscale down para apagarlo)."
+  echo "== Listo: http://IP-DE-TU-VPS:$PUERTO (sigue pidiendo la clave para entrar)."
   exit 0
 fi
 
@@ -58,38 +74,26 @@ if ! [[ "$TOKEN" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
   exit 1
 fi
 DOMINIO="$NOMBRE.duckdns.org"
-echo "== AthenAI · dejando la plataforma privada en https://$DOMINIO (puerto interno $PUERTO)"
+echo "== AthenAI · plataforma con candado en https://$DOMINIO (puerto interno $PUERTO)"
 
-# 1) Tailscale -----------------------------------------------------------------------------------------------
-if ! command -v tailscale >/dev/null 2>&1; then
-  echo "== Instalando Tailscale…"
-  if [ "$SIMULAR" = "1" ]; then echo "+ curl -fsSL https://tailscale.com/install.sh | sh"; else curl -fsSL https://tailscale.com/install.sh | sh; fi
-fi
-correr systemctl enable --now tailscaled
-if [ "$SIMULAR" = "1" ]; then
-  TSIP="100.64.0.1"
-  echo "+ tailscale up    (simulado: IP 100.64.0.1)"
-else
-  if ! tailscale ip -4 >/dev/null 2>&1; then
-    echo
-    echo "== Abre el enlace que aparece abajo y entra con TU cuenta de Tailscale (la misma del celular)."
-    tailscale up
-  fi
-  TSIP="$(tailscale ip -4 | head -n1)"
-fi
-if ! [[ "$TSIP" =~ ^100\. ]]; then echo "!! No se obtuvo la IP de Tailscale (¿entraste con el enlace?). Vuelve a ejecutar el script."; exit 1; fi
-echo "   IP privada de Tailscale: $TSIP"
+# 0) Fuera Tailscale (versión anterior) --------------------------------------------------------------------------
+quitar_tailscale
 
-# 2) DuckDNS → IP privada -----------------------------------------------------------------------------------
-echo "== Apuntando $DOMINIO a $TSIP…"
+# 1) DuckDNS → IP pública del VPS ----------------------------------------------------------------------------------
 if [ "$SIMULAR" = "1" ]; then
-  echo "+ curl https://www.duckdns.org/update?domains=$NOMBRE&token=***&ip=$TSIP"
+  IPV4="203.0.113.10"
 else
-  R="$(curl -fsS --max-time 20 "https://www.duckdns.org/update?domains=$NOMBRE&token=$TOKEN&ip=$TSIP" || true)"
+  IPV4="$(curl -4 -fsS --max-time 10 https://api.ipify.org || hostname -I | awk '{print $1}')"
+fi
+echo "== Apuntando $DOMINIO a $IPV4…"
+if [ "$SIMULAR" = "1" ]; then
+  echo "+ curl https://www.duckdns.org/update?domains=$NOMBRE&token=***&ip=$IPV4"
+else
+  R="$(curl -fsS --max-time 20 "https://www.duckdns.org/update?domains=$NOMBRE&token=$TOKEN&ip=$IPV4" || true)"
   if [ "$R" != "OK" ]; then echo "!! DuckDNS respondió «${R:-nada}»: revisa el nombre y el token en duckdns.org."; exit 1; fi
 fi
 
-# 3) Caddy con el módulo de DuckDNS ----------------------------------------------------------------------------
+# 2) Caddy con el módulo de DuckDNS ----------------------------------------------------------------------------
 case "$(uname -m)" in
   x86_64) ARQ=amd64 ;;
   aarch64 | arm64) ARQ=arm64 ;;
@@ -112,8 +116,6 @@ escribir /etc/caddy-athenai/Caddyfile 644 <<CADDY
 }
 
 $DOMINIO {
-	# Solo en la IP privada de Tailscale: desde internet no hay nada que ver.
-	bind $TSIP
 	tls {
 		dns duckdns {env.DUCKDNS_TOKEN}
 		resolvers 1.1.1.1 8.8.8.8
@@ -124,9 +126,9 @@ $DOMINIO {
 CADDY
 escribir /etc/systemd/system/caddy-athenai.service 644 <<UNIT
 [Unit]
-Description=AthenAI · HTTPS privado (Caddy)
-After=network-online.target tailscaled.service athenai-grabadora.service
-Wants=network-online.target tailscaled.service
+Description=AthenAI · HTTPS (Caddy)
+After=network-online.target athenai-grabadora.service
+Wants=network-online.target
 
 [Service]
 User=caddy-athenai
@@ -142,7 +144,7 @@ AmbientCapabilities=CAP_NET_BIND_SERVICE
 WantedBy=multi-user.target
 UNIT
 
-# 4) Grabadora solo en 127.0.0.1 -----------------------------------------------------------------------------
+# 3) Grabadora solo en 127.0.0.1 -----------------------------------------------------------------------------
 printf 'NOMBRE=%s\n' "$NOMBRE" | escribir "$SEGURO" 644
 if ! grep -q '^Environment=HOST=127.0.0.1' "$UNIDAD" 2>/dev/null; then
   correr sed -i '/^Environment=HOST=/d; /^Environment=PUERTO=/a Environment=HOST=127.0.0.1' "$UNIDAD"
@@ -152,20 +154,20 @@ correr systemctl restart athenai-grabadora
 correr systemctl enable caddy-athenai
 correr systemctl restart caddy-athenai
 
-# 5) Cortafuegos -------------------------------------------------------------------------------------------------
+# 4) Cortafuegos -------------------------------------------------------------------------------------------------
 if ! command -v ufw >/dev/null 2>&1; then correr apt-get install -y ufw; fi
 SSH_PUERTO="$(sshd -T 2>/dev/null | sed -n 's/^port //p' | head -n1 || true)"
 SSH_PUERTO="${SSH_PUERTO:-22}"
-echo "== Cortafuegos: SSH ($SSH_PUERTO) abierto, HTTPS solo por Tailscale, lo demás cerrado"
+echo "== Cortafuegos: SSH ($SSH_PUERTO) y HTTPS (443) abiertos; el $PUERTO y lo demás, cerrados"
 correr ufw allow "$SSH_PUERTO"/tcp            # primero SSH: nunca te quedas fuera del VPS
-correr ufw allow 41641/udp                    # Tailscale (conexión directa, más rápida)
-correr ufw allow in on tailscale0             # todo lo que llega por la red privada
+correr ufw allow 443/tcp                      # la plataforma con candado
+correr ufw allow 80/tcp                       # solo redirige http → https
 correr ufw delete allow "$PUERTO"/tcp || true # el puerto viejo deja de estar abierto a internet
 correr ufw default deny incoming
 correr ufw default allow outgoing
 correr ufw --force enable
 
-# 6) Comprobación ------------------------------------------------------------------------------------------------
+# 5) Comprobación ------------------------------------------------------------------------------------------------
 if [ "$SIMULAR" = "1" ]; then
   echo "== (simulado) Listo: https://$DOMINIO"
   exit 0
@@ -173,20 +175,18 @@ fi
 echo "== Esperando el certificado (puede tardar 1–2 minutos la primera vez)…"
 OK=0
 for _ in $(seq 1 40); do
-  if curl -fsS --max-time 5 --resolve "$DOMINIO:443:$TSIP" "https://$DOMINIO/api/salud" 2>/dev/null | grep -q athenAI; then OK=1; break; fi
+  if curl -fsS --max-time 5 --resolve "$DOMINIO:443:127.0.0.1" "https://$DOMINIO/api/salud" 2>/dev/null | grep -q athenAI; then OK=1; break; fi
   sleep 5
 done
 echo
 if [ "$OK" = "1" ]; then
-  echo "== LISTO. Tu plataforma ahora es privada y con candado:"
+  echo "== LISTO. Tu plataforma ahora tiene nombre y candado:"
   echo
   echo "   https://$DOMINIO"
   echo
-  echo "   1. Enciende Tailscale en tu celular o PC (misma cuenta)."
-  echo "   2. Abre la dirección y entra con tu clave: $(cat /var/lib/athenai-grabadora/clave.txt 2>/dev/null || echo '(sudo cat /var/lib/athenai-grabadora/clave.txt)')"
-  echo "   Sin Tailscale, desde internet no se ve nada."
+  echo "   Ábrela desde el celular o la PC y entra con tu clave: $(cat /var/lib/athenai-grabadora/clave.txt 2>/dev/null || echo '(sudo cat /var/lib/athenai-grabadora/clave.txt)')"
+  echo "   Si tu proveedor tiene cortafuegos en su panel web, abre ahí los puertos 443 y 80 (TCP)."
 else
-  echo "!! La grabadora y Tailscale ya están listos, pero el candado aún no responde."
+  echo "!! La grabadora sigue grabando normal, pero el candado aún no responde."
   echo "   Mira qué dice Caddy:  journalctl -u caddy-athenai -n 50"
-  echo "   Mientras tanto, la grabadora sigue grabando normal."
 fi

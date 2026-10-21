@@ -140,6 +140,23 @@ fuera de muestra. Pruebas de blindaje en Walk-Forward y Etiquetador. Detalle en 
 - **DOM:** muestra todos los niveles de la vista del libro (hasta 200 por lado) con scroll, «Centrar» y agrupación
   ×1, ×5, ×10, ×25 y ×100. Solo pantalla: el motor del libro y las Features no cambian (`agruparLibro.test.ts`).
 
+## Laboratorio: diseño de pestañas con datos reales · octubre 2026
+- Vuelve el aspecto de la antigua pantalla de ejemplos, ahora con el resultado REAL del Juez y sin nada simulado:
+  - tira de pasos;
+  - tarjeta de la estrategia con su mercado;
+  - 8 tarjetas con ✓/✕: Win rate, Profit factor, Expectancy, Max drawdown, Sharpe/Sortino, PBO, Luck test y Operaciones (las del Juez dicen «Juez» y las de referencia «ref.»);
+  - pestañas con la píldora animada.
+- **Pestañas** (cada una con su gráfico animado y, debajo, la sección completa de siempre):
+  - Curva de equity: con Backtest y Métricas;
+  - Walk-Forward: ventanas reales recorridas una a una;
+  - Monte Carlo: trayectorias y distribución calculadas por el motor;
+  - Luck test: distribución al azar del motor;
+  - Robustez, DSR y PBO, Anti-futuro;
+  - Juez y rechazos: puertas, reglas y motivos;
+  - Núcleo ML: sin modelos todavía;
+  - Ver todos.
+- Código: `src/components/laboratorio/vista/` (solo presentación; ningún motor cambió).
+
 ## Para después (no se construye ahora)
 - Fuente de datos de calidad (Databento o Rithmic): añadirla como fuente, con una función que **descargue datos
   históricos**. Así se hace backtesting con años de historia sin esperar a grabar.

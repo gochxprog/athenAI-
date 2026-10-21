@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Check, Download, Minus, X } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { motion } from 'framer-motion';
+import { Check, Cpu, Dices, Download, Gauge, Gavel, History, Layers, LineChart, Lock, Minus, ShieldCheck, Shuffle, X, XCircle, type LucideIcon } from 'lucide-react';
 import Panel from '@/components/ui/Panel';
 import AbanicoTrayectorias from '@/components/charts/AbanicoTrayectorias';
 import type { OperacionConHora, RespuestaLaboratorio } from '@/motores/laboratorio/protocolo';
@@ -8,6 +9,12 @@ import { NOMBRE_OBJETIVO } from '@/motores/juez/walkForward';
 import { ALFA_LUCK, NOMBRE_METODO_LUCK, NOMBRE_METRICA_LUCK } from '@/motores/juez/luckTest';
 import { conSigno, num } from '@/lib/format';
 import { Explicacion, Histograma, Linea } from './graficos';
+import TiraPasos from './vista/TiraPasos';
+import TarjetasJuez, { TarjetaEstrategia } from './vista/TarjetasJuez';
+import CurvaEquityJuez from './vista/CurvaEquityJuez';
+import WalkForwardJuez from './vista/WalkForwardJuez';
+import MonteCarloJuez from './vista/MonteCarloJuez';
+import LuckTestJuez from './vista/LuckTestJuez';
 
 const pct = (v: number | null | undefined, d = 1) => (v === null || v === undefined ? '—' : conSigno(v * 100, d, '%'));
 const fecha = (t: number) => new Date(t).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
@@ -691,61 +698,172 @@ function SeccionMetricas({ r }: { r: RespuestaLaboratorio }) {
   );
 }
 
-export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
+export interface ContextoLaboratorio {
+  /** Nombre de la estrategia juzgada. */
+  nombre: string;
+  /** Estrategias guardadas y papers en la biblioteca (para la tira de pasos). */
+  estrategias: number;
+  papers: number;
+}
+
+/** Resultado del Juez con el diseño del Laboratorio: tira de pasos, estrategia, 8 tarjetas y un motor por pestaña. */
+export default function ResultadoJuezVista({ r, contexto, selector }: { r: RespuestaLaboratorio; contexto?: ContextoLaboratorio; selector?: ReactNode }) {
   const j = r.resultado;
-  const aprobada = j.veredicto === 'APROBADA';
   return (
     <div className="space-y-4" data-resultado-juez={j.veredicto}>
-      <div className={`rounded-xl border p-4 ${aprobada ? 'border-white bg-white text-black' : 'border-borde'}`}>
-        <p className={`text-[10px] uppercase tracking-[0.16em] ${aprobada ? 'text-black/60' : 'text-plata-500'}`}>Veredicto del Juez</p>
-        <p className={`mt-1 text-2xl font-light ${aprobada ? '' : 'text-white'}`}>
-          {TEXTO_VEREDICTO[j.veredicto] ?? j.veredicto}
-          {j.score && <span className="cifra ml-3 text-base">{num(j.score.total, 0)}/100</span>}
-        </p>
-        <p className={`mt-1 text-sm ${aprobada ? '' : 'text-plata-200'}`}>{j.resumen}</p>
-        {(j.alertas ?? []).map((a) => (
-          <p key={a} className={`mt-1 text-[11.5px] ${aprobada ? 'text-black/80' : 'text-plata-100'}`} data-alerta>
-            ⚠ {a}
-          </p>
-        ))}
-        <p className={`mt-2 text-[10.5px] ${aprobada ? 'text-black/60' : 'text-plata-500'}`}>
-          {num(r.filas)} dollar bars ({fecha(r.desde)} → {fecha(r.hasta)}) · fuera de muestra desde {fecha(r.inicioOosT)} · {r.combos.length} {r.combos.length === 1 ? 'variante' : 'variantes'} · {j.ensayos} probadas en total · {num(r.segundos, 1)} s
-        </p>
-      </div>
-
-      <PestanasJuez r={r} />
+      {contexto && <TiraPasos r={r} estrategias={contexto.estrategias} papers={contexto.papers} />}
+      <TarjetaEstrategia r={r} nombre={contexto?.nombre ?? j.mercado ?? 'Estrategia'} selector={selector} />
+      <TarjetasJuez r={r} />
+      <PestanasJuez r={r} nombre={contexto?.nombre ?? ''} />
     </div>
   );
 }
 
-/** Los motores del Juez en pestañas, uno por pestaña (solo presentación: cada sección es la misma de siempre). */
-const PESTANAS_JUEZ: { id: string; titulo: string; Seccion: (p: { r: RespuestaLaboratorio }) => JSX.Element | null }[] = [
-  { id: 'backtest', titulo: '1 · Backtest', Seccion: SeccionBacktest },
-  { id: 'metricas', titulo: '2 · Métricas', Seccion: SeccionMetricas },
-  { id: 'wfo', titulo: '3 · Walk-Forward', Seccion: SeccionWalkForward },
-  { id: 'mc', titulo: '4 · Monte Carlo', Seccion: SeccionMonteCarlo },
-  { id: 'luck', titulo: '5 · Luck test', Seccion: SeccionLuck },
-  { id: 'robustez', titulo: '6 · Robustez', Seccion: SeccionRobustez },
-  { id: 'sobreajuste', titulo: '7–8 · DSR y PBO', Seccion: SeccionSobreajuste },
-  { id: 'antifuturo', titulo: '9 · Anti-futuro', Seccion: SeccionAntiFuturo },
-  { id: 'veredicto', titulo: '10 · Veredicto', Seccion: SeccionVeredicto },
+/** Juez y rechazos: puertas de cero tolerancia, reglas bloqueadas (solo lectura) y motivos de rechazo. */
+function JuezYRechazos({ r }: { r: RespuestaLaboratorio }) {
+  const j = r.resultado;
+  const fallan = j.reglas.filter((x) => x.ok === false);
+  const icono = (ok: boolean | null) => (
+    <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] ${ok ? 'bg-white text-black' : ok === null ? 'border border-borde text-plata-500' : 'border border-plata-500 text-plata-400'}`}>{ok ? '✓' : ok === null ? '·' : '✕'}</span>
+  );
+  return (
+    <div className="grid gap-4 xl:grid-cols-2" data-juez-rechazos>
+      <div>
+        <p className="etiqueta mb-2">Motivos de rechazo de esta prueba</p>
+        {fallan.length ? (
+          <ul className="space-y-1.5">
+            {fallan.map((x) => (
+              <li key={x.nombre} className="flex items-start gap-2 text-xs text-plata-200">
+                <XCircle size={13} className="mt-0.5 shrink-0 text-plata-400" />
+                <span>
+                  <span className="text-white">{x.nombre}</span> · {x.valor} <span className="text-plata-500">(se exige {x.umbral})</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-plata-300">Ninguna regla falla.</p>
+        )}
+        <p className="etiqueta mb-2 mt-4">Puertas de cero tolerancia</p>
+        <ul className="divide-y divide-borde-suave">
+          {j.puertas.map((x) => (
+            <li key={x.nombre} className="flex items-center justify-between gap-3 py-2 text-xs">
+              <span className="flex items-center gap-2 text-plata-200">{icono(x.ok)}{x.nombre}</span>
+              <span className="cifra shrink-0 text-right text-plata-300">{x.valor} <span className="text-plata-500">· {x.umbral}</span></span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <p className="etiqueta mb-2 flex items-center gap-1.5"><Lock size={10} /> Reglas del Juez · solo lectura</p>
+        <ul className="divide-y divide-borde-suave">
+          {j.reglas.map((x) => (
+            <li key={x.nombre} className="flex items-center justify-between gap-3 py-2 text-xs">
+              <span className="flex items-center gap-2 text-plata-300">{icono(x.ok)}{x.nombre}</span>
+              <span className="cifra shrink-0 text-white">{x.umbral}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-[10px] leading-relaxed text-plata-500">Las reglas son código fijo: ningún modelo ni estrategia puede cambiarlas.</p>
+      </div>
+    </div>
+  );
+}
+
+/** Núcleo ML: todavía no hay modelos (se activan cuando el usuario lo diga). Sin números inventados. */
+function NucleoML({ r }: { r: RespuestaLaboratorio }) {
+  const controles = [
+    'Un modelo por mercado (market_id): nunca se mezclan activos',
+    'Dataset del Etiquetador: Features de la barra de decisión + respuesta que mira al futuro solo como etiqueta',
+    'Las columnas de la respuesta nunca son entradas',
+    'Walk-forward purgado con embargo: nunca se baraja',
+    'Detector de fugas: ninguna columna casi igual a la etiqueta',
+    'Después, este mismo Juez valida el modelo fuera de muestra',
+  ];
+  return (
+    <div className="space-y-3" data-nucleo-ml>
+      <p className="text-xs text-plata-200">
+        Todavía no hay modelos de machine learning: se activan cuando tú lo digas. Para {r.resultado.mercado ?? 'este mercado'} ya están listos los controles anti-fuga que deberán pasar:
+      </p>
+      <ul className="space-y-1.5">
+        {controles.map((c) => (
+          <li key={c} className="flex items-start gap-2 text-xs text-plata-300">
+            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white text-[9px] text-black">✓</span>
+            {c}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Cada motor del Juez en su propia pestaña (estilo del Laboratorio): primero el gráfico animado, debajo la sección de siempre. */
+const PESTANAS_JUEZ: {
+  id: string;
+  titulo: string;
+  icono: LucideIcon;
+  descripcion: string;
+  Grafico?: (p: { r: RespuestaLaboratorio }) => JSX.Element | null;
+  Secciones: ((p: { r: RespuestaLaboratorio }) => JSX.Element | null)[];
+}[] = [
+  { id: 'equity', titulo: 'Curva de equity', icono: LineChart, descripcion: 'Entrenamiento (In-Sample) frente a validación del Juez (Out-of-Sample), con su drawdown.', Grafico: CurvaEquityJuez, Secciones: [SeccionBacktest, SeccionMetricas] },
+  { id: 'wfo', titulo: 'Walk-Forward', icono: Layers, descripcion: 'La estrategia se re-elige y se valida ventana a ventana sobre datos que nunca vio.', Grafico: WalkForwardJuez, Secciones: [SeccionWalkForward] },
+  { id: 'mc', titulo: 'Monte Carlo', icono: Dices, descripcion: 'Miles de reordenamientos de las operaciones reales para medir el rango de resultados y el riesgo.', Grafico: MonteCarloJuez, Secciones: [SeccionMonteCarlo] },
+  { id: 'luck', titulo: 'Luck test', icono: Shuffle, descripcion: 'Se compara la estrategia con escenarios al azar para descartar que el resultado sea suerte.', Grafico: LuckTestJuez, Secciones: [SeccionLuck] },
+  { id: 'robustez', titulo: 'Robustez', icono: ShieldCheck, descripcion: 'Costos ×2, parámetros vecinos y estabilidad por regímenes, solo con este mercado.', Secciones: [SeccionRobustez] },
+  { id: 'sobreajuste', titulo: 'DSR y PBO', icono: Gauge, descripcion: 'Deflated Sharpe y probabilidad de sobreajuste: descuentan haber probado muchas variantes.', Secciones: [SeccionSobreajuste] },
+  { id: 'antifuturo', titulo: 'Anti-futuro', icono: History, descripcion: 'Comprueba que la estrategia no usa datos de barras posteriores.', Secciones: [SeccionAntiFuturo] },
+  { id: 'juez', titulo: 'Juez y rechazos', icono: Gavel, descripcion: 'Reglas bloqueadas, puertas de cero tolerancia, motivos de rechazo y veredicto.', Grafico: JuezYRechazos, Secciones: [SeccionVeredicto] },
+  { id: 'ml', titulo: 'Núcleo ML', icono: Cpu, descripcion: 'Modelos de machine learning por mercado (se activan cuando lo digas).', Grafico: NucleoML, Secciones: [] },
 ];
 
-function PestanasJuez({ r }: { r: RespuestaLaboratorio }) {
-  const [activa, setActiva] = useState<string>('backtest');
-  const todas = activa === 'todas';
+function PestanasJuez({ r, nombre }: { r: RespuestaLaboratorio; nombre: string }) {
+  const [activa, setActiva] = useState<string>('equity');
+  const p = PESTANAS_JUEZ.find((x) => x.id === activa) ?? PESTANAS_JUEZ[0];
+  const { titulo, icono, descripcion, Grafico, Secciones } = p;
   return (
     <div className="space-y-4">
-      <div className="flex gap-1 overflow-x-auto rounded-xl border border-borde p-1" role="tablist" aria-label="Motores del Juez">
-        {[...PESTANAS_JUEZ.map((x) => [x.id, x.titulo] as const), ['todas', 'Ver todos'] as const].map(([id, titulo]) => (
-          <button key={id} role="tab" aria-selected={activa === id} data-pestana-juez={id} onClick={() => setActiva(id)} className={`shrink-0 rounded-lg px-3 py-2 text-xs ${activa === id ? 'bg-white text-black' : 'text-plata-300 hover:text-white'}`}>
-            {titulo}
-          </button>
-        ))}
+      {/* Cada prueba en su propia pestaña */}
+      <div className="sticky top-16 z-20 -mx-1 overflow-x-auto bg-black/80 px-1 py-2 backdrop-blur-xl">
+        <div className="flex min-w-max gap-1 rounded-xl border border-borde p-1" role="tablist" aria-label="Motores del Juez">
+          {PESTANAS_JUEZ.map((x) => {
+            const Icono = x.icono;
+            const sel = x.id === activa;
+            return (
+              <button key={x.id} role="tab" aria-selected={sel} data-pestana-juez={x.id} onClick={() => setActiva(x.id)} className={`relative flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs transition-colors ${sel ? 'text-black' : 'text-plata-300 hover:text-white'}`}>
+                {sel && <motion.span layoutId="pestana-juez" className="absolute inset-0 rounded-lg bg-white" transition={{ type: 'spring', stiffness: 400, damping: 34 }} />}
+                <Icono size={13} className="relative" />
+                <span className="relative">{x.titulo}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
-      {PESTANAS_JUEZ.filter((x) => todas || x.id === activa).map(({ id, Seccion }) => (
-        <Seccion key={id} r={r} />
-      ))}
+
+      <motion.div key={activa} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+        {Grafico ? (
+          <Panel titulo={nombre ? `${titulo} · ${nombre}` : titulo} icono={icono} accion={<span className="hidden text-[10px] text-plata-500 md:inline">{descripcion}</span>}>
+            <p className="mb-4 text-[11px] text-plata-500 md:hidden">{descripcion}</p>
+            <Grafico r={r} />
+            {Secciones.length > 0 && (
+              <details className="mt-4 border-t border-borde-suave pt-3" data-detalle-motor>
+                <summary className="cursor-pointer text-[11px] text-plata-300 hover:text-white">Detalle completo · explicación simple y cómo se calcula</summary>
+                <div className="mt-3 space-y-4">
+                  {Secciones.map((Seccion, i) => (
+                    <Seccion key={i} r={r} />
+                  ))}
+                </div>
+              </details>
+            )}
+          </Panel>
+        ) : (
+          <div className="space-y-4">
+            {Secciones.map((Seccion, i) => (
+              <Seccion key={i} r={r} />
+            ))}
+          </div>
+        )}
+      </motion.div>
     </div>
   );
 }

@@ -15,7 +15,6 @@ import { DEFINICIONES_FEATURES } from '@/motores/nucleo/features';
 import { num } from '@/lib/format';
 import { guardarEstrategias, leerEstrategias, PLANTILLAS, type EstrategiaGuardada } from './plantillas';
 import { mercadoId } from '@/motores/mercado/mercadoId';
-import ResultadoJuezVista from './ResultadoJuez';
 import MapaEdge from './MapaEdge';
 import BibliotecaPapers, { AccionesPaper, VisorPaper } from './BibliotecaPapers';
 import { crearPaper, guardarPaper, leerPapers, type Paper } from '@/motores/papers/paper';
@@ -37,7 +36,7 @@ const MOTORES_JUEZ = [
 ];
 
 /** Laboratorio real: estrategias en Python sobre tus Features guardadas, juzgadas por el Juez. */
-export default function EstrategiasPython() {
+export default function EstrategiasPython({ alTerminar, alVerResultados }: { alTerminar?: (paperId: string) => void; alVerResultados?: (paperId?: string) => void } = {}) {
   const [estrategias, setEstrategias] = useState<EstrategiaGuardada[]>(leerEstrategias);
   const [selId, setSelId] = useState(estrategias[0].id);
   const sel = estrategias.find((x) => x.id === selId) ?? estrategias[0];
@@ -119,6 +118,7 @@ export default function EstrategiasPython() {
       // El veredicto se guarda en SU mercado: probar en otro mercado no pisa lo que se sabe de este.
       const juicio = { mercado, proveedor: f.proveedor, simbolo: f.simbolo, veredicto: r.resultado.veredicto, combo, fecha: Date.now(), paperId: paper.id };
       cambiar({ ensayos: sel.ensayos + r.combos.length, ultimoVeredicto: r.resultado.veredicto, juzgada: { proveedor: f.proveedor, simbolo: f.simbolo, combo }, porMercado: { ...sel.porMercado, [mercado]: juicio } });
+      alTerminar?.(paper.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -133,6 +133,10 @@ export default function EstrategiasPython() {
     return leerPapers().filter((x) => x.estrategia === sel.nombre).sort((a, b) => b.creado - a.creado)[0] ?? null;
   }, [sel.nombre, versionPapers]);
   const mostrado = resultado ?? (corriendo ? null : ultimo?.respuesta ?? null);
+  const numPapers = useMemo(() => {
+    void versionPapers;
+    return leerPapers().length;
+  }, [versionPapers]);
   const fuenteSel = fuentes.find((x) => clave(x) === datos);
 
   return (
@@ -341,7 +345,18 @@ export default function EstrategiasPython() {
           <AccionesPaper p={ultimo} alVer={setViendo} />
         </div>
       )}
-      {mostrado && <ResultadoJuezVista r={mostrado} />}
+      {mostrado && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-borde p-4" data-resumen-prueba={mostrado.resultado.veredicto}>
+          <div className="min-w-0">
+            <p className="etiqueta">Veredicto del Juez</p>
+            <p className="mt-1 text-sm text-white">{mostrado.resultado.veredicto}{mostrado.resultado.score && <span className="cifra ml-2 text-plata-300">· {num(mostrado.resultado.score.total, 0)}/100</span>}</p>
+            <p className="text-[11px] text-plata-400">{mostrado.resultado.resumen}</p>
+          </div>
+          <button onClick={() => alVerResultados?.(resultado ? paper?.id : ultimo?.id)} className="rounded-lg bg-white px-3.5 py-2 text-xs font-medium text-black" data-ver-resultados>
+            Ver resultados completos ({numPapers} {numPapers === 1 ? 'prueba' : 'pruebas'})
+          </button>
+        </div>
+      )}
       {!mostrado && !corriendo && (
         <Panel titulo="Lo que hará el Juez" icono={Gavel} cuerpo="p-4" data-sin-prueba>
           <p className="mb-2 text-xs text-plata-300">Esta estrategia todavía no se ha probado. Al pulsar «Probar con el Juez» pasa por estos 10 motores, y aquí aparece cada uno con sus gráficos:</p>
