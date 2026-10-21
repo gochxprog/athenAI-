@@ -2,7 +2,7 @@
 
 Plataforma de trading cuantitativo con datos de mercado reales (Binance USD-M Futures por defecto; Rithmic por puente). Solo Paper Trading: el dinero real está bloqueado.
 
-**Lista de motores y su estado:** [`docs/MOTORES.md`](docs/MOTORES.md) · **Inventario:** [`docs/INVENTARIO.md`](docs/INVENTARIO.md) · **Hoja de ruta:** [`docs/HOJA_DE_RUTA.md`](docs/HOJA_DE_RUTA.md) · **Un mercado, un juicio:** [`docs/ARQUITECTURA_MERCADOS.md`](docs/ARQUITECTURA_MERCADOS.md)
+**Lista de motores y su estado:** [`docs/MOTORES.md`](docs/MOTORES.md) · **Inventario:** [`docs/INVENTARIO.md`](docs/INVENTARIO.md) · **Hoja de ruta:** [`docs/HOJA_DE_RUTA.md`](docs/HOJA_DE_RUTA.md) · **Un mercado, un juicio:** [`docs/ARQUITECTURA_MERCADOS.md`](docs/ARQUITECTURA_MERCADOS.md) · **Seguridad del VPS:** [`docs/SEGURIDAD.md`](docs/SEGURIDAD.md)
 
 React 18 + Vite + TypeScript + Tailwind CSS · Three.js / React Three Fiber · Framer Motion · Python en el navegador (Pyodide) para las estrategias.
 

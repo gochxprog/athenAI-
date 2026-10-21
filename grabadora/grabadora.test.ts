@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AlmacenDisco, leerLineas } from './almacenDisco';
-import { crearServidor, LIMITE_FILAS } from './servidor';
+import { BLOQUEO_MS, COOKIE, crearServidor, LIMITE_FILAS, MAX_FALLOS } from './servidor';
 import { leerOCrearClave } from './grabadora';
 import { parametrosPorDefecto } from '../src/motores/nucleo/parametros';
 import type { FilaFeatures } from '../src/motores/nucleo/features';
@@ -133,6 +133,93 @@ describe('API de la grabadora', () => {
       expect(pre.status).toBe(204);
       expect(pre.headers.get('access-control-allow-headers')).toContain('Authorization');
       expect(LIMITE_FILAS).toBe(5_000);
+    } finally {
+      srv.close();
+    }
+  });
+});
+
+describe('Entrada con contraseña a la plataforma', () => {
+  async function montar() {
+    const a = new AlmacenDisco(temporal());
+    a.guardar('BTCUSDT', 1, [fila(1, DIA + 1_000)]);
+    a.vaciar();
+    const web = temporal();
+    fs.writeFileSync(path.join(web, 'index.html'), '<html>PLATAFORMA-SECRETA</html>');
+    fs.writeFileSync(path.join(web, 'app.js'), 'console.log("codigo")');
+    let t = DIA;
+    const srv = crearServidor({ almacen: a, clave: 'clave-larga-de-prueba', estado: () => ({ inicio: 1, version: 't', simbolos: [] }), web, reloj: () => t });
+    await new Promise<void>((ok) => srv.listen(0, '127.0.0.1', ok));
+    const base = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
+    const entrar = (clave: string, extra: Record<string, string> = {}) =>
+      fetch(`${base}/entrar`, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...extra }, body: new URLSearchParams({ clave }).toString() });
+    return { srv, base, entrar, avanzar: (ms: number) => (t += ms) };
+  }
+
+  it('sin sesión no se ve nada de la plataforma ni los datos; con la clave entra y la API responde sin Bearer', async () => {
+    const { srv, base, entrar } = await montar();
+    try {
+      for (const ruta of ['/', '/app.js', '/orderflow']) {
+        const r = await (await fetch(`${base}${ruta}`)).text();
+        expect(r).not.toContain('PLATAFORMA-SECRETA');
+        expect(r).not.toContain('codigo');
+        expect(r).toContain('Escribe la clave de tu grabadora');
+      }
+      expect((await fetch(`${base}/api/estado`)).status).toBe(401);
+      expect(await (await fetch(`${base}/api/salud`)).json()).toEqual({ ok: true, grabadora: 'athenAI', sesion: false });
+      const r = await entrar('clave-larga-de-prueba');
+      expect(r.status).toBe(303);
+      expect(r.headers.get('location')).toBe('/');
+      // Vuelve a la página pedida; nada de redirigir fuera de la plataforma.
+      expect((await fetch(`${base}/entrar`, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'clave=clave-larga-de-prueba&volver=%23%2Forderflow' })).headers.get('location')).toBe('/#/orderflow');
+      expect((await fetch(`${base}/entrar`, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'clave=clave-larga-de-prueba&volver=%2F%2Fmalo.com' })).headers.get('location')).toBe('/');
+      const galleta = r.headers.get('set-cookie') ?? '';
+      expect(galleta).toMatch(new RegExp(`^${COOKIE}=[0-9a-f]{64}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000$`));
+      const sesion = { headers: { Cookie: galleta.split(';')[0] } };
+      expect(await (await fetch(`${base}/`, sesion)).text()).toContain('PLATAFORMA-SECRETA');
+      expect((await fetch(`${base}/api/estado`, sesion)).status).toBe(200);
+      expect(await (await fetch(`${base}/api/salud`, sesion)).json()).toMatchObject({ sesion: true });
+      // Salir cierra la sesión: la misma cookie ya no sirve.
+      expect((await fetch(`${base}/salir`, { ...sesion, redirect: 'manual' })).status).toBe(303);
+      expect(await (await fetch(`${base}/`, sesion)).text()).not.toContain('PLATAFORMA-SECRETA');
+      expect((await fetch(`${base}/api/estado`, sesion)).status).toBe(401);
+      // Una cookie inventada no sirve.
+      expect((await fetch(`${base}/api/estado`, { headers: { Cookie: `${COOKIE}=${'a'.repeat(64)}` } })).status).toBe(401);
+    } finally {
+      srv.close();
+    }
+  });
+
+  it('detrás de HTTPS (Caddy) la cookie lleva Secure; la sesión caduca a los 30 días', async () => {
+    const { srv, base, entrar, avanzar } = await montar();
+    try {
+      const r = await entrar('clave-larga-de-prueba', { 'X-Forwarded-Proto': 'https' });
+      const galleta = r.headers.get('set-cookie') ?? '';
+      expect(galleta).toContain('; Secure');
+      const sesion = { headers: { Cookie: galleta.split(';')[0] } };
+      avanzar(29 * 86_400_000);
+      expect((await fetch(`${base}/api/estado`, sesion)).status).toBe(200);
+      avanzar(2 * 86_400_000);
+      expect((await fetch(`${base}/api/estado`, sesion)).status).toBe(401);
+    } finally {
+      srv.close();
+    }
+  });
+
+  it('fuerza bruta: tras 5 claves malas desde una IP queda bloqueada 15 min (ni la buena entra); otra IP no', async () => {
+    const { srv, entrar, avanzar } = await montar();
+    try {
+      for (let i = 0; i < MAX_FALLOS - 1; i += 1) expect((await entrar('mala')).status).toBe(401);
+      const quinto = await entrar('mala');
+      expect(quinto.status).toBe(401);
+      expect(await quinto.text()).toContain('Demasiados intentos');
+      expect((await entrar('clave-larga-de-prueba')).status).toBe(429);
+      // Detrás de Caddy, otra IP real (X-Forwarded-For) no está bloqueada.
+      expect((await entrar('clave-larga-de-prueba', { 'X-Forwarded-For': '10.0.0.9' })).status).toBe(303);
+      avanzar(BLOQUEO_MS + 1);
+      expect((await entrar('clave-larga-de-prueba')).status).toBe(303);
+      expect((await entrar('mala')).status).toBe(401); // cuenta otra vez desde cero
+      expect((await entrar('clave-larga-de-prueba')).status).toBe(303);
     } finally {
       srv.close();
     }

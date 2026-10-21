@@ -5,10 +5,14 @@
 //   GET /api/filas?mercado=binance:BTCUSDT&desde=<ms>&limite=<n>  → filas con cierre > desde (máx. 5.000)
 //   (también acepta `simbolo=BTCUSDT`, que equivale a binance:BTCUSDT)
 // La clave va en la cabecera «Authorization: Bearer <clave>». CORS abierto: la clave es la que protege los datos.
+// La PLATAFORMA (web) pide contraseña antes de mostrar nada: /entrar (la clave de la grabadora) crea una sesión
+// con cookie HttpOnly + SameSite=Strict (+ Secure detrás de HTTPS), válida 30 días; /salir la cierra. Con
+// sesión, la API también responde sin Bearer (la plataforma servida desde aquí no necesita escribir la clave).
+// Fuerza bruta: 5 claves malas desde una IP → 15 min bloqueada.
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { timingSafeEqual } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { AlmacenDisco } from './almacenDisco';
 import { esMercadoId, partesMercado } from '../src/motores/mercado/mercadoId';
 
@@ -28,9 +32,25 @@ export interface OpcionesServidor {
   estado: () => { inicio: number; version: string; simbolos: EstadoSimbolo[] };
   /** Carpeta con la plataforma compilada (dist/) para servirla en «/». Opcional. */
   web?: string | null;
+  /** Reloj (pruebas). */
+  reloj?: () => number;
 }
 
 export const LIMITE_FILAS = 5_000;
+export const COOKIE = 'athenai_sesion';
+export const DURACION_SESION_MS = 30 * 86_400_000;
+export const MAX_FALLOS = 5;
+export const BLOQUEO_MS = 15 * 60_000;
+
+/** Página de entrada (sin recursos externos: no revela nada de la plataforma). */
+function paginaEntrar(mensaje = '', volver = ''): string {
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AthenAI · Entrar</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#000;color:#d9dbdf;font:14px system-ui,sans-serif}form{width:min(320px,88vw);border:1px solid #2a2a2e;border-radius:14px;padding:24px;background:#0b0b0d}h1{margin:0 0 4px;font-size:18px;color:#fff;font-weight:500}p{margin:0 0 16px;color:#8e929a;font-size:12px}input{box-sizing:border-box;width:100%;padding:10px;border-radius:8px;border:1px solid #2a2a2e;background:#000;color:#fff;font:13px ui-monospace,monospace}button{margin-top:12px;width:100%;padding:10px;border:0;border-radius:8px;background:#fff;color:#000;font-weight:600}.m{margin-top:12px;color:#fff;font-size:12px}</style></head>
+<body><form method="post" action="/entrar"><h1>AthenAI</h1><p>Escribe la clave de tu grabadora para entrar.</p><input type="password" name="clave" autocomplete="current-password" autofocus required aria-label="Clave"><input type="hidden" name="volver" id="volver" value="${volver}"><button type="submit">Entrar</button>${mensaje ? `<div class="m">${mensaje}</div>` : ''}</form><script>if(location.hash)document.getElementById('volver').value=location.hash</script></body></html>`;
+}
+
+const leerCookies = (h: string | undefined) => Object.fromEntries((h ?? '').split(';').map((x) => x.trim().split('=')).filter((x) => x.length === 2).map(([k, v]) => [k, decodeURIComponent(v)]));
+
 
 const TIPOS: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.wasm': 'application/wasm', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.zip': 'application/zip', '.txt': 'text/plain; charset=utf-8' };
 
@@ -42,8 +62,25 @@ function claveCorrecta(recibida: string | undefined, clave: string): boolean {
 }
 
 export function crearServidor(o: OpcionesServidor): http.Server {
+  /** Sesiones abiertas: token al azar → caducidad (en memoria: reiniciar la grabadora pide entrar otra vez). */
+  const sesiones = new Map<string, number>();
+  const fallos = new Map<string, { n: number; hasta: number }>();
+  const ahora = o.reloj ?? Date.now;
   return http.createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
+    // Detrás de Caddy (127.0.0.1) la IP real viene en X-Forwarded-For; de nadie más se cree esa cabecera.
+    const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
+    const ip = (local && String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim()) || req.socket.remoteAddress || '?';
+    const https = String(req.headers['x-forwarded-proto'] ?? '') === 'https';
+    const token = leerCookies(req.headers.cookie)[COOKIE];
+    const exp = token ? sesiones.get(token) : undefined;
+    const conSesion = exp !== undefined && exp > ahora();
+    if (token && exp !== undefined && !conSesion) sesiones.delete(token);
+    const cookie = (valor: string, maxAge: number) => `${COOKIE}=${valor}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${https ? '; Secure' : ''}`;
+    const html = (codigo: number, cuerpo: string, extra: Record<string, string> = {}) => {
+      res.writeHead(codigo, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', ...extra });
+      res.end(cuerpo);
+    };
     const json = (codigo: number, cuerpo: unknown) => {
       res.writeHead(codigo, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify(cuerpo));
@@ -53,11 +90,43 @@ export function crearServidor(o: OpcionesServidor): http.Server {
       res.end();
       return;
     }
+    if (url.pathname === '/entrar' && req.method === 'POST') {
+      const f = fallos.get(ip);
+      if (f && f.hasta > ahora()) return html(429, paginaEntrar(`Demasiados intentos. Espera ${Math.ceil((f.hasta - ahora()) / 60_000)} min.`));
+      let cuerpo = '';
+      req.on('data', (c: Buffer) => {
+        cuerpo += c.toString();
+        if (cuerpo.length > 4_096) req.destroy();
+      });
+      req.on('end', () => {
+        const datos = new URLSearchParams(cuerpo);
+        const clave = datos.get('clave') ?? '';
+        // Vuelve a la página que se pidió (solo rutas internas de la plataforma: «#/orderflow»).
+        const volver = /^#\/[a-z0-9-]{0,40}$/.test(datos.get('volver') ?? '') ? datos.get('volver') : '';
+        if (!claveCorrecta(clave.trim(), o.clave)) {
+          // Fallos seguidos desde esta IP (un bloqueo ya vencido empieza de cero).
+          const n = (f && f.hasta === 0 ? f.n : 0) + 1;
+          if (fallos.size > 10_000) fallos.clear();
+          fallos.set(ip, n >= MAX_FALLOS ? { n: 0, hasta: ahora() + BLOQUEO_MS } : { n, hasta: 0 });
+          return html(401, paginaEntrar(n >= MAX_FALLOS ? 'Demasiados intentos. Espera 15 min.' : 'Clave incorrecta.', volver ?? ''));
+        }
+        fallos.delete(ip);
+        const nuevo = randomBytes(32).toString('hex');
+        sesiones.set(nuevo, ahora() + DURACION_SESION_MS);
+        html(303, '', { Location: `/${volver}`, 'Set-Cookie': cookie(nuevo, DURACION_SESION_MS / 1000) });
+      });
+      return;
+    }
+    if (url.pathname === '/salir') {
+      if (token) sesiones.delete(token);
+      return html(303, '', { Location: '/entrar', 'Set-Cookie': cookie('', 0) });
+    }
+    if (url.pathname === '/entrar') return conSesion ? html(303, '', { Location: '/' }) : html(200, paginaEntrar());
     if (req.method !== 'GET') return json(405, { error: 'Solo GET' });
-    if (url.pathname === '/api/salud') return json(200, { ok: true, grabadora: 'athenAI' });
+    if (url.pathname === '/api/salud') return json(200, { ok: true, grabadora: 'athenAI', sesion: conSesion });
     if (url.pathname.startsWith('/api/')) {
-      const token = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
-      if (!claveCorrecta(token, o.clave)) return json(401, { error: 'Clave incorrecta' });
+      const bearer = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+      if (!conSesion && !claveCorrecta(bearer, o.clave)) return json(401, { error: 'Clave incorrecta' });
       try {
         if (url.pathname === '/api/estado') {
           const e = o.estado();
@@ -78,7 +147,8 @@ export function crearServidor(o: OpcionesServidor): http.Server {
       }
       return json(404, { error: 'No existe' });
     }
-    // La plataforma compilada (si se instaló junto a la grabadora).
+    // La plataforma compilada (si se instaló junto a la grabadora): solo con sesión.
+    if (o.web && !conSesion) return html(200, paginaEntrar());
     if (o.web) {
       const rel = path.normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, '');
       let archivo = path.resolve(o.web, `.${rel === '/' || rel === '\\' ? '/index.html' : rel}`);

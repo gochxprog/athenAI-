@@ -11,6 +11,10 @@ PUERTO="${2:-8080}"
 APP=/opt/athenai-grabadora
 DATOS=/var/lib/athenai-grabadora
 AQUI="$(cd "$(dirname "$0")" && pwd)"
+# Si ya se aseguró (asegurar.sh), la grabadora sigue escuchando solo en 127.0.0.1 detrás de Caddy + Tailscale.
+SEGURO=/etc/athenai/seguro.conf
+NOMBRE_SEGURO=""
+if [ -f "$SEGURO" ]; then NOMBRE_SEGURO="$(sed -n 's/^NOMBRE=//p' "$SEGURO")"; fi
 
 if [ "$(id -u)" -ne 0 ]; then echo "Ejecútalo con sudo: sudo bash $0"; exit 1; fi
 echo "== athenAI · instalando la grabadora 24/7 (activos: $SIMBOLOS · puerto: $PUERTO)"
@@ -55,6 +59,7 @@ Wants=network-online.target
 User=athenai
 Environment=SIMBOLOS=$SIMBOLOS
 Environment=PUERTO=$PUERTO
+$( [ -n "$NOMBRE_SEGURO" ] && echo "Environment=HOST=127.0.0.1" )
 Environment=DATOS=$DATOS
 Environment=WEB=$APP/web
 ExecStart=$(command -v node) $APP/grabadora.mjs
@@ -69,8 +74,8 @@ systemctl daemon-reload
 systemctl enable athenai-grabadora >/dev/null
 systemctl restart athenai-grabadora
 
-# 5) Cortafuegos: abre el puerto si ufw está activo.
-if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then ufw allow "$PUERTO"/tcp >/dev/null; fi
+# 5) Cortafuegos: abre el puerto si ufw está activo (nunca si está asegurada: entonces solo se entra por Tailscale).
+if [ -z "$NOMBRE_SEGURO" ] && command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then ufw allow "$PUERTO"/tcp >/dev/null; fi
 
 # 6) Resultado.
 for _ in $(seq 1 20); do [ -s "$DATOS/clave.txt" ] && break; sleep 1; done
@@ -82,9 +87,16 @@ else
   echo "!! La grabadora no arrancó. Mira el registro con: journalctl -u athenai-grabadora -n 50"
 fi
 echo
+if [ -n "$NOMBRE_SEGURO" ]; then
+  echo "   Dirección:  https://$NOMBRE_SEGURO.duckdns.org   (privada: con Tailscale encendido)"
+  echo "   Clave:      $(cat "$DATOS/clave.txt" 2>/dev/null || echo '(aún no creada)')"
+  echo "   Ver el registro:  journalctl -u athenai-grabadora -f"
+  exit 0
+fi
 echo "   Dirección:  http://$IP:$PUERTO"
 echo "   Clave:      $(cat "$DATOS/clave.txt" 2>/dev/null || echo '(aún no creada)')"
 echo
-echo "   En la plataforma: Datos → Grabadora 24/7 → pega la dirección y la clave → Conectar."
+echo "   Ábrela en el navegador y entra con la clave."
+echo "   Para dejarla PRIVADA y con candado: sudo bash asegurar.sh <nombre-duckdns> <token-duckdns>"
 echo "   Ver el registro:  journalctl -u athenai-grabadora -f"
 echo "   Si tu proveedor tiene un cortafuegos en su panel, abre ahí también el puerto $PUERTO (TCP)."

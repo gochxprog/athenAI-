@@ -17,7 +17,17 @@ INSTALAR (Ubuntu 22.04 o 24.04)
       Datos → Grabadora 24/7 → pega la dirección y la clave → Conectar.
 
 TAMBIÉN PUEDES ABRIR LA PLATAFORMA DESDE EL VPS
-      http://IP-DE-TU-VPS:8080   (si el zip trae la carpeta web/)
+      http://IP-DE-TU-VPS:8080   (si el zip trae la carpeta web/). Pide la clave para entrar.
+
+DEJARLA PRIVADA Y CON CANDADO (recomendado)
+1. En duckdns.org entra con Google, crea un nombre (por ejemplo «atenai») y copia el «token».
+2. En tailscale.com crea tu cuenta e instala la app Tailscale en tu celular y en tu PC.
+3. En el VPS:
+      sudo bash athenai-grabadora/asegurar.sh TU-NOMBRE TU-TOKEN
+   Aparece un enlace: ábrelo y entra con tu cuenta de Tailscale.
+4. Con Tailscale encendido abre  https://TU-NOMBRE.duckdns.org  y entra con tu clave.
+   Desde internet (sin Tailscale) ya no se ve nada. SSH sigue funcionando igual.
+   Para volver a como estaba:  sudo bash athenai-grabadora/asegurar.sh --deshacer
 
 ÚTIL
 - Ver qué hace:        journalctl -u athenai-grabadora -f
@@ -29,4 +39,4 @@ TAMBIÉN PUEDES ABRIR LA PLATAFORMA DESDE EL VPS
 
 IMPORTANTE
 - Binance bloquea los VPS de Estados Unidos: el instalador avisa si no llega a Binance.
-- Si tu proveedor tiene cortafuegos en su panel web, abre el puerto 8080 (TCP).
+- Si tu proveedor tiene cortafuegos en su panel web, abre el puerto 8080 (TCP) (no hace falta si la aseguraste).

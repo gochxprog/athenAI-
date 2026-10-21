@@ -3,7 +3,8 @@
 // en disco. La plataforma descarga lo grabado (Datos → Grabadora 24/7) aunque el computador haya estado apagado.
 //
 // Variables (todas opcionales):
-//   SIMBOLOS=BTCUSDT,ETHUSDT   PUERTO=8080   DATOS=/var/lib/athenai-grabadora   WEB=<carpeta de la plataforma>
+//   SIMBOLOS=BTCUSDT,ETHUSDT   PUERTO=8080   HOST=127.0.0.1 (solo detrás de Caddy, ver asegurar.sh; por defecto todas)
+//   DATOS=/var/lib/athenai-grabadora   WEB=<carpeta de la plataforma>
 //   BINANCE_REST / BINANCE_WS  (solo para pruebas con un servidor propio)
 import fs from 'node:fs';
 import path from 'node:path';
@@ -30,6 +31,8 @@ interface Activo {
 export interface OpcionesGrabadora {
   simbolos: string[];
   puerto: number;
+  /** Interfaz en la que escucha (por defecto todas). */
+  host?: string;
   datos: string;
   web: string | null;
   rest?: string;
@@ -129,7 +132,9 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
     })),
   });
   const servidor = crearServidor({ almacen, clave, estado, web: o.web });
-  servidor.listen(o.puerto, () => log(`Grabadora ${VERSION} escuchando en el puerto ${o.puerto} · símbolos: ${o.simbolos.join(', ')} · datos en ${o.datos}`));
+  const alEscuchar = () => log(`Grabadora ${VERSION} escuchando en ${o.host ?? 'todas las interfaces'}, puerto ${o.puerto} · símbolos: ${o.simbolos.join(', ')} · datos en ${o.datos}`);
+  if (o.host) servidor.listen(o.puerto, o.host, alEscuchar);
+  else servidor.listen(o.puerto, alEscuchar);
   void fuente.iniciar();
 
   const detener = () => {
@@ -148,6 +153,7 @@ if (process.argv[1] && /grabadora\.(m?js|ts)$/.test(process.argv[1])) {
   const g = iniciarGrabadora({
     simbolos,
     puerto: Number(process.env.PUERTO ?? 8080),
+    host: process.env.HOST || undefined,
     datos: process.env.DATOS ?? path.resolve('datos'),
     web: process.env.WEB && fs.existsSync(process.env.WEB) ? process.env.WEB : null,
     rest: process.env.BINANCE_REST || undefined,

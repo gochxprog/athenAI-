@@ -7,6 +7,8 @@ import type { ParametrosSimbolo } from '../nucleo/parametros';
 export interface ConfigGrabadora {
   url: string;
   clave: string;
+  /** Plataforma servida por la propia grabadora con sesión abierta (/entrar): pide con la cookie, sin clave. */
+  sesion?: boolean;
 }
 
 export interface EstadoRemoto {
@@ -64,7 +66,7 @@ export class ClienteGrabadora {
   private async pedir<T>(c: ConfigGrabadora, ruta: string): Promise<T> {
     let r: Response;
     try {
-      r = await this.fetchImpl(`${limpiarUrl(c.url)}${ruta}`, { headers: { Authorization: `Bearer ${c.clave.trim()}` } });
+      r = await this.fetchImpl(`${limpiarUrl(c.url)}${ruta}`, c.sesion ? { credentials: 'same-origin' } : { headers: { Authorization: `Bearer ${c.clave.trim()}` } });
     } catch {
       throw new Error(`No se pudo conectar con ${limpiarUrl(c.url)}. Revisa la dirección, que la grabadora esté encendida y que el puerto esté abierto.`);
     }
@@ -93,11 +95,17 @@ export class ClienteGrabadora {
    * lo anota para pedir la clave una sola vez. La clave nunca viaja sola: la escribe el dueño.
    */
   async detectarMismoOrigen(origen: string | null = typeof location === 'undefined' ? null : location.origin): Promise<boolean> {
-    if (this.estado.config || !origen || !/^https?:/.test(origen)) return false;
+    if (!origen || !/^https?:/.test(origen)) return false;
     try {
-      const r = await this.fetchImpl(`${origen}/api/salud`);
-      const j = r.ok ? ((await r.json()) as { grabadora?: string }) : null;
-      if (j?.grabadora !== 'athenAI' || this.estado.config) return false;
+      const r = await this.fetchImpl(`${origen}/api/salud`, { credentials: 'same-origin' });
+      const j = r.ok ? ((await r.json()) as { grabadora?: string; sesion?: boolean }) : null;
+      if (j?.grabadora !== 'athenAI') return false;
+      // Ya entraste con tu contraseña (/entrar): se conecta sola con la sesión, sin escribir la clave otra vez.
+      if (j.sesion) {
+        this.cambiar({ config: { url: limpiarUrl(origen), clave: '', sesion: true }, detectada: null, error: null });
+        return true;
+      }
+      if (this.estado.config) return false;
       this.cambiar({ detectada: limpiarUrl(origen) });
       return true;
     } catch {
@@ -152,7 +160,6 @@ let iniciado = false;
 export function iniciarGrabadora(): void {
   if (iniciado) return;
   iniciado = true;
-  void grabadora.sincronizar();
-  void grabadora.detectarMismoOrigen();
+  void grabadora.detectarMismoOrigen().then(() => grabadora.sincronizar());
   setInterval(() => void grabadora.sincronizar(), CADA_MS);
 }

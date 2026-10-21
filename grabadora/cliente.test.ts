@@ -57,3 +57,43 @@ describe('Sincronización plataforma ← grabadora del VPS', () => {
     }
   });
 });
+
+describe('Plataforma servida por la grabadora con sesión (misma dirección)', () => {
+  it('tras entrar con la contraseña se conecta y descarga sola, sin escribir la clave otra vez', async () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sesion-'));
+    const web = fs.mkdtempSync(path.join(os.tmpdir(), 'web-'));
+    fs.writeFileSync(path.join(web, 'index.html'), '<html></html>');
+    const disco = new AlmacenDisco(d);
+    disco.nuevaSesion('ETHUSDT', parametrosPorDefecto('ETHUSDT', 0.01), DIA, 7);
+    disco.guardar('ETHUSDT', 7, [fila(1), fila(2), fila(3)]);
+    disco.vaciar();
+    const srv = crearServidor({ almacen: disco, clave: 'kk', estado: () => ({ inicio: 1, version: 't', simbolos: [] }), web });
+    await new Promise<void>((ok) => srv.listen(0, '127.0.0.1', ok));
+    const base = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
+    try {
+      const r = await fetch(`${base}/entrar`, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'clave=kk' });
+      const galleta = (r.headers.get('set-cookie') ?? '').split(';')[0];
+      // Como el navegador: en la misma dirección manda la cookie; nunca una cabecera Authorization.
+      const cabeceras: (string | null)[] = [];
+      const navegador = (async (u: string, init?: RequestInit) => {
+        cabeceras.push(new Headers(init?.headers).get('Authorization'));
+        return fetch(u, { ...init, headers: { ...(init?.headers as Record<string, string>), Cookie: galleta } });
+      }) as typeof fetch;
+      const c = new ClienteGrabadora(navegador, { getItem: () => null, setItem: () => {}, removeItem: () => {} });
+      expect(await c.detectarMismoOrigen(base)).toBe(true);
+      expect(c.estado.config).toEqual({ url: base, clave: '', sesion: true });
+      expect(c.estado.detectada).toBeNull();
+      expect(await c.sincronizar()).toEqual({ ETHUSDT: 3 });
+      expect(cabeceras.every((x) => x === null)).toBe(true);
+      // Sin sesión (otro navegador): solo se detecta y se pedirá la clave.
+      const otro = new ClienteGrabadora(undefined, { getItem: () => null, setItem: () => {}, removeItem: () => {} });
+      expect(await otro.detectarMismoOrigen(base)).toBe(true);
+      expect(otro.estado.config).toBeNull();
+      expect(otro.estado.detectada).toBe(base);
+    } finally {
+      srv.close();
+      fs.rmSync(d, { recursive: true, force: true });
+      fs.rmSync(web, { recursive: true, force: true });
+    }
+  });
+});
