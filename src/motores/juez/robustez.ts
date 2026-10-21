@@ -8,12 +8,11 @@
 //    Rentabilidad aceptable = retorno > 0.
 //    Pasa si ≥ 70 % de los vecinos son aceptables. Caída = (Sharpe θ* − Sharpe vecino) / |Sharpe θ*|;
 //    si la caída media supera el 50 % → alerta de «isla de optimización».
-// C. Otro mercado: θ* congelado, sin reoptimizar, en otro activo. No debe destruir capital:
-//    pasa si retorno > −10 % y drawdown ≤ 2 × el drawdown fuera de muestra del original (mínimo 10 %).
-// D. Estabilidad por regímenes: el tramo fuera de muestra se corta en 10 sub-periodos estancos; cada uno se
+// C. Estabilidad por regímenes: el tramo fuera de muestra se corta en 10 sub-periodos estancos; cada uno se
 //    clasifica por dirección (sube / baja) y volatilidad (alta / baja frente a la mediana). Pasa si gana en
 //    ≥ 60 % de los sub-periodos y ningún sub-periodo aporta ≥ 90 % de las ganancias.
-// Veredicto del módulo: se cuentan A, B y D (las críticas). 0 fallos → aprobado; 1 → alerta; ≥ 2 → rechazado.
+// Todo con los datos del MISMO mercado: un edge nunca se prueba en otro activo (docs/ARQUITECTURA_MERCADOS.md).
+// Veredicto del módulo: se cuentan A, B y C. 0 fallos → aprobado; 1 → alerta; ≥ 2 → rechazado.
 import { backtest, metricas, type Costos, type Metricas, type OpcionesBacktest, type Operacion } from './backtest';
 import type { Combo } from './juez';
 
@@ -48,7 +47,6 @@ export interface ResultadoRobustez {
   costos2x: { retorno: number; factorBeneficio: number | null; ok: boolean };
   /** `base` = variante de la que salen los vecinos (elegida antes del primer OOS). */
   vecinos: { base: number; lista: Vecino[]; proporcion: number | null; caidaMedia: number | null; isla: boolean; ok: boolean | null };
-  otroMercado: (Metricas & { simbolo: string; ok: boolean }) | null;
   estabilidad: { subperiodos: Subperiodo[]; consistencia: number; concentracion: number | null; ok: boolean };
   fallas: number;
   estado: EstadoRobustez;
@@ -108,10 +106,8 @@ export function robustez(e: {
   inicioOos: number;
   /** Retornos fuera de muestra con los costos normales. */
   retornosOos: readonly number[];
-  ddOos: number;
   costos: Costos;
   opciones?: OpcionesBacktest;
-  otroMercado?: (Metricas & { simbolo: string }) | null;
 }): ResultadoRobustez {
   const n = e.cierres.length;
   // A. Costos ×2.
@@ -138,10 +134,7 @@ export function robustez(e: {
   const proporcion = lista.length ? lista.filter((v) => v.aceptable).length / lista.length : null;
   const vecinos = { base: e.mejor, lista, proporcion, caidaMedia, isla: caidaMedia !== null && caidaMedia > CAIDA_ISLA, ok: proporcion === null ? null : proporcion >= VECINOS_MINIMO };
 
-  // C. Otro mercado.
-  const otroMercado = e.otroMercado ? { ...e.otroMercado, ok: e.otroMercado.retornoTotal > -0.1 && e.otroMercado.maxDrawdown <= Math.max(0.1, 2 * e.ddOos) } : null;
-
-  // D. Estabilidad por regímenes.
+  // C. Estabilidad por regímenes.
   const subs = subperiodos(e.cierres, e.retornosOos, e.inicioOos, n);
   const consistencia = subs.length ? subs.filter((s) => s.retorno > 0).length / subs.length : 0;
   const ganancias = subs.map((s) => Math.max(0, s.retorno));
@@ -149,7 +142,7 @@ export function robustez(e: {
   const concentracion = suma > 0 ? Math.max(...ganancias) / suma : null;
   const estabilidad = { subperiodos: subs, consistencia, concentracion, ok: consistencia >= CONSISTENCIA_MINIMA && (concentracion === null || concentracion < CONCENTRACION_MAXIMA) };
 
-  // Veredicto del módulo (pruebas críticas: A, B y D; B no cuenta si no hay vecinos que probar).
+  // Veredicto del módulo (pruebas críticas: A, B y C; B no cuenta si no hay vecinos que probar).
   const fallas = [costos2x.ok, vecinos.ok, estabilidad.ok].filter((x) => x === false).length;
-  return { costos2x, vecinos, otroMercado, estabilidad, fallas, estado: fallas === 0 ? 'aprobado' : fallas === 1 ? 'alerta' : 'rechazado' };
+  return { costos2x, vecinos, estabilidad, fallas, estado: fallas === 0 ? 'aprobado' : fallas === 1 ? 'alerta' : 'rechazado' };
 }

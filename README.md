@@ -2,7 +2,7 @@
 
 Plataforma de trading cuantitativo con datos de mercado reales (Binance USD-M Futures por defecto; Rithmic por puente). Solo Paper Trading: el dinero real está bloqueado.
 
-**Lista de motores y su estado:** [`docs/MOTORES.md`](docs/MOTORES.md) · **Inventario:** [`docs/INVENTARIO.md`](docs/INVENTARIO.md) · **Hoja de ruta:** [`docs/HOJA_DE_RUTA.md`](docs/HOJA_DE_RUTA.md)
+**Lista de motores y su estado:** [`docs/MOTORES.md`](docs/MOTORES.md) · **Inventario:** [`docs/INVENTARIO.md`](docs/INVENTARIO.md) · **Hoja de ruta:** [`docs/HOJA_DE_RUTA.md`](docs/HOJA_DE_RUTA.md) · **Un mercado, un juicio:** [`docs/ARQUITECTURA_MERCADOS.md`](docs/ARQUITECTURA_MERCADOS.md)
 
 React 18 + Vite + TypeScript + Tailwind CSS · Three.js / React Three Fiber · Framer Motion · Python en el navegador (Pyodide) para las estrategias.
 
@@ -37,6 +37,7 @@ src/
 │   ├── memoria/      # régimen, gemelos, cruce
 │   ├── juez/         # los 10 motores del Juez
 │   ├── etiquetador/  # triple barrera + CUSUM
+│   ├── mercado/      # market_id: la única identidad de cada mercado
 │   ├── paper/        # Ejecutor y Guardián
 │   └── worker/       # Web Worker del motor
 └── data/agentes.ts   # los 10 agentes

@@ -12,8 +12,6 @@ export interface PeticionLaboratorio {
   codigo: string;
   proveedor: Proveedor;
   simbolo: string;
-  /** Otro mercado para la prueba de robustez (BTC frente a XAU, por ejemplo). */
-  otro: { proveedor: Proveedor; simbolo: string } | null;
   costos: Costos;
   /** Variantes ya probadas antes con esta idea (para el Deflated Sharpe). */
   ensayosPrevios: number;

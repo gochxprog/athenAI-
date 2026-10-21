@@ -3,7 +3,7 @@ import { Bot as IconoBot, Download, Power, ShieldAlert, ShieldCheck } from 'luci
 import Encabezado from '@/components/ui/Encabezado';
 import Panel from '@/components/ui/Panel';
 import { Explicacion, Linea } from '@/components/laboratorio/graficos';
-import { leerEstrategias } from '@/components/laboratorio/plantillas';
+import { juiciosDe, leerEstrategias } from '@/components/laboratorio/plantillas';
 import { leerPapers } from '@/motores/papers/paper';
 import { motorPaper } from '@/motores/paper/iniciar';
 import { equity, operacionesCsv, type Bot, type EstadoBot, type OperacionPaper } from '@/motores/paper/ejecutor';
@@ -52,31 +52,40 @@ const ahoraSuscribir = (cb: () => void) => {
 
 function NuevoBot() {
   const motor = useMotorPaper();
+  // Candidatas = pares estrategia + mercado que el Juez aprobó EN ESE mercado (un bot nunca sale de él).
   const candidatas = useMemo(() => {
     const papers = leerPapers();
-    return leerEstrategias()
-      .filter((e) => e.juzgada && exposicionMaxima(e.ultimoVeredicto) > 0)
-      .map((e) => ({ e, p: papers.filter((x) => x.estrategia === e.nombre).sort((a, b) => b.creado - a.creado)[0] }));
+    return leerEstrategias().flatMap((e) =>
+      juiciosDe(e)
+        .filter((j) => exposicionMaxima(j.veredicto) > 0)
+        .map((j) => ({
+          clave: `${e.id}|${j.mercado}`,
+          e,
+          j,
+          p: papers.find((x) => x.id === j.paperId) ?? papers.filter((x) => x.estrategia === e.nombre && (x.mercado ? x.mercado === j.mercado : x.simbolo === j.simbolo)).sort((a, b) => b.creado - a.creado)[0],
+        })),
+    );
   }, []);
-  const [sel, setSel] = useState(candidatas[0]?.e.id ?? '');
+  const [sel, setSel] = useState(candidatas[0]?.clave ?? '');
   const [capital, setCapital] = useState(10_000);
-  const elegida = candidatas.find((x) => x.e.id === sel);
-  const max = exposicionMaxima(elegida?.e.ultimoVeredicto);
+  const elegida = candidatas.find((x) => x.clave === sel);
+  const max = exposicionMaxima(elegida?.j.veredicto);
   const [exposicion, setExposicion] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
   const crear = async () => {
-    if (!elegida?.e.juzgada) return;
+    if (!elegida) return;
     setError(null);
     try {
       await motor.crearBot({
         nombre: elegida.e.nombre,
         estrategiaId: elegida.e.id,
         codigo: elegida.e.codigo,
-        combo: elegida.e.juzgada.combo,
-        proveedor: elegida.e.juzgada.proveedor,
-        simbolo: elegida.e.juzgada.simbolo,
-        veredicto: elegida.e.ultimoVeredicto ?? '',
+        combo: elegida.j.combo,
+        proveedor: elegida.j.proveedor,
+        simbolo: elegida.j.simbolo,
+        mercadoAprobado: elegida.j.mercado,
+        veredicto: elegida.j.veredicto,
         score: elegida.p?.respuesta.resultado.score?.total ?? null,
         capital,
         exposicion: Math.min(max, exposicion),
@@ -95,11 +104,11 @@ function NuevoBot() {
       ) : (
         <div className="flex flex-wrap items-end gap-3">
           <label className="block">
-            <span className="etiqueta">Estrategia aprobada</span>
+            <span className="etiqueta">Estrategia y mercado aprobados</span>
             <select value={sel} onChange={(e) => setSel(e.target.value)} aria-label="Estrategia" className="mt-1 block rounded-md border border-borde bg-black px-2 py-1.5 text-[11px] text-plata-100">
-              {candidatas.map(({ e }) => (
-                <option key={e.id} value={e.id}>
-                  {e.nombre} · {e.juzgada!.simbolo} · {e.ultimoVeredicto}
+              {candidatas.map(({ clave, e, j }) => (
+                <option key={clave} value={clave}>
+                  {e.nombre} · {j.simbolo} · {j.veredicto}
                 </option>
               ))}
             </select>
@@ -116,6 +125,11 @@ function NuevoBot() {
             Crear bot
           </button>
         </div>
+      )}
+      {elegida && (
+        <p className="text-[11px] text-plata-400" data-solo-mercado={elegida.j.mercado}>
+          Este bot solo opera <span className="text-white">{elegida.j.simbolo}</span> ({elegida.j.mercado}), el mercado donde el Juez aprobó la estrategia. Nunca opera otro activo.
+        </p>
       )}
       {elegida && !elegida.p?.respuesta.operaciones?.length && <p className="text-[11px] text-plata-400">⚠ No hay operaciones guardadas de su prueba del Juez: el bot funcionará, pero sin banda para comparar. Vuelve a pasarla por el Juez para tenerla.</p>}
       {error && <p className="text-xs text-white">{error}</p>}

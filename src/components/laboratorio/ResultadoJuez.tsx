@@ -373,23 +373,22 @@ function Prueba({ titulo, ok, valor, detalle }: { titulo: string; ok: boolean | 
   );
 }
 
-/** Motor 6 · Robustez: costos ×2, parámetros vecinos, otro mercado y estabilidad por regímenes. */
+/** Motor 6 · Robustez: costos ×2, parámetros vecinos y estabilidad por regímenes (solo con el mercado juzgado). */
 function SeccionRobustez({ r }: { r: RespuestaLaboratorio }) {
   const rb = r.resultado.robustez;
   if (!rb?.costos2x) return null;
-  const { costos2x: c2, vecinos: v, otroMercado: o, estabilidad: e } = rb;
+  const { costos2x: c2, vecinos: v, estabilidad: e } = rb;
   return (
     <Panel titulo="Motor 6 · Robustez" accion={<span className="text-[10px] text-plata-500">{ESTADO_ROB[rb.estado]}</span>} cuerpo="space-y-4 p-4">
       <Explicacion
-        que="pruebas de estrés: el doble de comisiones, cambiar un poco los parámetros, otro mercado y distintos momentos del mercado (sube, baja, calmado, nervioso)."
+        que="pruebas de estrés: el doble de comisiones, cambiar un poco los parámetros y distintos momentos del mercado (sube, baja, calmado, nervioso). Todo con los datos de este mismo mercado."
         sirve="descartar estrategias que solo funcionan en condiciones perfectas o con una configuración exacta (una «isla»)."
         mirar="que pase las 3 pruebas críticas (costos ×2, vecinos y estabilidad). Con 1 fallo sale una alerta; con 2 o más se rechaza."
       />
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-robustez={rb.estado}>
+      <div className="grid gap-3 sm:grid-cols-3" data-robustez={rb.estado}>
         <Prueba titulo="Costos ×2" ok={c2.ok} valor={pct(c2.retorno)} detalle={`Profit Factor ${n2(c2.factorBeneficio)} (mín. 1,2) · retorno > 0`} />
         <Prueba titulo="Parámetros vecinos" ok={v.ok} valor={v.proporcion === null ? '—' : pctSin(v.proporcion, 0)} detalle={v.proporcion === null ? 'Pon 3 o más valores por parámetro en PARAMETROS para medirlo' : `aceptables (mín. 70 %)${v.isla ? ' · ⚠ isla de optimización' : ''}`} />
         <Prueba titulo="Estabilidad por regímenes" ok={e.ok} valor={pctSin(e.consistencia, 0)} detalle={`sub-periodos que ganan (mín. 60 %) · el mejor aporta ${e.concentracion === null ? '—' : pctSin(e.concentracion, 0)} (máx. 90 %)`} />
-        <Prueba titulo={`Otro mercado${o ? ` · ${o.simbolo}` : ''}`} ok={o ? o.ok : null} valor={o ? pct(o.retornoTotal) : 'no probado'} detalle={o ? `caída ${pct(-o.maxDrawdown)} · ${o.operaciones} operaciones` : 'No hay otro mercado grabado en la carpeta (se elige solo)'} />
       </div>
       {v.lista.length > 0 && (
         <div className="overflow-x-auto">
@@ -437,7 +436,7 @@ function SeccionRobustez({ r }: { r: RespuestaLaboratorio }) {
         <ul className="mt-2 list-disc space-y-1 pl-4">
           <li>Costos ×2: los mismos parámetros elegidos en cada ventana del Walk-Forward, con comisión × 2 y deslizamiento × 2. Pasa con Profit Factor &gt; 1,2 y retorno &gt; 0.</li>
           <li>Vecinos: los mejores parámetros se eligen SOLO con los datos anteriores al primer tramo fuera de muestra, y ellos y sus vecinos se miden en el tramo fuera de muestra (sin fuga de información). Cada parámetro se mueve un paso de tu rejilla (arriba y abajo) dejando los demás igual. Aceptable = gana. Pasa si ≥ 70 % son aceptables. Si el Sharpe cae de media más de un 50 %: «isla de optimización».</li>
-          <li>Otro mercado: los mismos parámetros, sin reoptimizar. No debe destruir capital: retorno &gt; −10 % y caída ≤ 2 × la del original (mínimo 10 %).</li>
+          <li>Un mercado, un juicio: nunca se prueba en otro activo. Un edge de BTC solo vale para BTC; cada mercado se juzga con sus propios datos.</li>
           <li>Estabilidad: el tramo fuera de muestra se corta en 10 sub-periodos; cada uno se clasifica por dirección (sube o baja) y volatilidad (alta o baja frente a la mediana). Pasa si gana en ≥ 60 % y ningún sub-periodo aporta ≥ 90 % de las ganancias.</li>
           <li>Pruebas críticas: costos ×2, vecinos y estabilidad. 0 fallos: aprobado; 1: alerta; 2 o más: rechazado.</li>
         </ul>

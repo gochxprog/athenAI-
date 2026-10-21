@@ -27,9 +27,13 @@ const PUESTOS = (() => {
   return out;
 })();
 
+/** Gris grafito mate de los accesorios (sin color: el color de cada agente es solo la luz de su puesto). */
+const MATE = '#2a2c31';
+const MATE_CLARO = '#8e929a';
+
 /** El accesorio va dentro del grupo de la cabeza (se mueve con ella). La cara (visor) mira hacia −z. */
-function AccesorioCabeza({ tipo, color, vivo }: { tipo: Accesorio; color: string; vivo: boolean }) {
-  const mat = <meshStandardMaterial color={color} metalness={0.2} roughness={0.55} emissive={color} emissiveIntensity={vivo ? 0.18 : 0} transparent opacity={vivo ? 1 : 0.55} />;
+function AccesorioCabeza({ tipo, vivo }: { tipo: Accesorio; vivo: boolean }) {
+  const mat = <meshStandardMaterial color={MATE} metalness={0.1} roughness={0.9} transparent opacity={vivo ? 1 : 0.55} />;
   switch (tipo) {
     case 'antena':
       return (
@@ -40,7 +44,7 @@ function AccesorioCabeza({ tipo, color, vivo }: { tipo: Accesorio; color: string
           </mesh>
           <mesh position={[0, 0.29, 0]}>
             <sphereGeometry args={[0.028, 16, 16]} />
-            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={vivo ? 1.6 : 0} />
+            <meshStandardMaterial color={MATE_CLARO} emissive="#ffffff" emissiveIntensity={vivo ? 0.35 : 0} roughness={0.6} />
           </mesh>
         </group>
       );
@@ -99,7 +103,7 @@ function AccesorioCabeza({ tipo, color, vivo }: { tipo: Accesorio; color: string
           </mesh>
           <mesh position={[0.13, -0.02, -0.13]}>
             <sphereGeometry args={[0.018, 10, 10]} />
-            <meshStandardMaterial color="#e5e7eb" />
+            <meshStandardMaterial color={MATE_CLARO} roughness={0.9} />
           </mesh>
         </group>
       );
@@ -119,7 +123,7 @@ function AccesorioCabeza({ tipo, color, vivo }: { tipo: Accesorio; color: string
           </mesh>
           <mesh position={[0, 0.2, 0]}>
             <sphereGeometry args={[0.05, 16, 16]} />
-            <meshStandardMaterial color="#f3f4f6" roughness={0.9} />
+            <meshStandardMaterial color={MATE_CLARO} roughness={0.95} />
           </mesh>
         </group>
       );
@@ -341,10 +345,19 @@ function Puesto({ id, seleccionado, onSeleccion, estado }: { id: AgenteId; selec
         <meshBasicMaterial color="#ffffff" transparent opacity={0.2} />
       </mesh>
 
-      {/* Luz del puesto en su color (encendida si trabaja). */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0.15]}>
-        <circleGeometry args={[0.75, 48]} />
-        <meshBasicMaterial color={estilo.color} transparent opacity={vivo ? (seleccionado ? 0.22 : 0.12) : 0.04} depthWrite={false} />
+      {/* Luz LED del puesto en su color: un aro fino en el suelo con un halo muy suave, y una tira bajo el
+          borde del escritorio. Encendida si el agente trabaja; casi apagada si aún no tiene motor. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, 0.15]}>
+        <circleGeometry args={[0.74, 48]} />
+        <meshBasicMaterial color={estilo.color} transparent opacity={vivo ? (seleccionado ? 0.08 : 0.04) : 0.012} depthWrite={false} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.006, 0.15]}>
+        <ringGeometry args={[0.735, 0.75, 96]} />
+        <meshBasicMaterial color={estilo.color} transparent opacity={vivo ? (seleccionado ? 0.95 : 0.6) : 0.1} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh position={[0, 0.692, 0.152]}>
+        <boxGeometry args={[1.22, 0.008, 0.006]} />
+        <meshBasicMaterial color={estilo.color} transparent opacity={vivo ? 0.85 : 0.1} toneMapped={false} />
       </mesh>
 
       {/* Escritorio */}
@@ -379,11 +392,6 @@ function Puesto({ id, seleccionado, onSeleccion, estado }: { id: AgenteId; selec
           <capsuleGeometry args={[0.17, 0.36, 8, 20]} />
           <meshStandardMaterial color={vivo ? GRIS_CLARO : GRIS} metalness={0.75} roughness={0.28} />
         </mesh>
-        {/* Camiseta de su color (encima del cuerpo, sin cambiarlo). */}
-        <mesh position={[0, 0.76, 0]}>
-          <cylinderGeometry args={[0.176, 0.176, 0.26, 28]} />
-          <meshStandardMaterial color={estilo.color} metalness={0.15} roughness={0.6} transparent opacity={vivo ? 0.95 : 0.45} />
-        </mesh>
         <group ref={cabeza} position={[0, 1.22, 0]}>
           <mesh castShadow>
             <sphereGeometry args={[0.15, 32, 32]} />
@@ -394,7 +402,7 @@ function Puesto({ id, seleccionado, onSeleccion, estado }: { id: AgenteId; selec
             <boxGeometry args={[0.2, 0.035, 0.06]} />
             <meshStandardMaterial color={vivo ? '#ffffff' : '#3a3c40'} emissive="#ffffff" emissiveIntensity={vivo ? (seleccionado ? 2.2 : 1.2) : 0} />
           </mesh>
-          <AccesorioCabeza tipo={estilo.accesorio} color={estilo.color} vivo={vivo} />
+          <AccesorioCabeza tipo={estilo.accesorio} vivo={vivo} />
         </group>
       </group>
 

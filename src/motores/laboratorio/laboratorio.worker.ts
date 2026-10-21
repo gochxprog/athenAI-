@@ -3,10 +3,10 @@
 // Va en su propio worker para que un bucle infinito en el código del usuario se pueda cancelar sin tocar el motor.
 import { AlmacenFeatures, type FilaGuardada } from '../almacen/almacen';
 import { juzgar } from '../juez/juez';
-import { normalizarPosiciones } from '../juez/backtest';
 import { ejecutarEstrategia, mensajeError, type PyodideMinimo } from './python';
 import type { MensajeEtiquetas, MensajeLaboratorio, MensajeSenales, PeticionEtiquetar, PeticionLaboratorio, PeticionSenales, SenalEstrategia } from './protocolo';
 import { datasetCsv, etiquetar } from '../etiquetador/etiquetador';
+import { mercadoId } from '../mercado/mercadoId';
 
 const ctx = self as unknown as { postMessage: (m: MensajeLaboratorio | MensajeSenales | MensajeEtiquetas) => void; onmessage: ((e: MessageEvent<PeticionLaboratorio | PeticionSenales | PeticionEtiquetar>) => void) | null };
 
@@ -24,22 +24,6 @@ async function leer(proveedor: PeticionLaboratorio['proveedor'], simbolo: string
   const al = new AlmacenFeatures(proveedor);
   try {
     return (await al.leer(simbolo)).filter((f) => Number.isFinite(f.close) && f.close > 0);
-  } finally {
-    al.cerrar();
-  }
-}
-
-/** Preferencia de «otro mercado» de la misma familia (cripto perpetuos de Binance). */
-const FAMILIA = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'XAUUSDT', 'PAXGUSDT'];
-
-async function mercadoAlternativo(proveedor: PeticionLaboratorio['proveedor'], simbolo: string): Promise<{ proveedor: PeticionLaboratorio['proveedor']; simbolo: string } | null> {
-  const al = new AlmacenFeatures(proveedor);
-  try {
-    const hay = (await al.resumen()).filter((x) => x.simbolo !== simbolo && x.filas >= 100);
-    hay.sort((a, b) => (FAMILIA.indexOf(a.simbolo) + 1 || 99) - (FAMILIA.indexOf(b.simbolo) + 1 || 99) || b.filas - a.filas);
-    return hay[0] ? { proveedor, simbolo: hay[0].simbolo } : null;
-  } catch {
-    return null;
   } finally {
     al.cerrar();
   }
@@ -88,7 +72,7 @@ ctx.onmessage = async (e) => {
     try {
       const filas = await leer(q.proveedor, q.simbolo);
       const resultado = etiquetar(filas, q.config, huecosDe(filas));
-      ctx.postMessage({ tipo: 'etiquetas', id: q.id, resultado, csv: datasetCsv(filas, resultado) });
+      ctx.postMessage({ tipo: 'etiquetas', id: q.id, resultado, csv: datasetCsv(filas, resultado, mercadoId(q.proveedor, q.simbolo)) });
     } catch (err) {
       ctx.postMessage({ tipo: 'etiquetas', id: q.id, resultado: null, csv: '', error: err instanceof Error ? err.message : String(err) });
     }
@@ -114,6 +98,7 @@ ctx.onmessage = async (e) => {
     const fundingIncluido = funding.some((x) => x !== null);
     progreso('El Juez está probando: Walk-Forward, Monte Carlo, Luck test, robustez…');
     const entrada = {
+      mercado: mercadoId(p.proveedor, p.simbolo),
       cierres: filas.map((f) => f.close),
       tiempos: filas.map((f) => f.cierre),
       huecos: huecosDe(filas),
@@ -127,25 +112,8 @@ ctx.onmessage = async (e) => {
       ensayos: p.ensayosPrevios + ejec.combos.length,
       antiFuturo: ejec.antiFuturo,
     };
-    let resultado = juzgar(entrada);
-    // Otro mercado: el que elegiste o, si no, uno de la misma familia grabado en la misma carpeta.
-    const otroMercado = p.otro ?? (await mercadoAlternativo(p.proveedor, p.simbolo));
-    if (otroMercado) {
-      p.otro = otroMercado;
-      progreso(`Robustez: misma estrategia en ${p.otro.simbolo}…`);
-      const otras = await leer(p.otro.proveedor, p.otro.simbolo);
-      if (otras.length >= 100) {
-        const combo = ejec.combos[resultado.comboVivo];
-        let otraPos: number[];
-        try {
-          otraPos = normalizarPosiciones(ejecutarEstrategia(py, `${p.codigo}\nPARAMETROS = ${JSON.stringify(Object.fromEntries(Object.entries(combo).map(([k, v]) => [k, [v]])))}\n`, otras).posiciones[0], otras.length);
-        } catch (err) {
-          throw new Error(`Error en tu código con ${p.otro.simbolo}:\n${mensajeError(err)}`);
-        }
-        const huecosOtro = huecosDe(otras);
-        resultado = juzgar({ ...entrada, otroMercado: { simbolo: p.otro.simbolo, cierres: otras.map((f) => f.close), tiempos: otras.map((f) => f.cierre), posiciones: otraPos.map((x, i) => (huecosOtro[i + 1] ? 0 : x)) } });
-      } else progreso(`No hay datos suficientes de ${p.otro.simbolo}: se omite esa prueba.`);
-    }
+    // Un mercado, un juicio: el Juez solo ve las filas de este market_id.
+    const resultado = juzgar(entrada);
     ctx.postMessage({
       tipo: 'resultado',
       id: p.id,

@@ -1,14 +1,16 @@
 // API de la grabadora para la plataforma (y, si está compilada, la propia plataforma como página web).
 //   GET /api/salud                     → { ok: true }               (sin clave: solo dice que está viva)
 //   GET /api/estado                    → símbolos, conexión, filas  (con clave)
-//   GET /api/sesiones?simbolo=BTCUSDT  → sesiones de grabación      (con clave)
-//   GET /api/filas?simbolo=BTCUSDT&desde=<ms>&limite=<n>  → filas con cierre > desde (máx. 5.000)
+//   GET /api/sesiones?mercado=binance:BTCUSDT  → sesiones de grabación de ESE mercado   (con clave)
+//   GET /api/filas?mercado=binance:BTCUSDT&desde=<ms>&limite=<n>  → filas con cierre > desde (máx. 5.000)
+//   (también acepta `simbolo=BTCUSDT`, que equivale a binance:BTCUSDT)
 // La clave va en la cabecera «Authorization: Bearer <clave>». CORS abierto: la clave es la que protege los datos.
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
 import type { AlmacenDisco } from './almacenDisco';
+import { esMercadoId, partesMercado } from '../src/motores/mercado/mercadoId';
 
 export interface EstadoSimbolo {
   simbolo: string;
@@ -61,9 +63,12 @@ export function crearServidor(o: OpcionesServidor): http.Server {
           const e = o.estado();
           return json(200, { ...e, almacen: o.almacen.resumen() });
         }
-        if (url.pathname === '/api/sesiones') return json(200, { sesiones: o.almacen.sesiones(url.searchParams.get('simbolo') ?? undefined) });
+        if (url.pathname === '/api/sesiones') {
+          const simbolo = simboloPedido(url);
+          return json(200, { sesiones: o.almacen.sesiones(simbolo === null ? undefined : simbolo) });
+        }
         if (url.pathname === '/api/filas') {
-          const simbolo = (url.searchParams.get('simbolo') ?? '').toUpperCase();
+          const simbolo = simboloPedido(url) ?? '';
           const desde = Number(url.searchParams.get('desde') ?? 0);
           const limite = Math.min(LIMITE_FILAS, Math.max(1, Number(url.searchParams.get('limite') ?? LIMITE_FILAS) || LIMITE_FILAS));
           return json(200, o.almacen.leer(simbolo, Number.isFinite(desde) ? desde : 0, limite));
@@ -87,4 +92,16 @@ export function crearServidor(o: OpcionesServidor): http.Server {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Grabadora de athenAI funcionando. Conéctala desde la plataforma: Datos → Grabadora 24/7.');
   });
+}
+
+/** Símbolo pedido por `mercado=binance:X` o `simbolo=X`. Un mercado de otro proveedor o mal escrito no da datos (''). */
+function simboloPedido(url: URL): string | null {
+  const m = url.searchParams.get('mercado');
+  if (m !== null) {
+    if (!esMercadoId(m)) return '';
+    const p = partesMercado(m);
+    return p.proveedor === 'binance' ? p.simbolo : '';
+  }
+  const s = url.searchParams.get('simbolo');
+  return s === null ? null : s.toUpperCase();
 }

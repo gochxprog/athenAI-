@@ -20,6 +20,7 @@
 //    tiempo = 0.
 // D. Meta-etiqueta: y_meta = 1 si la etiqueta es +1 (la señal acertó: operar); 0 si es −1 o 0 (no operar).
 // Un evento cuyo recorrido cruza un hueco de datos se descarta (no se aprende de datos rotos).
+import type { MercadoId } from '@/motores/mercado/mercadoId';
 import type { FilaFeatures } from '../nucleo/features';
 
 export interface ConfigEtiquetador {
@@ -204,10 +205,11 @@ export function etiquetar(filas: readonly Fila[], config: ConfigEtiquetador = {}
 }
 
 /** Dataset de entrenamiento: Features de la barra t₀ + etiqueta + meta-etiqueta (CSV). */
-export function datasetCsv(filas: readonly Fila[], r: ResultadoEtiquetador): string {
+/** `mercado` (market_id) va en cada fila: el dataset de un mercado nunca se mezcla con el de otro. */
+export function datasetCsv(filas: readonly Fila[], r: ResultadoEtiquetador, mercado: MercadoId): string {
   const claves = [...new Set(r.etiquetas.flatMap((e) => Object.keys(filas[e.t0].valores ?? {})))];
   // Las columnas del evento llevan prefijo para no chocar con Features del mismo nombre (p. ej. «retorno»).
-  const cab = ['evento_inicio', 'evento_fin', 'evento_lado', 'evento_precio', 'evento_sigma', 'evento_barrera', 'etiqueta', 'meta', 'evento_retorno', 'evento_barras', ...claves];
-  const filasCsv = r.etiquetas.map((e) => [new Date(e.inicio).toISOString(), new Date(e.fin).toISOString(), e.lado, e.precio, e.sigma, e.barrera, e.etiqueta, e.meta, e.retorno, e.barras, ...claves.map((k) => filas[e.t0].valores?.[k] ?? '')].join(','));
+  const cab = ['market_id', 'evento_inicio', 'evento_fin', 'evento_lado', 'evento_precio', 'evento_sigma', 'evento_barrera', 'etiqueta', 'meta', 'evento_retorno', 'evento_barras', ...claves];
+  const filasCsv = r.etiquetas.map((e) => [mercado, new Date(e.inicio).toISOString(), new Date(e.fin).toISOString(), e.lado, e.precio, e.sigma, e.barrera, e.etiqueta, e.meta, e.retorno, e.barras, ...claves.map((k) => filas[e.t0].valores?.[k] ?? '')].join(','));
   return [cab.join(','), ...filasCsv].join('\n');
 }

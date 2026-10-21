@@ -109,7 +109,7 @@ Laboratorio con «Explicación simple» y «Cómo se calcula».
 | 3 | Walk-Forward | ¿Sigue ganando con datos que no vio? | WFE ≥ 0,5 |
 | 4 | Monte Carlo | Si las pérdidas llegan seguidas, ¿cuánto puedo perder? | Ruina ≤ 5 % |
 | 5 | Luck test | ¿Habilidad o suerte? | p < 0,05 |
-| 6 | Robustez | ¿Aguanta costos ×2, cambios de parámetros, otro mercado y regímenes? | Menos de 2 fallos |
+| 6 | Robustez | ¿Aguanta costos ×2, cambios de parámetros y regímenes (solo en su mercado)? | Menos de 2 fallos |
 | 7 | Deflated Sharpe | ¿Gané solo por probar muchas versiones? | DSR ≥ 0,95 |
 | 8 | PBO | ¿Elegir «la mejor» fue una lotería? | PBO < 5 % |
 | 9 | Anti-futuro | ¿El código hace trampa mirando el futuro? | Sin fugas |

@@ -39,7 +39,7 @@ const b = backtest(e.cierres, e.posiciones[combo], e.costos, v.oosDesde, v.oosHa
 
 | # | Dónde | Problema | Corrección |
 |---|---|---|---|
-| 1 | `juez/juez.ts` → variante para los bots | La variante que se llevaba a Paper (`dentroMuestra.combo`) se elegía con el Sharpe de **toda** la serie, incluido el tramo de prueba | Nueva `comboVivo`: la que el Walk-Forward elegiría hoy con la misma regla (`elegirVariante` sobre las últimas L_IS barras). Es la que usan los bots y la prueba en otro mercado |
+| 1 | `juez/juez.ts` → variante para los bots | La variante que se llevaba a Paper (`dentroMuestra.combo`) se elegía con el Sharpe de **toda** la serie, incluido el tramo de prueba | Nueva `comboVivo`: la que el Walk-Forward elegiría hoy con la misma regla (`elegirVariante` sobre las últimas L_IS barras). Es la que usan los bots |
 | 2 | `juez/robustez.ts` → vecinos | θ* y sus vecinos se elegían y medían con la serie completa (elegir y evaluar con los mismos datos) | θ* se elige solo con las barras anteriores al primer OOS (menos el embargo), y θ* y sus vecinos se miden solo en el tramo fuera de muestra |
 
 `dentroMuestra` se mantiene solo como **referencia optimista** en pantalla (está rotulada así) y no decide nada.

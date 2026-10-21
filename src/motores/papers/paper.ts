@@ -1,5 +1,6 @@
 // Papers: cada prueba del Juez queda documentada en un documento autocontenido (HTML que también se imprime
 // a PDF): idea, datos, lógica y código, parámetros por tramo, métricas, reglas, gráficos y conclusión.
+import type { MercadoId } from '@/motores/mercado/mercadoId';
 import type { RespuestaLaboratorio } from '../laboratorio/protocolo';
 import type { Costos, Metricas } from '../juez/backtest';
 import { DEFINICIONES_FEATURES } from '../nucleo/features';
@@ -11,6 +12,8 @@ export interface Paper {
   codigo: string;
   simbolo: string;
   proveedor: string;
+  /** market_id del mercado juzgado (los papers antiguos no lo tienen). */
+  mercado?: MercadoId;
   costos: Costos;
   respuesta: RespuestaLaboratorio;
 }
@@ -223,8 +226,7 @@ ${wfe}
 ${j.robustez?.costos2x ? `<tr><td>Estado del módulo</td><td class="n">${esc(j.robustez.estado)}</td></tr>
 <tr><td>Costos ×2 (retorno · Profit Factor)</td><td class="n">${pct(j.robustez.costos2x.retorno)} · ${j.robustez.costos2x.factorBeneficio === null ? '—' : num(j.robustez.costos2x.factorBeneficio, 2)}</td></tr>
 <tr><td>Parámetros vecinos aceptables</td><td class="n">${j.robustez.vecinos.proporcion === null ? '—' : `${num(j.robustez.vecinos.proporcion * 100, 0)} %`}${j.robustez.vecinos.isla ? ' · isla de optimización' : ''}</td></tr>
-<tr><td>Estabilidad (sub-periodos que ganan)</td><td class="n">${num(j.robustez.estabilidad.consistencia * 100, 0)} %</td></tr>
-<tr><td>Otro mercado</td><td class="n">${j.robustez.otroMercado ? `${esc(j.robustez.otroMercado.simbolo)}: ${pct(j.robustez.otroMercado.retornoTotal)}` : 'no probado'}</td></tr>` : ''}
+<tr><td>Estabilidad (sub-periodos que ganan)</td><td class="n">${num(j.robustez.estabilidad.consistencia * 100, 0)} %</td></tr>` : ''}
 <tr><td>Deflated Sharpe</td><td class="n">${num(j.deflatedSharpe, 3)}${j.dsrDetalle ? ` (SR ${num(j.dsrDetalle.srObs, 4)} frente a SR* ${num(j.dsrDetalle.srEstrella, 4)}, N = ${j.dsrDetalle.n})` : ''}</td></tr>
 <tr><td>PBO (probabilidad de sobreajuste)</td><td class="n">${j.pbo === null ? '—' : `${num(j.pbo * 100, 1)} %`}${j.pboDetalle ? ` (${j.pboDetalle.malas} de ${j.pboDetalle.combinaciones} combinaciones)` : ''}</td></tr>
 </table>

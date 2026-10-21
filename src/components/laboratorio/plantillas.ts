@@ -1,6 +1,20 @@
 // Plantillas de estrategia en Python. Solo usan Features de la fila actual y de filas anteriores.
 import type { Proveedor } from '@/motores/almacen/almacen';
 import type { Combo } from '@/motores/juez/juez';
+import { mercadoIdSeguro, type MercadoId } from '@/motores/mercado/mercadoId';
+
+/** Lo que dijo el Juez de una estrategia en UN mercado. La aprobación solo vale para ese mercado. */
+export interface JuicioMercado {
+  mercado: MercadoId;
+  proveedor: Proveedor;
+  simbolo: string;
+  veredicto: string;
+  /** Variante que se lleva a vivo en ese mercado. */
+  combo: Combo;
+  fecha: number;
+  /** Paper de esa prueba (costos, operaciones y banda del Monte Carlo para el bot). */
+  paperId?: string;
+}
 
 export interface EstrategiaGuardada {
   id: string;
@@ -11,6 +25,8 @@ export interface EstrategiaGuardada {
   ultimoVeredicto?: string;
   /** Mercado y variante de la última prueba del Juez (para calcular su señal en vivo). */
   juzgada?: { proveedor: Proveedor; simbolo: string; combo: Combo };
+  /** Último veredicto del Juez en cada mercado (market_id → juicio). Cada mercado se juzga por separado. */
+  porMercado?: Partial<Record<MercadoId, JuicioMercado>>;
   actualizada: number;
 }
 
@@ -107,4 +123,12 @@ export function guardarEstrategias(xs: EstrategiaGuardada[]): void {
   } catch {
     // Almacenamiento bloqueado: vale para esta sesión.
   }
+}
+
+/** Juicios por mercado de una estrategia (las guardadas antes del market_id salen de su última prueba). */
+export function juiciosDe(e: EstrategiaGuardada): JuicioMercado[] {
+  const xs = Object.values(e.porMercado ?? {}).filter((j): j is JuicioMercado => !!j);
+  if (xs.length || !e.juzgada || !e.ultimoVeredicto) return xs.sort((a, b) => a.mercado.localeCompare(b.mercado));
+  const mercado = mercadoIdSeguro(e.juzgada.proveedor, e.juzgada.simbolo);
+  return mercado ? [{ mercado, proveedor: e.juzgada.proveedor, simbolo: e.juzgada.simbolo, veredicto: e.ultimoVeredicto, combo: e.juzgada.combo, fecha: e.actualizada }] : [];
 }

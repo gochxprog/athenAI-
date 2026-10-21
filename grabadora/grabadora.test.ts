@@ -36,12 +36,54 @@ describe('Almacén en disco de la grabadora', () => {
     expect(pagina.filas).toHaveLength(2);
     expect(pagina.mas).toBe(true);
     expect(a.leer('BTCUSDT', 0, 10).filas[0].sesion).toBe(7);
-    expect(a.resumen()).toEqual([{ simbolo: 'BTCUSDT', filas: 3, desde: DIA + 1_000, hasta: DIA + 86_400_500, bytes: expect.any(Number) }]);
+    expect(a.leer('BTCUSDT', 0, 10).filas[0].mercado).toBe('binance:BTCUSDT');
+    expect(a.resumen()).toEqual([{ mercado: 'binance:BTCUSDT', simbolo: 'BTCUSDT', filas: 3, desde: DIA + 1_000, hasta: DIA + 86_400_500, bytes: expect.any(Number) }]);
     // Al escribir más, el resumen se actualiza sin releer el disco.
     a.guardar('BTCUSDT', 7, [fila(4, DIA + 86_400_000 + 900)]);
     a.vaciar();
     expect(a.resumen()[0].filas).toBe(4);
     expect(a.sesiones('BTCUSDT').map((s) => s.id)).toEqual([7]);
+  });
+
+  it('cada mercado en su carpeta: BTC y XAU nunca comparten archivo ni sesiones', () => {
+    const d = temporal();
+    const a = new AlmacenDisco(d);
+    a.nuevaSesion('BTCUSDT', parametrosPorDefecto(), DIA, 1);
+    a.nuevaSesion('XAUUSDT', parametrosPorDefecto(), DIA, 2);
+    a.guardar('BTCUSDT', 1, [fila(1, DIA + 1_000)]);
+    a.guardar('XAUUSDT', 2, [fila(1, DIA + 1_000), fila(2, DIA + 2_000)]);
+    a.vaciar();
+    expect(fs.readdirSync(path.join(d, 'mercados')).sort()).toEqual(['binance_btcusdt', 'binance_xauusdt']);
+    expect(leerLineas<{ mercado: string }>(path.join(d, 'mercados', 'binance_btcusdt', 'filas', '2026-10-21.jsonl')).map((f) => f.mercado)).toEqual(['binance:BTCUSDT']);
+    expect(leerLineas<{ mercado: string }>(path.join(d, 'mercados', 'binance_xauusdt', 'filas', '2026-10-21.jsonl')).map((f) => f.mercado)).toEqual(['binance:XAUUSDT', 'binance:XAUUSDT']);
+    expect(a.leer('BTCUSDT', 0, 10).filas).toHaveLength(1);
+    expect(a.leer('XAUUSDT', 0, 10).filas).toHaveLength(2);
+    expect(a.sesiones('BTCUSDT').map((s) => s.id)).toEqual([1]);
+    expect(a.sesiones('XAUUSDT').map((s) => s.id)).toEqual([2]);
+    expect(a.sesiones().map((s) => s.mercado)).toEqual(['binance:BTCUSDT', 'binance:XAUUSDT']);
+  });
+
+  it('migra el formato anterior moviendo los archivos, sin perder filas, y se puede repetir', () => {
+    const d = temporal();
+    // Formato anterior: filas/{SIMBOLO}/{día}.jsonl y un sesiones.jsonl común.
+    fs.mkdirSync(path.join(d, 'filas', 'BTCUSDT'), { recursive: true });
+    fs.mkdirSync(path.join(d, 'filas', 'XAUUSDT'), { recursive: true });
+    const linea = (n: number, s: string) => JSON.stringify({ ...fila(n, DIA + n * 1_000), simbolo: s, sesion: 9 });
+    fs.writeFileSync(path.join(d, 'filas', 'BTCUSDT', '2026-10-21.jsonl'), `${linea(1, 'BTCUSDT')}\n${linea(2, 'BTCUSDT')}\n`);
+    fs.writeFileSync(path.join(d, 'filas', 'XAUUSDT', '2026-10-21.jsonl'), `${linea(1, 'XAUUSDT')}\n`);
+    fs.writeFileSync(path.join(d, 'sesiones.jsonl'), `${JSON.stringify({ id: 9, simbolo: 'BTCUSDT', inicio: DIA, parametros: parametrosPorDefecto() })}\n${JSON.stringify({ id: 10, simbolo: 'XAUUSDT', inicio: DIA, parametros: parametrosPorDefecto() })}\n`);
+    const a = new AlmacenDisco(d);
+    expect(a.migracion).toEqual({ filas: 2, sesiones: 2 });
+    expect(fs.existsSync(path.join(d, 'filas'))).toBe(false);
+    expect(fs.existsSync(path.join(d, 'sesiones.jsonl.migrado'))).toBe(true);
+    expect(a.leer('BTCUSDT', 0, 10).filas.map((f) => [f.n, f.mercado])).toEqual([[1, 'binance:BTCUSDT'], [2, 'binance:BTCUSDT']]);
+    expect(a.leer('XAUUSDT', 0, 10).filas.map((f) => f.mercado)).toEqual(['binance:XAUUSDT']);
+    expect(a.sesiones('BTCUSDT').map((s) => s.id)).toEqual([9]);
+    expect(a.sesiones('XAUUSDT').map((s) => s.id)).toEqual([10]);
+    // Arrancar otra vez no cambia nada.
+    const b = new AlmacenDisco(d);
+    expect(b.migracion).toBeNull();
+    expect(b.leer('BTCUSDT', 0, 10).filas).toHaveLength(2);
   });
 
   it('una línea cortada por un apagón se ignora al leer', () => {
@@ -82,6 +124,11 @@ describe('API de la grabadora', () => {
       const r = (await (await fetch(`${base}/api/filas?simbolo=btcusdt&desde=${DIA + 1_000}`, auth)).json()) as { filas: { n: number }[]; mas: boolean };
       expect(r.filas.map((x) => x.n)).toEqual([2]);
       expect(r.mas).toBe(false);
+      // Por market_id: el mismo mercado da sus filas; otro mercado o proveedor no da nada.
+      const m = (await (await fetch(`${base}/api/filas?mercado=binance:BTCUSDT`, auth)).json()) as { filas: { mercado: string }[] };
+      expect(m.filas.map((x) => x.mercado)).toEqual(['binance:BTCUSDT', 'binance:BTCUSDT']);
+      expect(((await (await fetch(`${base}/api/filas?mercado=binance:XAUUSDT`, auth)).json()) as { filas: unknown[] }).filas).toEqual([]);
+      expect(((await (await fetch(`${base}/api/filas?mercado=rithmic:BTCUSDT`, auth)).json()) as { filas: unknown[] }).filas).toEqual([]);
       const pre = await fetch(`${base}/api/filas`, { method: 'OPTIONS' });
       expect(pre.status).toBe(204);
       expect(pre.headers.get('access-control-allow-headers')).toContain('Authorization');

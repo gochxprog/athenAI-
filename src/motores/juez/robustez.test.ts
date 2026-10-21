@@ -25,8 +25,7 @@ function correr(cierres: number[], tiempos: number[], combos: Combo[], posicione
   const w = walkForward({ cierres, tiempos, posiciones, costos });
   const mejor = elegirVariante({ cierres, tiempos, posiciones, costos }, 0, w.inicioOos - w.embargo, 'sharpe').combo;
   const met = posiciones.map((p) => metricas(backtest(cierres, p, costos, w.inicioOos, cierres.length), tiempos, w.inicioOos, cierres.length));
-  const oos = metricas({ retornos: w.retornos, equity: [], operaciones: w.operaciones }, tiempos, w.inicioOos, cierres.length);
-  return robustez({ cierres, tiempos, posiciones, combos, mejor, metOos: met, ventanas: w.ventanas, inicioOos: w.inicioOos, retornosOos: w.retornos, ddOos: oos.maxDrawdown, costos });
+  return robustez({ cierres, tiempos, posiciones, combos, mejor, metOos: met, ventanas: w.ventanas, inicioOos: w.inicioOos, retornosOos: w.retornos, costos });
 }
 
 describe('Motor 6 · Robustez', () => {

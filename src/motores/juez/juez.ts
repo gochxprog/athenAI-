@@ -6,9 +6,11 @@
 //   2. Monte Carlo: remuestrea las operaciones fuera de muestra 2.000 veces → peor escenario razonable.
 //   3. Luck test: 1.000 versiones de la misma estrategia desplazada al azar en el tiempo (misma exposición,
 //      mismas operaciones). Si el azar consigue lo mismo a menudo, no hay ventaja.
-//   4. Robustez: costos ×2, parámetros vecinos, estabilidad por regímenes y otro mercado (robustez.ts).
+//   4. Robustez: costos ×2, parámetros vecinos y estabilidad por regímenes (robustez.ts).
 //   5. Deflated Sharpe (López de Prado): descuenta haber probado muchas variantes.
 //   6. PBO (CSCV): probabilidad de que la mejor variante dentro de muestra sea peor que la mediana fuera.
+// Un mercado, un juicio: todo se mide SOLO con los datos (fuera de muestra) del mercado `mercado`. Un edge nunca
+// se prueba ni se aprueba con datos de otro activo (docs/ARQUITECTURA_MERCADOS.md).
 import { crearAleatorio } from '@/lib/random';
 import { SCORE_PAPER, veredicto, type Puerta, type ScoreVeredicto, type Veredicto } from './veredicto';
 import { deflatedSharpe, DSR_MINIMO, pboCscv, PBO_MAXIMO, type DetalleDsr, type DetallePbo } from './sobreajuste';
@@ -16,11 +18,14 @@ import { robustez, type ResultadoRobustez } from './robustez';
 import { ALFA_LUCK, luckTest, type ConfigLuck, type ResultadoLuck } from './luckTest';
 import { monteCarlo, RUINA_MAXIMA, type ConfigMc, type ResultadoMc } from './monteCarlo';
 import { elegirVariante, walkForward, type ClaseWfe, type ConfigWfo, type ObjetivoWfo, type VentanaResultado } from './walkForward';
+import type { MercadoId } from '@/motores/mercado/mercadoId';
 import { aplicarHuecos, backtest, COSTOS_POR_DEFECTO, metricas, sharpeBarras, type Costos, type Metricas, type Operacion } from './backtest';
 
 export type Combo = Record<string, number | string | boolean>;
 
 export interface EntradaJuez {
+  /** Mercado de TODAS las series de esta entrada (market_id). El resultado lo lleva pegado. */
+  mercado?: MercadoId;
   cierres: number[];
   tiempos: number[];
   /** Barras marcadas como hueco (corte de datos): no se mantiene posición a través de ellas. */
@@ -33,8 +38,6 @@ export interface EntradaJuez {
   costos?: Costos;
   /** Variantes probadas en total (todas las ejecuciones de esta idea): alimenta el Deflated Sharpe. */
   ensayos?: number;
-  /** Misma estrategia (combo elegido) en otro mercado, si se pidió. */
-  otroMercado?: { simbolo: string; cierres: number[]; tiempos: number[]; posiciones: number[] } | null;
   /** Resultado de la prueba anti-futuro (la estrategia no usa datos de barras posteriores). */
   antiFuturo?: { ok: boolean; detalle: string; estatico?: { violaciones: string[]; alertas: string[] }; dinamico?: { cortes: number; recorte: boolean; alteracion: boolean; fila: number | null; prueba: string | null } } | null;
   semilla?: number;
@@ -63,6 +66,8 @@ export interface Regla {
 }
 
 export interface ResultadoJuez {
+  /** Mercado juzgado (market_id): la aprobación solo vale para él. */
+  mercado: MercadoId | null;
   /** APROBADA = lista para Paper Trading (puntuación ≥ 75). */
   veredicto: Veredicto;
   /** Puertas de cero tolerancia (motor 10). */
@@ -147,9 +152,8 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
   // Variante que se lleva a vivo: la que el Walk-Forward elegiría HOY (mismo objetivo, últimas L_IS barras).
   const comboVivo = wfo.ventanas.length ? elegirVariante({ cierres: e.cierres, tiempos: e.tiempos, posiciones, costos, opciones: fx }, Math.max(0, n - wfo.lIs), n, objetivo).combo : mejor;
 
-  // Motor 6 · Robustez (costos ×2, vecinos, otro mercado, estabilidad por regímenes).
-  const otro = e.otroMercado ? { simbolo: e.otroMercado.simbolo, ...metricas(backtest(e.otroMercado.cierres, e.otroMercado.posiciones, costos), e.otroMercado.tiempos) } : null;
-  const rob = robustez({ cierres: e.cierres, tiempos: e.tiempos, posiciones, combos: e.combos, mejor: seleccionPrevia, metOos, ventanas: wfo.ventanas, inicioOos, retornosOos: retOos, ddOos: oos.maxDrawdown, costos, opciones: fx, otroMercado: otro });
+  // Motor 6 · Robustez (costos ×2, vecinos, estabilidad por regímenes), solo con este mercado.
+  const rob = robustez({ cierres: e.cierres, tiempos: e.tiempos, posiciones, combos: e.combos, mejor: seleccionPrevia, metOos, ventanas: wfo.ventanas, inicioOos, retornosOos: retOos, costos, opciones: fx });
 
   // Motores 7 y 8 · Sobreajuste: Deflated Sharpe (fuera de muestra) y PBO (CSCV con todas las variantes).
   const ensayos = Math.max(e.ensayos ?? 1, e.combos.length);
@@ -172,7 +176,6 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
     { nombre: 'Deflated Sharpe', tipo: 'puerta', ok: dsr === null ? null : dsr >= DSR_MINIMO, valor: dsr === null ? '—' : dec(dsr, 3), umbral: '≥ 0,95', explicacion: `Descuenta haber probado ${ensayos} ${ensayos === 1 ? 'variante' : 'variantes'}.` },
     { nombre: 'PBO (sobreajuste)', tipo: 'puerta', ok: pbo === null ? null : pbo < PBO_MAXIMO, valor: pbo === null ? 'una sola variante' : pctTxt(pbo), umbral: '< 5 %', explicacion: 'Probabilidad de que la mejor variante en entrenamiento quede por debajo de la mediana fuera.' },
     { nombre: 'Robustez (costos ×2, vecinos, estabilidad)', tipo: 'puerta', ok: rob.estado !== 'rechazado', valor: `${3 - rob.fallas - (rob.vecinos.ok === null ? 1 : 0)}/${rob.vecinos.ok === null ? 2 : 3} pruebas superadas`, umbral: 'falla como mucho 1', explicacion: 'Debe aguantar el doble de costos, cambios pequeños en sus parámetros y distintos regímenes del mercado.' },
-    { nombre: 'Otro mercado', tipo: 'puntua', ok: rob.otroMercado ? rob.otroMercado.ok : null, valor: rob.otroMercado ? `${rob.otroMercado.simbolo}: ${pctTxt(rob.otroMercado.retornoTotal)}, caída ${pctTxt(rob.otroMercado.maxDrawdown)}` : 'no probado', umbral: '> −10 % y caída ≤ 2× la original', explicacion: 'Con los mismos parámetros en otro activo no debe destruir capital.' },
   ];
   const alertas: string[] = [];
   if (mc?.alertaOrden) alertas.push(`Monte Carlo: la peor caída probable (P95 ${pctTxt(mc.ddP95)}) es más del doble que la del backtest (${pctTxt(mc.ddOriginal)}). Si las pérdidas llegan seguidas, dolerá mucho más de lo que muestra el backtest.`);
@@ -207,6 +210,7 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
           : `Pasa todas las puertas, pero con ${dec(v.score!.total, 0)} puntos (se piden ${SCORE_PAPER}): queda en cuarentena; conviene reajustar o grabar más datos.`;
 
   return {
+    mercado: e.mercado ?? null,
     veredicto: v.veredicto,
     puertas: v.puertas,
     score: v.score,

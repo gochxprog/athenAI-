@@ -22,7 +22,8 @@ TAMBIÉN PUEDES ABRIR LA PLATAFORMA DESDE EL VPS
 ÚTIL
 - Ver qué hace:        journalctl -u athenai-grabadora -f
 - Reiniciar:           sudo systemctl restart athenai-grabadora
-- Actualizar:          sube el zip nuevo y vuelve a ejecutar el paso 2 (los datos se conservan)
+- Actualizar:          sube el zip nuevo y vuelve a ejecutar el paso 2 (los datos se conservan; si venías de la
+                       versión anterior, al arrancar los mueve solo a una carpeta por mercado: mercados/binance_btcusdt/)
 - Datos grabados en:   /var/lib/athenai-grabadora
 - La clave está en:    /var/lib/athenai-grabadora/clave.txt
 

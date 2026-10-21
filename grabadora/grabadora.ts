@@ -51,6 +51,7 @@ export function leerOCrearClave(datos: string): string {
 export function iniciarGrabadora(o: OpcionesGrabadora) {
   const log = o.log ?? ((t: string) => console.log(`[${new Date().toISOString()}] ${t}`));
   const almacen = new AlmacenDisco(path.join(o.datos));
+  if (almacen.migracion) log(almacen.migracion.error ? `Migración a carpetas por mercado incompleta (no se borró nada): ${almacen.migracion.error}` : `Datos pasados a una carpeta por mercado: ${almacen.migracion.filas} archivos de días y ${almacen.migracion.sesiones} sesiones.`);
   const clave = leerOCrearClave(o.datos);
   const inicio = Date.now();
   const activos = new Map<string, Activo>();

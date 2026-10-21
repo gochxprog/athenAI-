@@ -13,6 +13,7 @@
 //            retorno = P&L neto / capital antes de entrar   ·   retorno por unidad = retorno / exposición
 //            (el retorno por unidad es comparable con las operaciones del Juez, que usan exposición 1).
 // Capital en vivo (equity) = capital + lado × cantidad × (precio medio − entrada).
+import type { MercadoId } from '@/motores/mercado/mercadoId';
 import { cobrosFunding, comisionUsd, deslizamientoDinamico, type Costos } from '../juez/costos';
 import type { Combo } from '../juez/juez';
 import type { Proveedor } from '../almacen/almacen';
@@ -74,6 +75,8 @@ export interface Bot {
   combo: Combo;
   proveedor: Proveedor;
   simbolo: string;
+  /** market_id: el ÚNICO mercado en el que opera (el mismo en el que el Juez aprobó la estrategia). */
+  mercado: MercadoId;
   creado: number;
   veredicto: string;
   score: number | null;

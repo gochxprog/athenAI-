@@ -18,7 +18,7 @@ const mercado = (bid: number, ask: number, extra: Partial<MercadoVivo> = {}): Me
 
 function bot(extra: Partial<Bot> = {}): Bot {
   return {
-    id: 'b1', nombre: 'Prueba', estrategiaId: 'e1', codigo: '', combo: {}, proveedor: 'binance', simbolo: 'BTCUSDT', creado: T0,
+    id: 'b1', nombre: 'Prueba', estrategiaId: 'e1', codigo: '', combo: {}, proveedor: 'binance', simbolo: 'BTCUSDT', mercado: 'binance:BTCUSDT', creado: T0,
     veredicto: 'APROBADA', score: 80, exposicion: 1, capitalInicial: 10_000, capital: 10_000, posicion: null, estado: 'activo', motivo: '',
     costos: COSTOS, retornosJuez: [0.01], dia: { fecha: '2026-10-21', pico: 10_000 }, pausadoDia: null, perdidasSeguidas: 0, operaciones: 0,
     retornoUnidadAcum: 0, ultimoFundingT: T0, ultimaSenalT: null, ultimaSenal: null, ultimoPrecio: null, hueco: false, ultimaActualizacion: T0, curva: [],
@@ -186,7 +186,7 @@ describe('Motor de Paper (de punta a punta con el libro en IndexedDB)', () => {
     return { motor, almacen, avisos, paso, avanzar: (ms: number) => (ahora += ms) };
   }
 
-  const nuevo = { nombre: 'Absorción', estrategiaId: 'e1', codigo: '', combo: {}, proveedor: 'binance' as const, simbolo: 'BTCUSDT', veredicto: 'APROBADA', score: 80, capital: 10_000, exposicion: 1, costos: COSTOS, retornosJuez: [0.01, -0.005] };
+  const nuevo = { nombre: 'Absorción', estrategiaId: 'e1', codigo: '', combo: {}, proveedor: 'binance' as const, simbolo: 'BTCUSDT', mercadoAprobado: 'binance:BTCUSDT' as const, veredicto: 'APROBADA', score: 80, capital: 10_000, exposicion: 1, costos: COSTOS, retornosJuez: [0.01, -0.005] };
 
   it('solo crea bots de estrategias aprobadas y limita la exposición según la nota', async () => {
     const { motor } = montar();
@@ -194,6 +194,27 @@ describe('Motor de Paper (de punta a punta con el libro en IndexedDB)', () => {
     await expect(motor.crearBot({ ...nuevo, veredicto: 'RECHAZADA' })).rejects.toThrow();
     const b = await motor.crearBot({ ...nuevo, veredicto: 'APROBADA CON RESERVA', exposicion: 3 });
     expect(b.exposicion).toBe(0.5);
+  });
+
+  it('un mercado, un juicio: no se crea un bot de BTC con una aprobación de XAU, y un bot de BTC no opera con barras de XAU', async () => {
+    const { motor, paso } = montar();
+    await motor.cargar();
+    await expect(motor.crearBot({ ...nuevo, mercadoAprobado: 'binance:XAUUSDT' })).rejects.toThrow(/no en binance:BTCUSDT/);
+    await expect(motor.crearBot({ ...nuevo, simbolo: 'XAUUSDT' })).rejects.toThrow(/aprobó esta estrategia en binance:BTCUSDT/);
+    const b = await motor.crearBot(nuevo);
+    expect(b.mercado).toBe('binance:BTCUSDT');
+    await paso(100); // primer feed de BTC: señal 0
+    // Llegan barras nuevas SOLO de XAU (BTC no cambia): el bot de BTC no pide señal ni abre.
+    const xau = (filas: number) => ({ simbolo: 'XAUUSDT', proveedor: 'binance', conexion: 'en-vivo', precio: 2400, filas, guardando: true, resumen: { bid: 2400, ask: 2400.2, precio: 2400.1, atr: null, libro10: null, fundingTasa: null } }) as unknown as EstadoFeed;
+    const antes = b.ultimaSenalT;
+    for (let i = 1; i <= 3; i += 1) {
+      await motor.alFeeds([xau(i)]);
+      await motor.esperarSenales();
+    }
+    expect(b.posicion).toBeNull();
+    expect(b.ultimaSenalT).toBe(antes);
+    expect(b.ultimoPrecio).not.toBe(2400.1);
+    await motor.borrar(b.id);
   });
 
   it('espera la próxima entrada, opera con las señales, guarda las operaciones y el apagado cierra todo', async () => {

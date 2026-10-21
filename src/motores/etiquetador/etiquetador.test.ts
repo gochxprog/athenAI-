@@ -95,10 +95,11 @@ describe('Etiquetador · completo', () => {
     }
     const { positivas, negativas, neutras } = res.resumen;
     expect(positivas + negativas + neutras).toBe(res.etiquetas.length);
-    const csv = datasetCsv(filas, res).split('\n');
-    expect(csv[0]).toBe('evento_inicio,evento_fin,evento_lado,evento_precio,evento_sigma,evento_barrera,etiqueta,meta,evento_retorno,evento_barras,delta');
+    const csv = datasetCsv(filas, res, 'binance:BTCUSDT').split('\n');
+    expect(csv[0]).toBe('market_id,evento_inicio,evento_fin,evento_lado,evento_precio,evento_sigma,evento_barrera,etiqueta,meta,evento_retorno,evento_barras,delta');
     expect(csv).toHaveLength(res.etiquetas.length + 1);
-    expect(csv[1].split(',')[10]).toBe(String(res.etiquetas[0].t0));
+    expect(csv[1].split(',')[0]).toBe('binance:BTCUSDT');
+    expect(csv[1].split(',')[11]).toBe(String(res.etiquetas[0].t0));
   });
 });
 

@@ -5,6 +5,7 @@
 //   · cada segundo: Guardián (conexión, caída del día, cambio de día), funding y capital en vivo;
 //   · cada barra nueva de su mercado: se pide la señal de la estrategia. El bot solo actúa cuando la señal CAMBIA
 //     (entra en la siguiente entrada; no se sube a una posición que la estrategia abrió antes).
+import { mercadoIdSeguro, type MercadoId } from '@/motores/mercado/mercadoId';
 import type { Aviso } from '../notificaciones/canales';
 import type { EstadoFeed } from '../worker/protocolo';
 import type { EstrategiaEnVivo, SenalEstrategia } from '../laboratorio/protocolo';
@@ -38,6 +39,8 @@ export interface NuevoBot {
   combo: Combo;
   proveedor: Proveedor;
   simbolo: string;
+  /** Mercado (market_id) en el que el Juez dio ese veredicto. Tiene que ser el mismo que proveedor:simbolo. */
+  mercadoAprobado: MercadoId;
   veredicto: string;
   score: number | null;
   capital: number;
@@ -53,7 +56,8 @@ const GUARDAR_CADA_MS = 10_000;
 
 const precioTxt = (v: number) => v.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const claveMercado = (proveedor: string, simbolo: string) => `${proveedor}:${simbolo}`;
+/** Clave de un feed o bot: su market_id (única definición en motores/mercado/mercadoId.ts). */
+const claveMercado = (proveedor: string, simbolo: string): string => mercadoIdSeguro(proveedor, simbolo) ?? `invalido:${proveedor}:${simbolo}`;
 
 export function mercadoDe(f: EstadoFeed, t: number): MercadoVivo {
   const r = f.resumen;
@@ -88,6 +92,8 @@ export class MotorPaper {
 
   async cargar(): Promise<void> {
     this.bots = (await this.deps.almacen.leerBots()).sort((a, b) => a.creado - b.creado);
+    // Bots creados antes del market_id: su mercado sale de su proveedor y símbolo (los mismos de siempre).
+    for (const b of this.bots) b.mercado ??= mercadoIdSeguro(b.proveedor, b.simbolo) ?? (`${b.proveedor}:${b.simbolo}` as MercadoId);
     const ahora = this.deps.reloj();
     for (const b of this.bots) if (b.posicion && ahora - b.ultimaActualizacion > HUECO_MS) b.hueco = true;
     this.cargado = true;
@@ -116,11 +122,11 @@ export class MotorPaper {
   }
 
   mercado(b: Bot): MercadoVivo | null {
-    return this.mercados.get(claveMercado(b.proveedor, b.simbolo)) ?? null;
+    return this.mercados.get(b.mercado) ?? null;
   }
 
   feed(b: Bot): EstadoFeed | null {
-    return this.feeds.find((f) => f.proveedor === b.proveedor && f.simbolo === b.simbolo) ?? null;
+    return this.feeds.find((f) => claveMercado(f.proveedor, f.simbolo) === b.mercado) ?? null;
   }
 
   private anotar(b: Bot, texto: string, grave = false, avisar = true): void {
@@ -147,6 +153,10 @@ export class MotorPaper {
     if (!max) throw new Error(`El Juez no la aprobó (${d.veredicto || 'sin veredicto'}): no puede tener bot.`);
     if (!(d.capital > 0)) throw new Error('El capital tiene que ser mayor que 0.');
     if (this.apagado) throw new Error('El apagado de emergencia está activo: rearma el sistema primero.');
+    // Un mercado, un juicio: el bot solo puede operar el mercado en el que el Juez aprobó la estrategia.
+    const mercado = mercadoIdSeguro(d.proveedor, d.simbolo);
+    if (!mercado) throw new Error(`Mercado no válido: ${d.proveedor}:${d.simbolo}.`);
+    if (d.mercadoAprobado !== mercado) throw new Error(`El Juez aprobó esta estrategia en ${d.mercadoAprobado}, no en ${mercado}: un edge de un mercado no se usa en otro.`);
     const t = this.deps.reloj();
     const b: Bot = {
       id: `bot-${t}-${Math.round(Math.random() * 1e4)}`,
@@ -156,6 +166,7 @@ export class MotorPaper {
       combo: d.combo,
       proveedor: d.proveedor,
       simbolo: d.simbolo,
+      mercado,
       creado: t,
       veredicto: d.veredicto,
       score: d.score,
@@ -182,7 +193,7 @@ export class MotorPaper {
     };
     this.bots.push(b);
     await this.guardar(b);
-    this.pendientes.add(claveMercado(b.proveedor, b.simbolo));
+    this.pendientes.add(b.mercado);
     this.anotar(b, `Bot creado: ${b.capital.toLocaleString('es-ES')} USD, exposición ${b.exposicion}×.`);
     this.avisarOyentes();
     return b;
@@ -229,7 +240,7 @@ export class MotorPaper {
     b.motivo = 'Esperando la próxima entrada de la estrategia.';
     b.ultimaSenal = null;
     b.pausadoDia = null;
-    this.pendientes.add(claveMercado(b.proveedor, b.simbolo));
+    this.pendientes.add(b.mercado);
     this.anotar(b, 'Reanudado por ti.', false, false);
     await this.guardar(b);
     this.avisarOyentes();
@@ -358,7 +369,7 @@ export class MotorPaper {
   }
 
   private async procesarSenales(claves: Set<string>): Promise<void> {
-    const bots = this.bots.filter((b) => b.estado === 'activo' && !this.apagado && claves.has(claveMercado(b.proveedor, b.simbolo)));
+    const bots = this.bots.filter((b) => b.estado === 'activo' && !this.apagado && claves.has(b.mercado));
     if (!bots.length) return;
     const xs = await this.deps.senales(bots.map((b) => ({ id: b.id, codigo: b.codigo, combo: b.combo, proveedor: b.proveedor, simbolo: b.simbolo })));
     for (const s of xs) {

@@ -2,10 +2,12 @@
 import { useEffect, useState } from 'react';
 import { motorOrderFlow } from '@/motores/worker/motorCliente';
 import type { Proveedor, ResumenSimbolo } from '@/motores/worker/protocolo';
+import { mercadoIdSeguro } from '@/motores/mercado/mercadoId';
 
 export type FuenteGuardada = { proveedor: Proveedor; simbolo: string; filas: number };
 
-export const claveFuente = (f: { proveedor: string; simbolo: string }) => `${f.proveedor}:${f.simbolo}`;
+/** Clave de un mercado grabado: su market_id (única definición en motores/mercado/mercadoId.ts). */
+export const claveFuente = (f: { proveedor: string; simbolo: string }): string => mercadoIdSeguro(f.proveedor, f.simbolo) ?? `${f.proveedor}:${f.simbolo}`;
 
 export function useFuentesGuardadas(): FuenteGuardada[] {
   const [fuentes, setFuentes] = useState<FuenteGuardada[]>([]);

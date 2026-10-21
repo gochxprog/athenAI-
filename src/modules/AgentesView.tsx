@@ -189,7 +189,7 @@ export default function AgentesView() {
               <span className="text-plata-200">{a.nombre}</span> · {ESTILO_AGENTE[a.id].nombreAccesorio}
             </span>
           ))}
-          <span className="text-plata-500">· su puesto se ilumina de su color cuando trabaja; atenuado = sin motor todavía</span>
+          <span className="text-plata-500">· el color es la luz LED de su puesto (encendida cuando trabaja; atenuada = sin motor todavía)</span>
         </div>
       </Panel>
 

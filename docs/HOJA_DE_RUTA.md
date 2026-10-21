@@ -119,7 +119,7 @@ Dónde verlo: **Order Flow → pestaña «Memoria del mercado»**, las tarjetas 
 - ✅ **Aviso "hoy es distinto"**: compara la ventana de las últimas 20 barras con todo lo grabado. Si está más lejos que el 98 % de lo normal, salta el aviso (tarjeta y barra superior) y dice qué es lo raro (volatilidad, liquidaciones, big trades…). Necesita **320 barras**.
 - ✅ **Día gemelo**: los 8 momentos más parecidos a ahora y qué pasó en las 20 barras siguientes (retorno, máxima subida y bajada). Es memoria, no predicción.
 - ✅ **BTC vs XAU (cruce entre mercados)**: correlación de los retornos de 5 min en las últimas 24 h para cada par de mercados y si coinciden en régimen. XAUUSDT y PAXGUSDT (Binance) y GC/MGC (Rithmic) están entre los sugeridos.
-  - ✅ La prueba "el patrón aparece en los dos mercados" la hace el Juez (regla «Otro mercado», Bloque C).
+  - El cruce entre mercados es solo contexto en pantalla. El Juez nunca prueba un edge en otro mercado: cada mercado se juzga por separado (docs/ARQUITECTURA_MERCADOS.md).
 - ✅ **Heatmap de liquidez** tipo Bookmap: botón «Heatmap» en el gráfico. Últimos 30 min del libro; solo brillan los muros (lo normal queda oscuro).
 - ✅ **Calendario de eventos fuertes** (Centro de datos): FOMC 2026 precargado, se añaden CPI, nóminas, etc. Ventana de no operar en la barra superior y Feature `ventana_evento`.
 
@@ -138,7 +138,7 @@ Dónde verlo: **Laboratorio → «Mis estrategias (Python) · real»**.
   - **Walk-Forward purgado con embargo**: el 30 % inicial solo para elegir parámetros; 5 tramos fuera de muestra, cada uno con parámetros elegidos solo con lo anterior (20 barras de embargo);
   - **Monte Carlo** (2.000 órdenes de las operaciones): P5 / P50 / P95 y probabilidad de una caída > 25 %;
   - **Luck test** (1.000 versiones desplazadas al azar con la misma exposición): p-valor;
-  - **robustez**: costos ×2, parámetros vecinos, estabilidad entre tramos y **otro mercado** (por ejemplo BTC frente a XAU: el patrón que aparece en los dos);
+  - **robustez**: costos ×2, parámetros vecinos, y estabilidad entre tramos, todo con los datos del mismo mercado (un edge de BTC no se prueba en XAU);
   - **Deflated Sharpe** (descuenta todas las variantes probadas con esa idea, también en ejecuciones anteriores) y **PBO** (CSCV).
 - ✅ **Métricas**: retorno, Sharpe anualizado, drawdown máximo, % de aciertos, factor de beneficio, operaciones, retorno medio y tiempo en mercado. Fuera de muestra (lo que cuenta) frente a dentro (optimista).
 - ✅ **Veredicto**: APROBADA / RECHAZADA (con los motivos) / DATOS INSUFICIENTES (mínimo 500 barras y 30 operaciones fuera de muestra).

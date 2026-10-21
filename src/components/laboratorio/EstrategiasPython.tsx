@@ -14,7 +14,9 @@ import { LUCK_POR_DEFECTO, NOMBRE_METODO_LUCK, NOMBRE_METRICA_LUCK, type MetodoL
 import { DEFINICIONES_FEATURES } from '@/motores/nucleo/features';
 import { num } from '@/lib/format';
 import { guardarEstrategias, leerEstrategias, PLANTILLAS, type EstrategiaGuardada } from './plantillas';
+import { mercadoId } from '@/motores/mercado/mercadoId';
 import ResultadoJuezVista from './ResultadoJuez';
+import MapaEdge from './MapaEdge';
 import BibliotecaPapers, { AccionesPaper, VisorPaper } from './BibliotecaPapers';
 import { crearPaper, guardarPaper, leerPapers, type Paper } from '@/motores/papers/paper';
 
@@ -27,7 +29,7 @@ const MOTORES_JUEZ = [
   ['Walk-Forward', 'elige los parámetros con un tramo y los prueba en el siguiente que no vio, una y otra vez.'],
   ['Monte Carlo', 'baraja tus operaciones miles de veces para ver la peor racha probable y el riesgo de ruina.'],
   ['Luck test', 'compara con miles de estrategias al azar: ¿habilidad o suerte?'],
-  ['Robustez', 'costos al doble, parámetros vecinos, otro mercado y estabilidad en el tiempo.'],
+  ['Robustez', 'costos al doble, parámetros vecinos y estabilidad en el tiempo, solo con el mercado elegido.'],
   ['Deflated Sharpe', 'descuenta el haber probado muchas variantes.'],
   ['PBO', 'probabilidad de que la mejor variante sea solo sobreajuste.'],
   ['Anti-futuro', 'comprueba que el código no mira datos del futuro.'],
@@ -41,7 +43,6 @@ export default function EstrategiasPython() {
   const sel = estrategias.find((x) => x.id === selId) ?? estrategias[0];
   const fuentes = useFuentesGuardadas();
   const [datos, setDatos] = useState('');
-  const [otro, setOtro] = useState('');
   const [comision, setComision] = useState(COSTOS_POR_DEFECTO.comisionPb);
   const [deslizamiento, setDeslizamiento] = useState(COSTOS_POR_DEFECTO.deslizamientoPb);
   // Walk-Forward: automático salvo que se cambie en «Avanzado» (0 = automático).
@@ -97,24 +98,27 @@ export default function EstrategiasPython() {
   const ejecutar = async () => {
     const f = fuentes.find((x) => clave(x) === datos);
     if (!f) return;
-    const o = fuentes.find((x) => clave(x) === otro && clave(x) !== datos) ?? null;
     setCorriendo(true);
     setError(null);
     setResultado(null);
     setProgreso([]);
     try {
       const r = await laboratorio.ejecutar(
-        { codigo: sel.codigo, proveedor: f.proveedor, simbolo: f.simbolo, otro: o && { proveedor: o.proveedor, simbolo: o.simbolo }, costos: { comisionPb: comision, deslizamientoPb: deslizamiento }, ensayosPrevios: sel.ensayos, wfo: { objetivo: objetivoWfo, lIs, lOos }, monteCarlo: { metodo: metodoMc, simulaciones: Math.min(10_000, Math.max(100, simulaciones)), umbralRuina: ruinaPct / 100, capitalInicial: capital }, luck: { metodo: metodoLuck, metrica: metricaLuck, permutaciones: Math.min(10_000, Math.max(100, permutaciones)) } },
+        { codigo: sel.codigo, proveedor: f.proveedor, simbolo: f.simbolo, costos: { comisionPb: comision, deslizamientoPb: deslizamiento }, ensayosPrevios: sel.ensayos, wfo: { objetivo: objetivoWfo, lIs, lOos }, monteCarlo: { metodo: metodoMc, simulaciones: Math.min(10_000, Math.max(100, simulaciones)), umbralRuina: ruinaPct / 100, capitalInicial: capital }, luck: { metodo: metodoLuck, metrica: metricaLuck, permutaciones: Math.min(10_000, Math.max(100, permutaciones)) } },
         (t) => setProgreso((p) => [...p.slice(-6), t]),
       );
       setResultado(r);
       // Cada prueba del Juez queda como paper en la biblioteca.
-      const paper = crearPaper({ estrategia: sel.nombre, codigo: sel.codigo, simbolo: f.simbolo, proveedor: NOMBRE_PROVEEDOR[f.proveedor], costos: { comisionPb: comision, deslizamientoPb: deslizamiento }, respuesta: r });
+      const mercado = mercadoId(f.proveedor, f.simbolo);
+      const paper = crearPaper({ estrategia: sel.nombre, codigo: sel.codigo, simbolo: f.simbolo, proveedor: NOMBRE_PROVEEDOR[f.proveedor], mercado, costos: { comisionPb: comision, deslizamientoPb: deslizamiento }, respuesta: r });
       guardarPaper(paper);
       setPaper(paper);
       setVersionPapers((v) => v + 1);
       notificador.juez(sel.nombre, f.simbolo, r.resultado.veredicto, r.resultado.resumen);
-      cambiar({ ensayos: sel.ensayos + r.combos.length, ultimoVeredicto: r.resultado.veredicto, juzgada: { proveedor: f.proveedor, simbolo: f.simbolo, combo: r.combos[r.resultado.comboVivo ?? r.resultado.dentroMuestra.combo] ?? {} } });
+      const combo = r.combos[r.resultado.comboVivo ?? r.resultado.dentroMuestra.combo] ?? {};
+      // El veredicto se guarda en SU mercado: probar en otro mercado no pisa lo que se sabe de este.
+      const juicio = { mercado, proveedor: f.proveedor, simbolo: f.simbolo, veredicto: r.resultado.veredicto, combo, fecha: Date.now(), paperId: paper.id };
+      cambiar({ ensayos: sel.ensayos + r.combos.length, ultimoVeredicto: r.resultado.veredicto, juzgada: { proveedor: f.proveedor, simbolo: f.simbolo, combo }, porMercado: { ...sel.porMercado, [mercado]: juicio } });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -216,26 +220,13 @@ export default function EstrategiasPython() {
         {fuenteSel && fuenteSel.filas < 100 && <p className="text-xs text-plata-200" data-pocas-filas>⚠ Solo hay {num(fuenteSel.filas)} barras grabadas de {fuenteSel.simbolo}. El Juez necesita al menos 100 (y para un resultado fiable, días de datos). Déjalo grabando.</p>}
         <div className="grid gap-3 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_auto_auto]">
           <label className="block">
-            <span className="etiqueta">Datos</span>
+            <span className="etiqueta">Mercado a probar</span>
             <select value={datos} onChange={(e) => setDatos(e.target.value)} aria-label="Datos para la prueba" className="mt-1 w-full rounded-md border border-borde bg-black px-2 py-1.5 text-[11px] text-plata-100">
               {fuentes.map((f) => (
                 <option key={clave(f)} value={clave(f)}>
                   {f.simbolo} · {NOMBRE_PROVEEDOR[f.proveedor]} · {num(f.filas)} filas
                 </option>
               ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="etiqueta">Otro mercado (robustez)</span>
-            <select value={otro} onChange={(e) => setOtro(e.target.value)} aria-label="Otro mercado" className="mt-1 w-full rounded-md border border-borde bg-black px-2 py-1.5 text-[11px] text-plata-100">
-              <option value="">Automático (otro de la misma familia, si hay datos)</option>
-              {fuentes
-                .filter((f) => clave(f) !== datos)
-                .map((f) => (
-                  <option key={clave(f)} value={clave(f)}>
-                    {f.simbolo} · {NOMBRE_PROVEEDOR[f.proveedor]}
-                  </option>
-                ))}
             </select>
           </label>
           <label className="block">
@@ -363,6 +354,7 @@ export default function EstrategiasPython() {
           </ol>
         </Panel>
       )}
+      <MapaEdge estrategias={estrategias} fuentes={fuentes} />
       <BibliotecaPapers version={versionPapers} />
       <VisorPaper p={viendo} alCerrar={() => setViendo(null)} />
     </div>
