@@ -67,6 +67,18 @@ describe('Órdenes a mano (Terminal)', () => {
     expect(vigilarGestion(b, mercado(1_000))).toBeNull();
   });
 
+  it('lotaje fijo: usa la cantidad dada; el riesgo sale de cantidad × distancia; no abre si no cabe o arriesga > 5 %', () => {
+    const p = previaOrden(10_000, mercado(99, 100, null), { lado: 1, riesgoPct: 0.01, cantidad: 20, stopPrecio: 98, rr: 2, gestion: 'fija' })!;
+    expect(p.cantidad).toBe(20);
+    expect(p.riesgoUsd).toBe(40);
+    const b = cuenta();
+    expect(abrirManual(b, mercado(99, 100, null), { lado: 1, riesgoPct: 0.01, cantidad: 20, stopPrecio: 98, rr: 2, gestion: 'fija' })).toBeNull();
+    expect(b.posicion!.cantidad).toBe(20);
+    expect(abrirManual(cuenta(), mercado(99, 100, null), { lado: 1, riesgoPct: 0.01, cantidad: 200, stopPrecio: 98, gestion: 'fija' })).toMatch(/no cabe/);
+    expect(abrirManual(cuenta(), mercado(99, 100, null), { lado: 1, riesgoPct: 0.01, cantidad: 90, stopPrecio: 90, gestion: 'fija' })).toMatch(/más del 5/);
+    expect(abrirManual(cuenta(), mercado(99, 100, null), { lado: 1, riesgoPct: 0.01, cantidad: 0, stopPrecio: 90, gestion: 'fija' })).toMatch(/lotaje/);
+  });
+
   it('no abre si ya hay posición o el riesgo es absurdo', () => {
     const b = cuenta();
     expect(abrirManual(b, mercado(100), { lado: 1, riesgoPct: 0.5, stopPrecio: 90, gestion: 'fija' })).toMatch(/riesgo/);

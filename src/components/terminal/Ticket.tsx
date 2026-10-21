@@ -35,6 +35,8 @@ export default function Ticket() {
   const feed = feeds.feeds.find((f) => f.simbolo === feeds.visible) ?? feeds.feeds[0];
   const [lado, setLado] = useState<1 | -1>(1);
   const [riesgo, setRiesgo] = useState(0.005);
+  const [modoTam, setModoTam] = useState<'riesgo' | 'lotaje'>('riesgo');
+  const [lotaje, setLotaje] = useState('0.01');
   const [modoStop, setModoStop] = useState<'atr' | 'precio'>('atr');
   const [k, setK] = useState(1.5);
   const [stopPrecio, setStopPrecio] = useState('');
@@ -47,9 +49,15 @@ export default function Ticket() {
   const mercado = feed ? mercadoIdSeguro(feed.proveedor, feed.simbolo) : null;
   const cuenta = mercado ? motor.bots.find((b) => b.id === idManual(mercado)) : undefined;
   const capital = cuenta?.capital ?? CAPITAL_MANUAL;
-  const orden: OrdenManual = { lado, riesgoPct: riesgo, gestion, ...(modoStop === 'atr' ? { stopAtr: k } : { stopPrecio: Number(stopPrecio) || undefined }), ...(rr ? { rr } : {}) };
+  const cantidadLotaje = Number(lotaje.replace(',', '.'));
+  const orden: OrdenManual = { lado, riesgoPct: riesgo, gestion, ...(modoTam === 'lotaje' ? { cantidad: cantidadLotaje > 0 ? cantidadLotaje : 0 } : {}), ...(modoStop === 'atr' ? { stopAtr: k } : { stopPrecio: Number(stopPrecio) || undefined }), ...(rr ? { rr } : {}) };
   const pre = previaOrden(capital, m, orden);
   const abierta = !!cuenta?.posicion;
+  const base = feed?.simbolo.replace(/USDT$|USDC$/, '') ?? '';
+  const lotes = base === 'BTC' ? [0.001, 0.005, 0.01, 0.05] : base === 'ETH' ? [0.01, 0.05, 0.1, 0.5] : [0.1, 0.5, 1, 5];
+  const nocional = pre ? pre.cantidad * pre.entrada : 0;
+  const riesgoCuenta = pre && capital > 0 ? pre.riesgoUsd / capital : 0;
+  const excede = !!pre && (nocional > capital || riesgoCuenta > RIESGO_MAXIMO);
 
   const enviar = async () => {
     if (!feed) return;
@@ -85,8 +93,33 @@ export default function Ticket() {
       </div>
 
       <div className="space-y-1.5">
-        <p className="etiqueta">Riesgo por operación</p>
-        <Chips nombre="Riesgo" valores={RIESGOS} valor={riesgo} texto={(v) => `${num(v * 100, v < 0.01 ? 2 : 0)} %`} alElegir={setRiesgo} />
+        <div className="flex items-center justify-between">
+          <p className="etiqueta">Tamaño</p>
+          <div className="flex rounded-md border border-borde p-0.5 text-[10px]" role="radiogroup" aria-label="Modo de tamaño">
+            {(['riesgo', 'lotaje'] as const).map((x) => (
+              <button key={x} role="radio" aria-checked={modoTam === x} onClick={() => setModoTam(x)} className={`rounded px-2 py-0.5 ${modoTam === x ? 'bg-white text-black' : 'text-plata-300 hover:text-white'}`} data-modo-tamano={x}>
+                {x === 'riesgo' ? 'Por riesgo %' : 'Lotaje'}
+              </button>
+            ))}
+          </div>
+        </div>
+        {modoTam === 'riesgo' ? (
+          <Chips nombre="Riesgo" valores={RIESGOS} valor={riesgo} texto={(v) => `${num(v * 100, v < 0.01 ? 2 : 0)} %`} alElegir={setRiesgo} />
+        ) : (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <input type="number" min={0} step="any" value={lotaje} onChange={(e) => setLotaje(e.target.value)} aria-label="Lotaje" className="w-full rounded-md border border-borde bg-black px-2.5 py-1.5 font-mono text-[11px] text-plata-100 outline-none focus:border-plata-400" data-lotaje />
+              <span className="font-mono text-[11px] text-plata-400">{base}</span>
+            </div>
+            <Chips nombre="Lotes rápidos" valores={lotes} valor={cantidadLotaje} texto={(v) => String(v).replace('.', ',')} alElegir={(v) => setLotaje(String(v))} />
+          </div>
+        )}
+        {pre && (
+          <p className={`cifra text-[10px] ${excede ? 'text-white' : 'text-plata-500'}`} data-tamano-resumen>
+            {num(pre.cantidad, 4)} {base} · {num(nocional, 0)} USD · arriesga {num(riesgoCuenta * 100, 2)} % de la cuenta
+            {excede ? (nocional > capital ? ' · no cabe sin apalancamiento' : ` · supera el ${RIESGO_MAXIMO * 100} %`) : ''}
+          </p>
+        )}
       </div>
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
@@ -113,7 +146,7 @@ export default function Ticket() {
 
       <ReglaR pre={pre} lado={lado} />
 
-      <button onClick={enviar} disabled={!pre || enviando || abierta || motor.apagado} className="w-full rounded-xl bg-white py-2.5 text-xs font-medium text-black transition-opacity disabled:opacity-30" data-enviar-orden>
+      <button onClick={enviar} disabled={!pre || excede || enviando || abierta || motor.apagado} className="w-full rounded-xl bg-white py-2.5 text-xs font-medium text-black transition-opacity disabled:opacity-30" data-enviar-orden>
         {abierta ? 'Ya tienes una posición en este mercado' : enviando ? 'Enviando…' : `${lado > 0 ? 'Comprar' : 'Vender'} ${pre ? num(pre.cantidad, 4) : ''} ${feed?.simbolo.replace('USDT', '') ?? ''}`}
       </button>
       {estado && <p className={`text-[11px] ${estado.ok ? 'text-white' : 'text-plata-300'}`}>{estado.texto}</p>}

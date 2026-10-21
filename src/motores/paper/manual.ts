@@ -3,6 +3,7 @@
 //
 //   Riesgo:     riesgoUsd = capital × riesgo%            distancia = |entrada − stop|  (k × ATR o precio dado)
 //   Tamaño:     cantidad = riesgoUsd / distancia          (sin apalancamiento: nocional ≤ capital; si no, se recorta)
+//               o lotaje fijo: cantidad dada, riesgo = cantidad × distancia (si no cabe sin apalancamiento, no se abre)
 //   En vivo (cada segundo), con el lado del libro por el que se saldría:
 //     largo → bid      corto → ask          (toca stop y objetivo a la vez → stop)
 //     sale a mercado con deslizamiento (como un stop real); si no, mueve el stop según la gestión.
@@ -14,6 +15,8 @@ export interface OrdenManual {
   lado: 1 | -1;
   /** Riesgo por operación, fracción de la cuenta (0,005 = 0,5 %). */
   riesgoPct: number;
+  /** Lotaje fijo (unidades del activo, p. ej. 0,01 BTC). Si viene, manda sobre el riesgo %. */
+  cantidad?: number;
   /** Stop: k × ATR o un precio. */
   stopAtr?: number;
   stopPrecio?: number;
@@ -48,7 +51,7 @@ export function previaOrden(capital: number, m: MercadoVivo | null, o: OrdenManu
   if (!(distancia > 0)) return null;
   const stop = ref - o.lado * distancia;
   const objetivo = o.objetivoPrecio ?? (o.rr ? ref + o.lado * o.rr * distancia : null);
-  const t = tamanoPorRiesgo(capital, o.riesgoPct, distancia, ref);
+  const t = o.cantidad !== undefined ? { cantidad: o.cantidad, riesgoUsd: o.cantidad * distancia, recortada: false } : tamanoPorRiesgo(capital, o.riesgoPct, distancia, ref);
   const objetivoUsd = objetivo === null ? null : Math.abs(objetivo - ref) * t.cantidad;
   return { entrada: ref, stop, objetivo, cantidad: t.cantidad, riesgoUsd: t.riesgoUsd, objetivoUsd, rr: objetivo === null ? null : Math.abs(objetivo - ref) / distancia, recortada: t.recortada };
 }
@@ -56,14 +59,18 @@ export function previaOrden(capital: number, m: MercadoVivo | null, o: OrdenManu
 /** Abre la orden a mercado con su stop y objetivo. Devuelve un mensaje si no se puede. */
 export function abrirManual(bot: Bot, m: MercadoVivo, o: OrdenManual): string | null {
   if (bot.posicion) return 'Ya hay una posición abierta en este mercado: ciérrala primero.';
-  if (!(o.riesgoPct > 0) || o.riesgoPct > RIESGO_MAXIMO) return `El riesgo por operación tiene que estar entre 0 y ${RIESGO_MAXIMO * 100} %.`;
+  if (o.cantidad !== undefined) {
+    if (!(o.cantidad > 0)) return 'El lotaje tiene que ser mayor que 0.';
+  } else if (!(o.riesgoPct > 0) || o.riesgoPct > RIESGO_MAXIMO) return `El riesgo por operación tiene que estar entre 0 y ${RIESGO_MAXIMO * 100} %.`;
   const pre = previaOrden(bot.capital, m, o);
   if (!pre) return 'Falta precio en vivo o el stop no es válido (con stop por ATR hace falta el ATR del mercado).';
   const f = precioLlenado(o.lado, m, pre.cantidad * pre.entrada, bot.costos);
   if (!f) return 'Sin precio para llenar la orden.';
   const distancia = Math.abs(pre.entrada - pre.stop);
   // Con el precio real de llenado: el stop queda a la misma distancia elegida.
-  const { cantidad } = tamanoPorRiesgo(bot.capital, o.riesgoPct, distancia, f.precio);
+  const cantidad = o.cantidad ?? tamanoPorRiesgo(bot.capital, o.riesgoPct, distancia, f.precio).cantidad;
+  if (cantidad * f.precio > bot.capital) return `Ese lotaje vale ${Math.round(cantidad * f.precio).toLocaleString('es-ES')} USD y tu cuenta tiene ${Math.round(bot.capital).toLocaleString('es-ES')} USD: sin apalancamiento no cabe.`;
+  if (o.cantidad !== undefined && (cantidad * distancia) / bot.capital > RIESGO_MAXIMO) return `Con ese lotaje y ese stop arriesgas más del ${RIESGO_MAXIMO * 100} % de la cuenta: acerca el stop o baja el lotaje.`;
   const reglas: ReglasSalida = { stopAtr: 1, rr: pre.rr ?? 1e9, gestion: o.gestion };
   const g = abrirGestionada(o.lado, 0, f.precio, distancia, reglas);
   if (!g) return 'No se pudo calcular el stop.';
