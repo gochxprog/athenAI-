@@ -1,6 +1,6 @@
 # Mapa del código · AthenAI
 
-Generado por `scripts/mapa.mjs` (202 archivos). Leer esto antes de explorar.
+Generado por `scripts/mapa.mjs` (212 archivos). Leer esto antes de explorar.
 Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 
 ## grabadora
@@ -11,7 +11,7 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 - `servidor.ts` → almacenDisco.ts, botsVps.ts, mercadoId.ts · ← grabadora.ts · 🧪 bots.test.ts, cliente.test.ts, grabadora.test.ts
 
 ## src
-- `App.tsx` → AvisoGrabadora.tsx, Sidebar.tsx, Topbar.tsx, metaModulo.ts, Navegacion.tsx, AgentesView.tsx, ConocimientoView.tsx, DashboardView.tsx, DatosView.tsx, DecisionesView.tsx, EstrategiasView.tsx, InvestigacionView.tsx, LaboratorioView.tsx, MaquinasView.tsx, OrderFlowView.tsx, PaperTradingView.tsx, cliente.ts, iniciar.ts, iniciar.ts, nav.ts · ← main.tsx
+- `App.tsx` → AvisoGrabadora.tsx, Sidebar.tsx, Topbar.tsx, metaModulo.ts, Navegacion.tsx, AgentesView.tsx, ConocimientoView.tsx, DashboardView.tsx, DatosView.tsx, DecisionesView.tsx, EstrategiasView.tsx, InvestigacionView.tsx, LaboratorioView.tsx, MaquinasView.tsx, OrderFlowView.tsx, TerminalView.tsx, cliente.ts, iniciar.ts, iniciar.ts, nav.ts · ← main.tsx
 - `main.tsx` → App.tsx
 - `vite-env.d.ts`
 
@@ -33,7 +33,7 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 - `MapaEdge.tsx` → fuentesGuardadas.ts, plantillas.ts, Panel.tsx · ← EstrategiasPython.tsx
 - `ResultadoJuez.tsx` → AbanicoTrayectorias.tsx, graficos.tsx, CurvaEquityJuez.tsx, LuckTestJuez.tsx, MonteCarloJuez.tsx, TarjetasJuez.tsx, TiraPasos.tsx, WalkForwardJuez.tsx, Panel.tsx, format.ts, backtest.ts, luckTest.ts, walkForward.ts, protocolo.ts · ← ResultadosJuez.tsx
 - `fuentesGuardadas.ts` → mercadoId.ts, motorCliente.ts, protocolo.ts · ← EstrategiasPython.tsx, Etiquetador.tsx, MapaEdge.tsx
-- `graficos.tsx` · ← 6 archivos
+- `graficos.tsx` · ← 7 archivos
 - `plantillas.ts` → almacen.ts, juez.ts, mercadoId.ts · ← 8 archivos
 
 ## components/laboratorio/vista
@@ -51,13 +51,23 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 
 ## components/orderflow
 - `DomEscalera.tsx` → agruparLibro.ts, format.ts, pipeline.ts · ← OrderFlowChart.tsx
-- `LienzoOrderFlow.tsx` → format.ts, historial.ts, pipeline.ts, tipos.ts · ← OrderFlowChart.tsx
+- `LienzoOrderFlow.tsx` → format.ts, historial.ts, pipeline.ts, tipos.ts · ← OrderFlowChart.tsx, TerminalView.tsx
 - `MemoriaMercado.tsx` → OrderFlowChart.tsx, ResumenMercados.tsx, Panel.tsx, TarjetaMotor.tsx, format.ts, regimen.ts, motorCliente.ts, protocolo.ts · ← OrderFlowView.tsx
 - `MotoresOrderFlow.tsx` → TarjetaMotor.tsx, format.ts, pipeline.ts, protocolo.ts · ← OrderFlowView.tsx
-- `OrderFlowChart.tsx` → DomEscalera.tsx, LienzoOrderFlow.tsx, historialGrafico.ts, Punto.tsx, Navegacion.tsx, pipeline.ts, tipos.ts, motorCliente.ts, protocolo.ts · ← 13 archivos
+- `OrderFlowChart.tsx` → DomEscalera.tsx, LienzoOrderFlow.tsx, historialGrafico.ts, Punto.tsx, Navegacion.tsx, pipeline.ts, tipos.ts, motorCliente.ts, protocolo.ts · ← 15 archivos
 - `ResumenMercados.tsx` → Sparkline.tsx, OrderFlowChart.tsx, Punto.tsx, useCalendario.ts, format.ts, motorCliente.ts, protocolo.ts · ← MemoriaMercado.tsx, DashboardView.tsx, OrderFlowView.tsx
 - `agruparLibro.ts` → pipeline.ts · ← DomEscalera.tsx · 🧪 agruparLibro.test.ts
 - `historialGrafico.ts` → almacen.ts, cliente.ts, historial.ts, pipeline.ts, tipos.ts, motorCliente.ts · ← OrderFlowChart.tsx
+
+## components/terminal
+- `BarraCuenta.tsx` → comun.ts, format.ts, ejecutor.ts · ← TerminalView.tsx
+- `Bots.tsx` → graficos.tsx, plantillas.ts, comun.ts, Panel.tsx, format.ts, costos.ts, ejecutor.ts, guardian.ts, paper.ts · ← TerminalView.tsx
+- `Cinta.tsx` → comun.ts · ← TerminalView.tsx
+- `LibroOperaciones.tsx` → comun.ts, Panel.tsx, format.ts, ejecutor.ts, motorCliente.ts · ← TerminalView.tsx
+- `PanelGuardian.tsx` → comun.ts, Panel.tsx, format.ts · ← TerminalView.tsx
+- `Posiciones.tsx` → comun.ts, format.ts, ejecutor.ts, manual.ts · ← TerminalView.tsx
+- `Ticket.tsx` → OrderFlowChart.tsx, comun.ts, format.ts, salidas.ts, mercadoId.ts, manual.ts, motorPaper.ts, motorCliente.ts · ← TerminalView.tsx
+- `comun.ts` → format.ts, ejecutor.ts, iniciar.ts · ← 8 archivos
 
 ## components/three
 - `EsferaCerebro.tsx` · ← DashboardView.tsx
@@ -68,7 +78,7 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 - `Consola.tsx` → format.ts · ← AgentesView.tsx, DashboardView.tsx
 - `Encabezado.tsx` · ← 11 archivos
 - `Insignia.tsx` · ← 11 archivos
-- `Panel.tsx` · ← 22 archivos
+- `Panel.tsx` · ← 25 archivos
 - `PanelLateral.tsx` · ← AgentesView.tsx
 - `Punto.tsx` · ← 7 archivos
 - `SinMotor.tsx` → Panel.tsx · ← ConocimientoView.tsx, InvestigacionView.tsx
@@ -86,7 +96,7 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 - `useReloj.ts` · ← Topbar.tsx
 
 ## lib
-- `format.ts` · ← 29 archivos
+- `format.ts` · ← 35 archivos
 - `random.ts` · ← juez.ts, antiFuturo.ts, hmm.ts, guardian.ts · 🧪 etiquetador.test.ts, backtest.test.ts, juez.test.ts, luckTest.test.ts, monteCarlo.test.ts, robustez.test.ts, sobreajuste.test.ts, walkForward.test.ts, memoria.test.ts, antifuga.test.ts, barras.test.ts, pipeline.test.ts, paper.test.ts
 
 ## modules
@@ -100,10 +110,10 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 - `LaboratorioView.tsx` → EstrategiasPython.tsx, Etiquetador.tsx, ResultadosJuez.tsx, Encabezado.tsx, Insignia.tsx · ← App.tsx
 - `MaquinasView.tsx` → OrderFlowChart.tsx, Encabezado.tsx, Panel.tsx, format.ts · ← App.tsx
 - `OrderFlowView.tsx` → MemoriaMercado.tsx, MotoresOrderFlow.tsx, OrderFlowChart.tsx, ResumenMercados.tsx, Encabezado.tsx, Insignia.tsx, Panel.tsx, format.ts, cliente.ts, features.ts, pipeline.ts, tipos.ts, motorCliente.ts · ← App.tsx
-- `PaperTradingView.tsx` → graficos.tsx, plantillas.ts, Encabezado.tsx, Panel.tsx, format.ts, costos.ts, ejecutor.ts, guardian.ts, iniciar.ts, paper.ts, motorCliente.ts · ← App.tsx
+- `TerminalView.tsx` → graficos.tsx, LienzoOrderFlow.tsx, OrderFlowChart.tsx, BarraCuenta.tsx, Bots.tsx, Cinta.tsx, LibroOperaciones.tsx, PanelGuardian.tsx, Posiciones.tsx, Ticket.tsx, comun.ts, Encabezado.tsx, Panel.tsx, manual.ts · ← App.tsx
 
 ## motores/almacen
-- `almacen.ts` → features.ts, parametros.ts · ← 10 archivos · 🧪 almacen.test.ts, cliente.test.ts
+- `almacen.ts` → features.ts, parametros.ts · ← 11 archivos · 🧪 almacen.test.ts, cliente.test.ts
 
 ## motores/diario
 - `diario.ts` → salidas.ts, mercadoId.ts · 🧪 diario.test.ts
@@ -164,12 +174,12 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 
 ## motores/juez
 - `backtest.ts` → costos.ts · ← 10 archivos · 🧪 backtest.test.ts, juez.test.ts, luckTest.test.ts, monteCarlo.test.ts, robustez.test.ts, salidas.test.ts
-- `costos.ts` · ← 5 archivos · 🧪 backtest.test.ts, paper.test.ts
+- `costos.ts` · ← 6 archivos · 🧪 backtest.test.ts, paper.test.ts
 - `juez.ts` → random.ts, backtest.ts, luckTest.ts, monteCarlo.ts, robustez.ts, sobreajuste.ts, veredicto.ts, walkForward.ts, mercadoId.ts · ← 8 archivos · 🧪 juez.test.ts, robustez.test.ts, paper.test.ts
 - `luckTest.ts` → backtest.ts · ← 6 archivos · 🧪 luckTest.test.ts
 - `monteCarlo.ts` → backtest.ts · ← EstrategiasPython.tsx, juez.ts, protocolo.ts, guardian.ts · 🧪 monteCarlo.test.ts, paper.test.ts
 - `robustez.ts` → backtest.ts, juez.ts · ← juez.ts · 🧪 robustez.test.ts
-- `salidas.ts` → costos.ts · ← diario.ts · 🧪 salidas.test.ts
+- `salidas.ts` → costos.ts · ← Ticket.tsx, diario.ts, ejecutor.ts, manual.ts · 🧪 salidas.test.ts
 - `sobreajuste.ts` · ← TarjetasJuez.tsx, juez.ts · 🧪 sobreajuste.test.ts
 - `veredicto.ts` · ← juez.ts · 🧪 veredicto.test.ts
 - `walkForward.ts` → backtest.ts · ← 5 archivos · 🧪 robustez.test.ts, walkForward.test.ts
@@ -188,7 +198,7 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 - `regimen.ts` → hmm.ts, features.ts · ← MemoriaMercado.tsx, motor.worker.ts, protocolo.ts · 🧪 memoria.test.ts
 
 ## motores/mercado
-- `mercadoId.ts` → almacen.ts · ← 12 archivos · 🧪 mercadoId.test.ts
+- `mercadoId.ts` → almacen.ts · ← 13 archivos · 🧪 mercadoId.test.ts
 
 ## motores/ml
 - `antifuga.ts` · 🧪 antifuga.test.ts
@@ -210,20 +220,21 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 - `tipos.ts` → types.ts, types.ts, order-book.ts · ← 17 archivos · 🧪 binance.test.ts, barras.test.ts, motorMercado.test.ts, pipeline.test.ts
 
 ## motores/paper
-- `almacenPaper.ts` → ejecutor.ts · ← iniciar.ts, motorPaper.ts, botsVps.ts · 🧪 paper.test.ts
-- `ejecutor.ts` → almacen.ts, costos.ts, juez.ts, mercadoId.ts, pipeline.ts · ← 7 archivos · 🧪 paper.test.ts, bots.test.ts
-- `guardian.ts` → random.ts, monteCarlo.ts, ejecutor.ts · ← PaperTradingView.tsx, iniciar.ts, motorPaper.ts, paperRemoto.ts · 🧪 paper.test.ts
-- `iniciar.ts` → cliente.ts, laboratorioCliente.ts, notificador.ts, almacenPaper.ts, ejecutor.ts, guardian.ts, motorPaper.ts, paperRemoto.ts, motorCliente.ts · ← App.tsx, Sidebar.tsx, AgentesView.tsx, PaperTradingView.tsx
-- `motorPaper.ts` → almacen.ts, costos.ts, juez.ts, protocolo.ts, mercadoId.ts, canales.ts, almacenPaper.ts, ejecutor.ts, guardian.ts, protocolo.ts · ← iniciar.ts, paperRemoto.ts, botsVps.ts, grabadora.ts · 🧪 paper.test.ts, bots.test.ts
-- `paperRemoto.ts` → ejecutor.ts, guardian.ts, motorPaper.ts · ← iniciar.ts · 🧪 paperRemoto.test.ts
+- `almacenPaper.ts` → ejecutor.ts · ← iniciar.ts, motorPaper.ts, botsVps.ts · 🧪 manual.test.ts, paper.test.ts
+- `ejecutor.ts` → almacen.ts, costos.ts, juez.ts, salidas.ts, mercadoId.ts, pipeline.ts · ← 12 archivos · 🧪 manual.test.ts, paper.test.ts, bots.test.ts
+- `guardian.ts` → random.ts, monteCarlo.ts, ejecutor.ts · ← Bots.tsx, iniciar.ts, motorPaper.ts, paperRemoto.ts · 🧪 paper.test.ts
+- `iniciar.ts` → cliente.ts, laboratorioCliente.ts, notificador.ts, almacenPaper.ts, ejecutor.ts, guardian.ts, motorPaper.ts, paperRemoto.ts, motorCliente.ts · ← App.tsx, Sidebar.tsx, comun.ts, AgentesView.tsx
+- `manual.ts` → costos.ts, salidas.ts, ejecutor.ts · ← 5 archivos · 🧪 manual.test.ts
+- `motorPaper.ts` → almacen.ts, costos.ts, juez.ts, protocolo.ts, mercadoId.ts, canales.ts, almacenPaper.ts, ejecutor.ts, guardian.ts, manual.ts, protocolo.ts · ← 5 archivos · 🧪 manual.test.ts, paper.test.ts, bots.test.ts
+- `paperRemoto.ts` → almacen.ts, ejecutor.ts, guardian.ts, manual.ts, motorPaper.ts · ← iniciar.ts · 🧪 paperRemoto.test.ts
 
 ## motores/papers
 - `paper.ts` → backtest.ts, protocolo.ts, mercadoId.ts, features.ts · ← 6 archivos · 🧪 paper.test.ts
 
 ## motores/worker
 - `motor.worker.ts` → almacen.ts, binance.ts, puenteSSE.ts, rithmicPuente.ts, extremos.ts, cruce.ts, gemelos.ts, regimen.ts, calendario.ts, features.ts, parametros.ts, pipeline.ts, tipos.ts, protocolo.ts
-- `motorCliente.ts` → binance.ts, calendario.ts, pipeline.ts, tipos.ts, protocolo.ts · ← 13 archivos
-- `protocolo.ts` → almacen.ts, rithmicPuente.ts, extremos.ts, cruce.ts, gemelos.ts, regimen.ts, calendario.ts, pipeline.ts, tipos.ts · ← 15 archivos · 🧪 lectura.test.ts, notificador.test.ts, paper.test.ts, bots.test.ts
+- `motorCliente.ts` → binance.ts, calendario.ts, pipeline.ts, tipos.ts, protocolo.ts · ← 14 archivos
+- `protocolo.ts` → almacen.ts, rithmicPuente.ts, extremos.ts, cruce.ts, gemelos.ts, regimen.ts, calendario.ts, pipeline.ts, tipos.ts · ← 15 archivos · 🧪 lectura.test.ts, notificador.test.ts, manual.test.ts, paper.test.ts, bots.test.ts
 
 ## types
 - `nav.ts` · ← 6 archivos

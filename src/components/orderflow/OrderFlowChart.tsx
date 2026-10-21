@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Database, Layers3, Maximize2, Minimize2 } from 'lucide-react';
-import LienzoOrderFlow, { type CapasGrafico } from './LienzoOrderFlow';
+import LienzoOrderFlow, { type CapasGrafico, type MarcasGrafico } from './LienzoOrderFlow';
 import DomEscalera from './DomEscalera';
 import { motorOrderFlow, type EstadoFeeds } from '@/motores/worker/motorCliente';
 import type { EntradaRegistro, Proveedor } from '@/motores/worker/protocolo';
@@ -69,7 +69,7 @@ export const NOMBRE_PROVEEDOR: Record<Proveedor, string> = {
  * overlays de absorción/agotamiento, LHM y eventos, más el DOM. Los datos vienen del Worker del motor,
  * que recibe aggTrades + vista del libro + OI) de la fuente elegida en el Centro de datos.
  */
-export default function OrderFlowChart({ estado }: { estado: EstadoGrafico | null }) {
+export default function OrderFlowChart({ estado, marcas }: { estado: EstadoGrafico | null; marcas?: MarcasGrafico | null }) {
   const [temporalidad, setTemporalidad] = useState<IdTemporalidad>(estado?.temporalidad ?? '1m');
   const [capas, setCapas] = useState<CapasGrafico>({ footprint: false, heatmap: false, cvd: true, oi: true, absorcion: true, lhm: true, eventos: true });
   const { feeds } = useFeeds();
@@ -174,7 +174,7 @@ export default function OrderFlowChart({ estado }: { estado: EstadoGrafico | nul
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className={`relative min-h-0 ${completa ? 'h-full' : 'h-[460px] lg:h-auto'}`}>
-          <LienzoOrderFlow estado={estado} capas={capas} historial={historial.barras} alBordeIzquierdo={historial.pedirMas} />
+          <LienzoOrderFlow estado={estado} capas={capas} historial={historial.barras} alBordeIzquierdo={historial.pedirMas} marcas={marcas} />
           <span className="pointer-events-none absolute bottom-7 left-3 text-[9.5px] text-plata-600" data-historial={historial.barras.length}>
             {historial.cargando ? 'Cargando historial… · ' : historial.nota ? `${historial.nota} · ` : historial.barras.length ? `${historial.barras.length.toLocaleString('es-ES')} velas de historial · ` : ''}
             Arrastrar: mover · dos dedos o rueda: zoom · eje de precio: estirar · doble toque: volver al vivo

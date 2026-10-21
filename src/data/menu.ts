@@ -31,7 +31,7 @@ export const MENU: { titulo: string; items: ItemMenu[] }[] = [
   {
     titulo: 'Dinero',
     items: [
-      { id: 'paper', etiqueta: 'Paper Trading', icono: Wallet },
+      { id: 'paper', etiqueta: 'Terminal', icono: Wallet },
       { id: 'decisiones', etiqueta: 'Decisiones', icono: Gavel },
     ],
   },

@@ -25,7 +25,7 @@ const ConocimientoView = lazy(() => import('@/modules/ConocimientoView'));
 const LaboratorioView = lazy(() => import('@/modules/LaboratorioView'));
 const EstrategiasView = lazy(() => import('@/modules/EstrategiasView'));
 const AgentesView = lazy(() => import('@/modules/AgentesView'));
-const PaperTradingView = lazy(() => import('@/modules/PaperTradingView'));
+const TerminalView = lazy(() => import('@/modules/TerminalView'));
 const DecisionesView = lazy(() => import('@/modules/DecisionesView'));
 const MaquinasView = lazy(() => import('@/modules/MaquinasView'));
 const DatosView = lazy(() => import('@/modules/DatosView'));
@@ -38,7 +38,7 @@ const VISTAS: Record<Modulo, ComponentType> = {
   estrategias: EstrategiasView,
   conocimiento: ConocimientoView,
   agentes: AgentesView,
-  paper: PaperTradingView,
+  paper: TerminalView,
   decisiones: DecisionesView,
   maquinas: MaquinasView,
   datos: DatosView,

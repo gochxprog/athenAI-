@@ -92,8 +92,17 @@ type Gesto =
   | { tipo: 'arrastre'; x: number; y: number; desp: number; precio: { centro: number; rango: number } | null; enEje: boolean; movido: boolean }
   | { tipo: 'pellizco'; dx: number; dy: number; mx: number; my: number; ancho: number; desp: number; precio: { centro: number; rango: number } };
 
+/** Operaciones de la Terminal sobre el gráfico (bots y manuales): ▲ compra · ▼ venta, y stop / objetivo de lo abierto. */
+export interface MarcasGrafico {
+  simbolo: string;
+  ops: { t: number; p: number; lado: 1 | -1; entrada: boolean }[];
+  abiertas: { t0: number; entrada: number; stop: number | null; objetivo: number | null; lado: 1 | -1; quien: string }[];
+}
+
 export interface PropsLienzo {
   estado: EstadoGrafico | null;
+  /** Opcional (Terminal): sin esto el gráfico es el de siempre. */
+  marcas?: MarcasGrafico | null;
   capas: CapasGrafico;
   /** Velas anteriores a lo vivo (solo para dibujar). */
   historial?: readonly BarraGrafico[];
@@ -101,7 +110,7 @@ export interface PropsLienzo {
   alBordeIzquierdo?: () => void;
 }
 
-export default function LienzoOrderFlow({ estado, capas, historial, alBordeIzquierdo }: PropsLienzo) {
+export default function LienzoOrderFlow({ estado, capas, historial, alBordeIzquierdo, marcas }: PropsLienzo) {
   const contRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const estadoRef = useRef(estado);
@@ -139,6 +148,8 @@ export default function LienzoOrderFlow({ estado, capas, historial, alBordeIzqui
     if (manual) setManual(false);
   }
   capasRef.current = capas;
+  const marcasRef = useRef(marcas);
+  marcasRef.current = marcas;
   sucio.current = true;
 
   useEffect(() => {
@@ -153,7 +164,7 @@ export default function LienzoOrderFlow({ estado, capas, historial, alBordeIzqui
       if (!sucio.current) return;
       sucio.current = false;
       marcarManual.current(vista.current.precio !== null);
-      const r = dibujar(canvas, cont, estadoRef.current, barrasRef.current, capasRef.current, vista.current, heatmapRef.current);
+      const r = dibujar(canvas, cont, estadoRef.current, barrasRef.current, capasRef.current, vista.current, heatmapRef.current, marcasRef.current);
       if (r && r.inicio < BORDE_HISTORIAL) bordeRef.current?.();
     };
     raf = requestAnimationFrame(bucle);
@@ -312,7 +323,7 @@ export default function LienzoOrderFlow({ estado, capas, historial, alBordeIzqui
 // -----------------------------------------------------------------------------------------------
 
 /** Dibuja y devuelve el índice de la primera barra visible (para pedir más historial al acercarse al borde). */
-function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGrafico | null, barras: readonly BarraGrafico[], capas: CapasGrafico, v: Vista, heatmap: HeatmapImagen | null): { inicio: number } | null {
+function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGrafico | null, barras: readonly BarraGrafico[], capas: CapasGrafico, v: Vista, heatmap: HeatmapImagen | null, marcas?: MarcasGrafico | null): { inicio: number } | null {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const W = cont.clientWidth;
   const H = cont.clientHeight;
@@ -513,6 +524,7 @@ function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGra
   });
 
   if (capas.eventos) dibujarEventos(ctx, estado.eventos, xDeTiempo, yP, lo, hi);
+  if (marcas && marcas.simbolo === estado.simbolo) dibujarMarcas(ctx, marcas, xDeTiempo, yP, lo, hi, areaW);
   ctx.restore();
 
   // VWAP de sesión y precio actual.
@@ -610,6 +622,58 @@ function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGra
     }
   }
   return { inicio: ini };
+}
+
+/** Entradas y salidas (▲ ▼, llenas = entrada, huecas = salida) y líneas de entrada, stop y objetivo de lo abierto. */
+function dibujarMarcas(ctx: CanvasRenderingContext2D, m: MarcasGrafico, xDeTiempo: (t: number) => number | null, yP: (p: number) => number, lo: number, hi: number, areaW: number): void {
+  const fin = areaW - MARGEN_DERECHO;
+  for (const a of m.abiertas) {
+    const x0 = Math.max(0, xDeTiempo(a.t0) ?? 0);
+    const linea = (p: number | null, color: string, guion: number[], etiqueta: string) => {
+      if (p === null || p <= lo || p >= hi) return;
+      const y = Math.round(yP(p)) + 0.5;
+      ctx.strokeStyle = color;
+      ctx.setLineDash(guion);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x0, y);
+      ctx.lineTo(fin, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = '9px ui-monospace, Menlo, monospace';
+      const w = ctx.measureText(etiqueta).width + 8;
+      ctx.fillStyle = 'rgba(0,0,0,0.85)';
+      ctx.fillRect(fin - w - 2, y - 7, w, 13);
+      ctx.strokeStyle = color;
+      ctx.strokeRect(fin - w - 2 + 0.5, y - 6.5, w - 1, 12);
+      ctx.fillStyle = color;
+      ctx.fillText(etiqueta, fin - w + 2, y + 3);
+    };
+    linea(a.objetivo, 'rgba(255,255,255,0.85)', [5, 4], `TP · ${a.quien}`);
+    linea(a.stop, 'rgba(142,146,154,0.9)', [2, 3], `SL · ${a.quien}`);
+    linea(a.entrada, 'rgba(255,255,255,0.45)', [], `${a.lado > 0 ? 'LARGO' : 'CORTO'} · ${a.quien}`);
+  }
+  for (const o of m.ops) {
+    if (o.p <= lo || o.p >= hi) continue;
+    const x = xDeTiempo(o.t);
+    if (x === null) continue;
+    const y = yP(o.p);
+    const compra = o.entrada ? o.lado === 1 : o.lado === -1;
+    const yy = compra ? y + 9 : y - 9;
+    ctx.beginPath();
+    ctx.moveTo(x, yy + (compra ? -5 : 5));
+    ctx.lineTo(x - 5, yy + (compra ? 3 : -3));
+    ctx.lineTo(x + 5, yy + (compra ? 3 : -3));
+    ctx.closePath();
+    if (o.entrada) {
+      ctx.fillStyle = C.blanco;
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = C.blanco;
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+  }
 }
 
 function escalonPrecio(bruto: number): number {

@@ -50,3 +50,13 @@
     background-size: 32px 32px;
   }
 }
+
+/* Terminal: cinta tipo teletipo (se desplaza media longitud: el contenido va duplicado). */
+@keyframes cinta {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
