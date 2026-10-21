@@ -52,7 +52,7 @@ Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el p
 
 | Módulo | Motores | Estado |
 |---|---|---|
-| Datos | Fuentes (Binance, Rithmic, Urus), Vigía de huecos, Barras, Almacén | 🔍 |
+| Datos | Fuente Binance, Vigía de huecos, Barras, Almacén, Calendario (tabla de abajo) | ✅ revisado, falta tu visto bueno |
 | Order Flow | Los 11 motores revisados uno por uno (tabla de abajo), con pruebas a mano y la pestaña «Cómo funciona cada motor» | ✅ revisado, falta tu visto bueno |
 | Memoria | Régimen (HMM), día gemelo / «hoy es distinto», cruce entre mercados | 🔍 |
 | Panel General | Lectura del momento, Features extremas | 🔍 |
@@ -72,6 +72,16 @@ Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el p
 | 9 | Open Interest | Correcto. |
 | 10 | Heatmap y pools | **Mejorado:** el umbral automático de los pools se recalcula cada 10 s mientras hay pocas fotos (antes salía de 1–2 fotos y no cambiaba en 5 min). DOM: compras y ventas de 10 s en el nivel correcto. |
 | 11 | Liquidaciones y funding | Correcto (precio medio ejecutado × cantidad ejecutada). |
+
+## Datos · revisión (octubre 2026)
+
+| # | Motor | Resultado de la revisión |
+|---|---|---|
+| 1 | Fuente Binance | **Corregido:** el primer cambio del libro tras la foto aceptaba U = lastUpdateId + 1 (regla del spot); en Futures debe ser U ≤ lastUpdateId ≤ u. Reconexión, funding y liquidaciones correctos. |
+| 2 | Vigía de huecos | **Corregido:** no detectaba trades perdidos. Ahora un salto en el aggTradeId marca la fila siguiente con hueco = 1 y los repetidos se ignoran. La primera barra tras abrir la app también es hueco. Se muestra «Trades perdidos» en Datos. |
+| 3 | Barras | Correcto (dollar bars: el trade que cruza el umbral pertenece a la barra). |
+| 4 | Almacén | Correcto (clave símbolo + cierre + número, escritura en lotes, cambio de sesión = hueco). |
+| 5 | Calendario | Correcto. |
 
 ## Por conectar o por hacer
 

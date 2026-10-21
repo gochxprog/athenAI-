@@ -155,6 +155,7 @@ function publicarFeeds(): void {
       proveedor: a.proveedor,
       guardando: !!(almacenes.get(a.proveedor) && a.sesion),
       cortes: a.cortes,
+      tradesPerdidos: p.tradesPerdidos,
       historial: a.historial.slice(-120),
       ritmo: [...a.ritmo],
       cvdVelocidad: a.cvdHist.length >= 61 ? a.cvdHist[a.cvdHist.length - 1] - a.cvdHist[0] : null,

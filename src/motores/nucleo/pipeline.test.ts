@@ -154,6 +154,8 @@ class CintaDePrueba {
       }
     }
     trades.sort((a, b) => a.timestamp - b.timestamp || a.aggTradeId - b.aggTradeId);
+    // Como en Binance, los ids crecen con el tiempo y son consecutivos.
+    for (const t of trades) t.aggTradeId = ++this.idTrade;
 
     // OI: abre con flujo direccional, cae en barridos (cierres forzados).
     const delta = trades.reduce((s, x) => s + (x.buyerIsMaker ? -x.quantity : x.quantity), 0);
@@ -197,8 +199,7 @@ class CintaDePrueba {
   }
 
   private trade(precio: number, cantidad: number, buyerIsMaker: boolean, ts: number): AggTrade {
-    this.idTrade += 1;
-    return { symbol: this.simbolo, price: precio, quantity: cantidad, timestamp: ts, aggTradeId: this.idTrade, buyerIsMaker };
+    return { symbol: this.simbolo, price: precio, quantity: cantidad, timestamp: ts, aggTradeId: 0, buyerIsMaker };
   }
 
   private poisson(lambda: number): number {
@@ -404,7 +405,9 @@ describe('Pipeline · calidad de datos, liquidaciones y resumen', () => {
     p.procesar({ tipo: 'conexion', estado: 'en-vivo' });
     correrMin(10);
     const antes = filas.length;
-    expect(filas.every((f) => f.valores.hueco === 0)).toBe(true);
+    // La primera fila tras arrancar también es un hueco (antes no se grababa); el resto, no.
+    expect(filas[0].valores.hueco).toBe(1);
+    expect(filas.slice(1).every((f) => f.valores.hueco === 0)).toBe(true);
     p.procesar({ tipo: 'conexion', estado: 'reconectando', detalle: 'prueba' });
     p.procesar({ tipo: 'conexion', estado: 'en-vivo' });
     correrMin(10);
@@ -412,6 +415,23 @@ describe('Pipeline · calidad de datos, liquidaciones y resumen', () => {
     expect(despues.length).toBeGreaterThan(1);
     expect(despues[0].valores.hueco).toBe(1);
     expect(despues.slice(1).every((f) => f.valores.hueco === 0)).toBe(true);
+  });
+
+  it('Vigía: si faltan trades (ids no consecutivos) la fila siguiente lleva hueco = 1; los repetidos se ignoran', () => {
+    const p = new Pipeline();
+    const t0 = Date.UTC(2026, 9, 21, 10, 0, 0);
+    // Cada trade = 2 BTC × 1.000.000 USD = 2 M USD: con dollar bars de 10 M, una barra cada 5 trades.
+    const tr = (id: number) => ({ symbol: 'BTCUSDT', price: 1_000_000, quantity: 2, timestamp: t0 + id * 1_000, aggTradeId: id, buyerIsMaker: id % 2 === 0 });
+    const filas: FilaFeatures[] = [];
+    const lote = (ids: number[]) => filas.push(...p.procesar({ tipo: 'trades', trades: ids.map(tr) }));
+    lote([1, 2, 3, 4, 5]); // barra 1 (primera tras arrancar: hueco)
+    lote([6, 7, 8, 9, 10]); // barra 2
+    lote([10, 9]); // repetidos: no cuentan
+    lote([14, 15, 16, 17, 18]); // faltan 11–13 → barra 3 con hueco
+    expect(filas.map((f) => f.valores.hueco)).toEqual([1, 0, 1]);
+    expect(p.tradesPerdidos).toBe(1);
+    // El volumen de la barra 2 no incluye los repetidos: 5 trades × 2 = 10.
+    expect(p.mercado.cvdCompleto).toBe(false);
   });
 
   it('las liquidaciones entran como evento y en las Features de su barra', () => {

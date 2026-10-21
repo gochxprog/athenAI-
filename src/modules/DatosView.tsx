@@ -11,6 +11,7 @@ import { descargarCsv, motorOrderFlow } from '@/motores/worker/motorCliente';
 import { GATEWAYS_RITHMIC, SISTEMAS_RITHMIC } from '@/motores/fuentes/rithmicPuente';
 import CalendarioEventos from '@/components/datos/CalendarioEventos';
 import PanelNotificaciones from '@/components/datos/PanelNotificaciones';
+import MotoresDatos from '@/components/datos/MotoresDatos';
 import { diagnosticarBinance, type ResultadoPrueba } from '@/motores/fuentes/binance';
 import type { ConfigCentro, EstadoFeed, Proveedor, ResumenSimbolo } from '@/motores/worker/protocolo';
 import { hora, num } from '@/lib/format';
@@ -224,6 +225,8 @@ export default function DatosView() {
       </div>
 
       <Feeds feeds={feeds.feeds} visible={feeds.visible} enCola={feeds.enCola} />
+
+      <MotoresDatos feed={feeds.feeds.find((f) => f.simbolo === feeds.visible) ?? feeds.feeds[0]} />
 
       <PanelNotificaciones />
 

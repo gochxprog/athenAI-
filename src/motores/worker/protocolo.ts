@@ -62,6 +62,8 @@ export interface EstadoFeed {
   guardando: boolean;
   /** Cortes de conexión desde que se aplicó la configuración. */
   cortes: number;
+  /** Veces que faltaron trades (aggTradeId no consecutivo): cada una marca la fila siguiente como hueco. */
+  tradesPerdidos: number;
   /** Precio muestreado cada segundo (últimos 5 min). */
   historial: number[];
   /** Dollar bars por minuto, ventanas de 10 s (últimos 5 min). */

@@ -163,8 +163,15 @@ export class Pipeline {
   private cvdAcum = 0;
   private diaCvd = -1;
   private golpes = new Anillo<{ t: number; p: number; q: number; compra: boolean }>(20_000);
-  /** Hubo un corte (reconexión, resincronización, error) desde la última fila: la próxima se marca con hueco = 1. */
-  private huecoPendiente = false;
+  /**
+   * Hubo un corte (reconexión, resincronización, error, trades perdidos) desde la última fila: la próxima se marca
+   * con hueco = 1. Empieza en true: la primera barra tras abrir la app viene después de un tramo sin grabar.
+   */
+  private huecoPendiente = true;
+  /** Último aggTradeId visto: si el siguiente no es el consecutivo, se perdieron trades (hueco). */
+  private ultimoIdTrade = -1;
+  /** Veces que faltaron trades (ids no consecutivos) desde que arrancó. */
+  tradesPerdidos = 0;
   /** Eventos fuertes del calendario (fechas conocidas de antemano). */
   calendario: EventoCalendario[] = [];
   conexion: EstadoConexion = 'detenido';
@@ -191,6 +198,14 @@ export class Pipeline {
     switch (m.tipo) {
       case 'trades': {
         for (const t of m.trades) {
+          // Vigía: los aggTradeId de Binance son consecutivos. Repetido o viejo → se ignora; salto → faltan trades.
+          if (this.ultimoIdTrade >= 0 && t.aggTradeId <= this.ultimoIdTrade) continue;
+          if (this.ultimoIdTrade >= 0 && t.aggTradeId > this.ultimoIdTrade + 1) {
+            this.huecoPendiente = true;
+            this.mercado.marcarHueco();
+            this.tradesPerdidos += 1;
+          }
+          this.ultimoIdTrade = t.aggTradeId;
           this.cinta.push(t);
           this.mercado.trade(t);
           this.golpes.push({ t: t.timestamp, p: t.price, q: t.quantity, compra: !t.buyerIsMaker });

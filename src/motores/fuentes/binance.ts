@@ -417,7 +417,8 @@ export class FuenteBinance {
     if (l.snapshotId !== null) {
       // Primer diff tras un snapshot sin diffs guardados.
       if (d.u < l.snapshotId) return;
-      if (d.U > l.snapshotId + 1) {
+      // Regla de Binance Futures: el primer diff debe cumplir U ≤ lastUpdateId ≤ u (sin el «+1» del spot).
+      if (d.U > l.snapshotId) {
         this.resincronizar(d.s, 'El primer diff no cubre el snapshot');
         l.pendientes.push(d);
         return;

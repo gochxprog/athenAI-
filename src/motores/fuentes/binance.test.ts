@@ -123,6 +123,18 @@ describe('FuenteBinance (protocolo de Binance USD-M Futures)', () => {
     fuente.detener();
   });
 
+  it('regla de Futures: si el primer diff empieza en lastUpdateId + 1 (U = 101 > 100) se resincroniza', async () => {
+    const { fuente, sockets, soltarSnapshot } = montar(100);
+    await fuente.iniciar();
+    sockets[0].onopen?.({});
+    soltarSnapshot();
+    await esperar();
+    await esperar();
+    sockets[0].emitir(diff(101, 105, 100));
+    expect(fuente.estadoLibro('BTCUSDT')?.resincronizaciones).toBe(1);
+    fuente.detener();
+  });
+
   it('detecta un hueco en la cadena y resincroniza con un snapshot nuevo', async () => {
     const { fuente, sockets, soltarSnapshot, pedidos } = montar(100);
     await fuente.iniciar();
