@@ -42,6 +42,15 @@ describe('Sincronización plataforma ← grabadora del VPS', () => {
       al.cerrar();
       // La configuración se recuerda.
       expect(new ClienteGrabadora(undefined, local).estado.config).toEqual({ url: url.replace(/\/$/, ''), clave: 'k' });
+      // Abierta desde la propia grabadora y sin conexión guardada: la detecta (para pedir la clave una vez).
+      const nuevo = new ClienteGrabadora(undefined, { getItem: () => null, setItem: () => {}, removeItem: () => {} });
+      expect(await nuevo.detectarMismoOrigen(url.replace(/\/$/, ''))).toBe(true);
+      expect(nuevo.estado.detectada).toBe(url.replace(/\/$/, ''));
+      // Otra dirección que no es una grabadora: nada.
+      const otro = new ClienteGrabadora(async () => new Response('no', { status: 404 }), { getItem: () => null, setItem: () => {}, removeItem: () => {} });
+      expect(await otro.detectarMismoOrigen('http://127.0.0.1:9')).toBe(false);
+      // Con conexión ya guardada no vuelve a pedir nada.
+      expect(await new ClienteGrabadora(undefined, local).detectarMismoOrigen(url)).toBe(false);
     } finally {
       srv.close();
       fs.rmSync(d, { recursive: true, force: true });

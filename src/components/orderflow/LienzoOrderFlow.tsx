@@ -1,7 +1,8 @@
 import { decimalesDe } from '@/lib/format';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { BarraGrafico, EstadoGrafico, HeatmapGrafico } from '@/motores/nucleo/pipeline';
 import type { EventoMotor } from '@/motores/nucleo/tipos';
+import { unirConVivo } from '@/motores/historial/historial';
 
 export interface CapasGrafico {
   footprint: boolean;
@@ -34,6 +35,12 @@ const hhmm = (t: number) => {
   const d = new Date(t);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
+const ddmm = (t: number) => {
+  const d = new Date(t);
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+/** Barras a la izquierda de la vista a partir de las cuales se pide más historial. */
+const BORDE_HISTORIAL = 60;
 const fmt = (v: number, dec = 1) => v.toLocaleString('es-ES', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 const fmtQ = (v: number) => (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2));
 
@@ -71,28 +78,65 @@ interface Vista {
   ancho: number;
   /** true hasta que el usuario hace zoom: el ancho se ajusta para llenar el gráfico si hay pocas barras. */
   auto: boolean;
-  /** Barras desplazadas desde la derecha (0 = siguiendo el precio en vivo). */
+  /** Barras desplazadas desde la derecha (0 = siguiendo el precio en vivo). Admite fracciones (arrastre suave). */
   desplazamiento: number;
+  /** Escala de precio fijada por el usuario (centro y rango); null = automática (se ajusta a las velas visibles). */
+  precio: { centro: number; rango: number } | null;
   raton: { x: number; y: number } | null;
-  arrastre: { x: number; desp: number } | null;
+  /** Último dibujo: escala y áreas, para convertir píxeles en precio durante los gestos. */
+  ultimo: { lo: number; hi: number; hPrincipal: number; areaW: number } | null;
 }
 
-export default function LienzoOrderFlow({ estado, capas }: { estado: EstadoGrafico | null; capas: CapasGrafico }) {
+/** Gesto en curso: un dedo / ratón (desplazar o estirar el eje de precio) o dos dedos (zoom en los dos ejes). */
+type Gesto =
+  | { tipo: 'arrastre'; x: number; y: number; desp: number; precio: { centro: number; rango: number } | null; enEje: boolean; movido: boolean }
+  | { tipo: 'pellizco'; dx: number; dy: number; mx: number; my: number; ancho: number; desp: number; precio: { centro: number; rango: number } };
+
+export interface PropsLienzo {
+  estado: EstadoGrafico | null;
+  capas: CapasGrafico;
+  /** Velas anteriores a lo vivo (solo para dibujar). */
+  historial?: readonly BarraGrafico[];
+  /** Se llama al acercarse al borde izquierdo: hay que traer más historial. */
+  alBordeIzquierdo?: () => void;
+}
+
+export default function LienzoOrderFlow({ estado, capas, historial, alBordeIzquierdo }: PropsLienzo) {
   const contRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const estadoRef = useRef(estado);
   const capasRef = useRef(capas);
-  const vista = useRef<Vista>({ ancho: capas.footprint ? 64 : 9, auto: true, desplazamiento: 0, raton: null, arrastre: null });
+  const vista = useRef<Vista>({ ancho: capas.footprint ? 64 : 9, auto: true, desplazamiento: 0, precio: null, raton: null, ultimo: null });
   const sucio = useRef(true);
   const heatmapRef = useRef<HeatmapImagen | null>(null);
+  const bordeRef = useRef(alBordeIzquierdo);
+  bordeRef.current = alBordeIzquierdo;
+  // Historial + vivo, recalculado solo cuando cambia alguno de los dos.
+  const unidas = useRef<{ hist: readonly BarraGrafico[] | undefined; vivas: readonly BarraGrafico[] | undefined; todas: BarraGrafico[] }>({ hist: undefined, vivas: undefined, todas: [] });
+  if (estado && (unidas.current.hist !== historial || unidas.current.vivas !== estado.barras)) {
+    unidas.current = { hist: historial, vivas: estado.barras, todas: unirConVivo(historial ?? [], estado.barras) };
+  }
+  const barrasRef = useRef(unidas.current.todas);
+  barrasRef.current = unidas.current.todas;
 
   estadoRef.current = estado;
   // El motor solo envía el heatmap cuando cambia: se guarda el último (por activo).
   if (estado?.heatmap && heatmapRef.current?.h !== estado.heatmap) heatmapRef.current = crearImagenHeatmap(estado.simbolo, estado.heatmap);
   else if (estado && heatmapRef.current && heatmapRef.current.simbolo !== estado.simbolo) heatmapRef.current = null;
+  const [manual, setManual] = useState(false);
+  const marcarManual = useRef(setManual);
   if (capasRef.current.footprint !== capas.footprint) {
     vista.current.ancho = capas.footprint ? 64 : 9;
     vista.current.auto = true;
+    vista.current.precio = null;
+  }
+  // Otro mercado u otra temporalidad: vuelve al vivo con la escala automática.
+  const claveVista = estado ? `${estado.simbolo}|${estado.temporalidad}` : '';
+  const claveVistaRef = useRef(claveVista);
+  if (claveVistaRef.current !== claveVista) {
+    claveVistaRef.current = claveVista;
+    Object.assign(vista.current, { desplazamiento: 0, precio: null, auto: true, ancho: capas.footprint ? 64 : 9 });
+    if (manual) setManual(false);
   }
   capasRef.current = capas;
   sucio.current = true;
@@ -108,48 +152,131 @@ export default function LienzoOrderFlow({ estado, capas }: { estado: EstadoGrafi
       raf = requestAnimationFrame(bucle);
       if (!sucio.current) return;
       sucio.current = false;
-      dibujar(canvas, cont, estadoRef.current, capasRef.current, vista.current, heatmapRef.current);
+      marcarManual.current(vista.current.precio !== null);
+      const r = dibujar(canvas, cont, estadoRef.current, barrasRef.current, capasRef.current, vista.current, heatmapRef.current);
+      if (r && r.inicio < BORDE_HISTORIAL) bordeRef.current?.();
     };
     raf = requestAnimationFrame(bucle);
 
     const v = vista.current;
+    const punteros = new Map<number, { x: number; y: number }>();
+    let gesto: Gesto | null = null;
+    let ultimoToque = { t: 0, x: 0, y: 0 };
+    const local = (e: { clientX: number; clientY: number }) => {
+      const r = canvas.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
+    /** Escala de precio actual (la automática del último dibujo si el usuario no la ha fijado). */
+    const precioActual = () => v.precio ?? (v.ultimo ? { centro: (v.ultimo.lo + v.ultimo.hi) / 2, rango: v.ultimo.hi - v.ultimo.lo } : null);
+    const precioPorPx = () => (v.ultimo ? (v.ultimo.hi - v.ultimo.lo) / Math.max(1, v.ultimo.hPrincipal - 16) : 0);
+    const reiniciar = () => {
+      v.desplazamiento = 0;
+      v.auto = true;
+      v.precio = null;
+      v.ancho = capasRef.current.footprint ? 64 : 9;
+      sucio.current = true;
+    };
+    const empezarPellizco = () => {
+      const [a, b] = [...punteros.values()];
+      const p = precioActual();
+      if (!p) return;
+      gesto = { tipo: 'pellizco', dx: Math.abs(a.x - b.x), dy: Math.abs(a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, ancho: v.ancho, desp: v.desplazamiento, precio: p };
+    };
+
     const alRueda = (e: WheelEvent) => {
       e.preventDefault();
-      const factor = e.deltaY > 0 ? 0.88 : 1.14;
-      v.ancho = Math.max(2, Math.min(180, v.ancho * factor));
-      v.auto = false;
+      const { x } = local(e);
+      const enEje = !!v.ultimo && x > v.ultimo.areaW;
+      if (enEje || e.shiftKey) {
+        // Sobre el eje de precio (o con Mayús): estira o encoge solo el precio.
+        const p = precioActual();
+        if (p) v.precio = { centro: p.centro, rango: Math.max(1e-9, p.rango * (e.deltaY > 0 ? 1.12 : 0.89)) };
+      } else if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        // Panel táctil: desplazamiento horizontal.
+        v.desplazamiento = Math.max(0, v.desplazamiento + e.deltaX / v.ancho);
+      } else {
+        const factor = e.deltaY > 0 ? 0.88 : 1.14;
+        v.ancho = Math.max(1, Math.min(180, v.ancho * factor));
+        v.auto = false;
+      }
       sucio.current = true;
     };
     const alPresionar = (e: PointerEvent) => {
-      v.arrastre = { x: e.clientX, desp: v.desplazamiento };
       canvas.setPointerCapture(e.pointerId);
+      punteros.set(e.pointerId, local(e));
+      if (punteros.size === 2) empezarPellizco();
+      else if (punteros.size === 1) {
+        const p = local(e);
+        const enEje = !!v.ultimo && p.x > v.ultimo.areaW;
+        // Sobre el eje se fija la escala de partida (si no, cada movimiento la multiplicaría otra vez).
+        gesto = { tipo: 'arrastre', x: p.x, y: p.y, desp: v.desplazamiento, precio: enEje ? precioActual() : v.precio, enEje, movido: false };
+      }
     };
     const alMover = (e: PointerEvent) => {
-      const r = canvas.getBoundingClientRect();
-      v.raton = { x: e.clientX - r.left, y: e.clientY - r.top };
-      if (v.arrastre) v.desplazamiento = Math.max(0, Math.round(v.arrastre.desp + (e.clientX - v.arrastre.x) / v.ancho));
+      const p = local(e);
+      v.raton = p;
+      if (punteros.has(e.pointerId)) punteros.set(e.pointerId, p);
+      const g = gesto;
+      if (g?.tipo === 'arrastre' && punteros.size === 1) {
+        const dx = p.x - g.x;
+        const dy = p.y - g.y;
+        if (Math.abs(dx) + Math.abs(dy) > 3) g.movido = true;
+        if (g.enEje) {
+          // Arrastrar el eje de precio: hacia abajo encoge, hacia arriba estira.
+          if (g.precio) v.precio = { centro: g.precio.centro, rango: Math.max(1e-9, g.precio.rango * Math.exp(dy * 0.006)) };
+        } else {
+          v.desplazamiento = Math.max(0, g.desp + dx / v.ancho);
+          // Movimiento vertical libre: solo un gesto claramente vertical pasa la escala de precio a manual
+          // (un arrastre horizontal con algo de temblor sigue con la escala automática).
+          if (g.precio || (Math.abs(dy) > 24 && Math.abs(dy) > Math.abs(dx))) {
+            if (!g.precio) g.precio = precioActual();
+            if (g.precio) v.precio = { centro: g.precio.centro + dy * precioPorPx(), rango: g.precio.rango };
+          }
+        }
+      } else if (g?.tipo === 'pellizco' && punteros.size === 2) {
+        const [a, b] = [...punteros.values()];
+        const dx = Math.abs(a.x - b.x);
+        const dy = Math.abs(a.y - b.y);
+        // Separar los dedos en horizontal ensancha las velas; en vertical estira el precio.
+        if (g.dx > 30) {
+          v.ancho = Math.max(1, Math.min(180, g.ancho * (dx / g.dx)));
+          v.auto = false;
+        }
+        const mx = (a.x + b.x) / 2;
+        const my = (a.y + b.y) / 2;
+        const rango = g.dy > 30 ? Math.max(1e-9, g.precio.rango * (g.dy / Math.max(10, dy))) : g.precio.rango;
+        v.precio = { centro: g.precio.centro + (my - g.my) * precioPorPx(), rango };
+        v.desplazamiento = Math.max(0, g.desp + (mx - g.mx) / v.ancho);
+      }
       sucio.current = true;
     };
     const alSoltar = (e: PointerEvent) => {
-      v.arrastre = null;
+      punteros.delete(e.pointerId);
       if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+      // Doble toque (o doble clic) sin arrastrar: volver al vivo y a la escala automática.
+      if (gesto?.tipo === 'arrastre' && !gesto.movido) {
+        const p = local(e);
+        const ahora = performance.now();
+        if (ahora - ultimoToque.t < 320 && Math.hypot(p.x - ultimoToque.x, p.y - ultimoToque.y) < 30) {
+          reiniciar();
+          ultimoToque = { t: 0, x: 0, y: 0 };
+        } else ultimoToque = { t: ahora, ...p };
+      }
+      if (punteros.size === 1) {
+        const [p] = [...punteros.values()];
+        gesto = { tipo: 'arrastre', x: p.x, y: p.y, desp: v.desplazamiento, precio: v.precio, enEje: false, movido: true };
+      } else if (punteros.size === 0) gesto = null;
     };
     const alSalir = () => {
       v.raton = null;
-      sucio.current = true;
-    };
-    const alDoble = () => {
-      v.desplazamiento = 0;
-      v.auto = true;
-      v.ancho = capasRef.current.footprint ? 64 : 9;
       sucio.current = true;
     };
     canvas.addEventListener('wheel', alRueda, { passive: false });
     canvas.addEventListener('pointerdown', alPresionar);
     canvas.addEventListener('pointermove', alMover);
     canvas.addEventListener('pointerup', alSoltar);
+    canvas.addEventListener('pointercancel', alSoltar);
     canvas.addEventListener('pointerleave', alSalir);
-    canvas.addEventListener('dblclick', alDoble);
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
@@ -157,25 +284,39 @@ export default function LienzoOrderFlow({ estado, capas }: { estado: EstadoGrafi
       canvas.removeEventListener('pointerdown', alPresionar);
       canvas.removeEventListener('pointermove', alMover);
       canvas.removeEventListener('pointerup', alSoltar);
+      canvas.removeEventListener('pointercancel', alSoltar);
       canvas.removeEventListener('pointerleave', alSalir);
-      canvas.removeEventListener('dblclick', alDoble);
     };
   }, []);
 
   return (
     <div ref={contRef} className="relative h-full w-full select-none">
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full cursor-crosshair touch-none" />
+      {manual && (
+        <button
+          onClick={() => {
+            vista.current.precio = null;
+            sucio.current = true;
+            setManual(false);
+          }}
+          className="absolute right-[72px] top-2 rounded border border-borde bg-black/80 px-2 py-0.5 text-[10px] text-plata-200 hover:text-white"
+          data-escala-auto
+        >
+          Escala auto
+        </button>
+      )}
     </div>
   );
 }
 
 // -----------------------------------------------------------------------------------------------
 
-function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGrafico | null, capas: CapasGrafico, v: Vista, heatmap: HeatmapImagen | null): void {
+/** Dibuja y devuelve el índice de la primera barra visible (para pedir más historial al acercarse al borde). */
+function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGrafico | null, barras: readonly BarraGrafico[], capas: CapasGrafico, v: Vista, heatmap: HeatmapImagen | null): { inicio: number } | null {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const W = cont.clientWidth;
   const H = cont.clientHeight;
-  if (W < 10 || H < 10) return;
+  if (W < 10 || H < 10) return null;
   if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
@@ -185,15 +326,15 @@ function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGra
   ctx.fillStyle = C.fondo;
   ctx.fillRect(0, 0, W, H);
   ctx.font = FUENTE;
-  if (!estado || (estado.barras.length === 0 && !estado.enCurso)) {
+  if (!estado || (barras.length === 0 && !estado.enCurso)) {
     ctx.fillStyle = C.eje;
     ctx.textAlign = 'center';
     ctx.fillText('Esperando datos del motor…', W / 2, H / 2);
-    return;
+    return null;
   }
 
   const dp = decimalesDe(estado.tickSize);
-  const todas: BarraGrafico[] = estado.enCurso ? [...estado.barras, estado.enCurso] : estado.barras;
+  const todas: readonly BarraGrafico[] = estado.enCurso ? [...barras, estado.enCurso] : barras;
   const areaW = W - EJE_PRECIO;
   const altoSub = (on: boolean, frac: number) => (on ? Math.round((H - EJE_TIEMPO) * frac) : 0);
   const hCvd = altoSub(capas.cvd, 0.17);
@@ -206,13 +347,15 @@ function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGra
     v.ancho = Math.max(minimo, Math.min(capas.footprint ? 120 : 26, (areaW - MARGEN_DERECHO) / (todas.length + 2)));
   }
 
-  // Barras visibles.
-  const cabe = Math.ceil((areaW - MARGEN_DERECHO) / v.ancho) + 1;
+  // Barras visibles (el desplazamiento admite fracciones: el arrastre es suave).
+  const cabe = Math.ceil((areaW - MARGEN_DERECHO) / v.ancho) + 2;
   v.desplazamiento = Math.min(v.desplazamiento, Math.max(0, todas.length - 5));
-  const fin = todas.length - v.desplazamiento;
+  const entero = Math.floor(v.desplazamiento);
+  const fraccion = v.desplazamiento - entero;
+  const fin = todas.length - entero;
   const ini = Math.max(0, fin - cabe);
   const visibles = todas.slice(ini, fin);
-  const xDe = (k: number) => areaW - MARGEN_DERECHO - (visibles.length - 1 - k) * v.ancho - v.ancho / 2;
+  const xDe = (k: number) => areaW - MARGEN_DERECHO - (visibles.length - 1 - k) * v.ancho - v.ancho / 2 + fraccion * v.ancho;
 
   // Escala de precio.
   let lo = Infinity;
@@ -224,8 +367,12 @@ function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGra
   const pad = Math.max((hi - lo) * 0.08, estado.paso * 2);
   lo -= pad;
   hi += pad;
-  // Footprint: escala vertical con filas legibles (≥ 15 px), centrada en el último precio.
-  if (capas.footprint) {
+  // Escala fijada por el usuario (arrastre vertical, pellizco o eje de precio).
+  if (v.precio) {
+    lo = v.precio.centro - v.precio.rango / 2;
+    hi = v.precio.centro + v.precio.rango / 2;
+  } else if (capas.footprint) {
+    // Footprint: escala vertical con filas legibles (≥ 15 px), centrada en el último precio.
     const filas = Math.max(8, Math.floor((hPrincipal - 16) / 15));
     if ((hi - lo) / estado.paso > filas) {
       const centro = visibles[visibles.length - 1]?.c ?? (lo + hi) / 2;
@@ -233,6 +380,10 @@ function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGra
       hi = centro + (filas / 2) * estado.paso;
     }
   }
+  if (!(hi > lo)) {
+    hi = lo + estado.paso * 10;
+  }
+  v.ultimo = { lo, hi, hPrincipal, areaW };
   const yP = (p: number) => 8 + (1 - (p - lo) / (hi - lo)) * (hPrincipal - 16);
   const pDeY = (y: number) => lo + (1 - (y - 8) / (hPrincipal - 16)) * (hi - lo);
 
@@ -416,7 +567,10 @@ function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGra
   const cada = Math.max(1, Math.round(110 / v.ancho));
   visibles.forEach((b, k) => {
     if ((ini + k) % cada !== 0) return;
-    ctx.fillText(hhmm(b.t), xDe(k), yT + EJE_TIEMPO / 2);
+    // Con historia de varios días, la primera etiqueta de cada día lleva la fecha.
+    const anterior = visibles[k - cada];
+    const otroDia = anterior && new Date(anterior.t).getDate() !== new Date(b.t).getDate();
+    ctx.fillText(otroDia ? ddmm(b.t) : hhmm(b.t), xDe(k), yT + EJE_TIEMPO / 2);
   });
 
   // Cruz y tooltip.
@@ -436,7 +590,7 @@ function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGra
     const b = visibles[k];
     if (b) {
       const lineas = [
-        `${hhmm(b.t)}${b.completa ? '' : ' · en curso'}`,
+        `${ddmm(b.t)} ${hhmm(b.t)}${b.completa ? '' : ' · en curso'}`,
         `O ${fmt(b.o, dp)}  H ${fmt(b.h, dp)}`,
         `L ${fmt(b.l, dp)}  C ${fmt(b.c, dp)}`,
         `Vol ${fmtQ(b.v)}  Δ ${b.d > 0 ? '+' : ''}${fmtQ(b.d)}`,
@@ -455,6 +609,7 @@ function dibujar(canvas: HTMLCanvasElement, cont: HTMLElement, estado: EstadoGra
       lineas.forEach((l, i) => ctx.fillText(l, 18, 16 + i * 14));
     }
   }
+  return { inicio: ini };
 }
 
 function escalonPrecio(bruto: number): number {

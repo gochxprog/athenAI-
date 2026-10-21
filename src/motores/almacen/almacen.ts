@@ -166,6 +166,25 @@ export class AlmacenFeatures {
     return salida.reverse();
   }
 
+  /** Hasta `n` filas de un símbolo con cierre < `antesDe` (las más recientes), en orden cronológico. */
+  async leerAntes(simbolo: string, antesDe: number, n: number): Promise<FilaGuardada[]> {
+    await this.vaciar();
+    const db = await this.abrir();
+    const tx = db.transaction('filas', 'readonly');
+    const salida: FilaGuardada[] = [];
+    await new Promise<void>((ok, mal) => {
+      const c = tx.objectStore('filas').openCursor(IDBKeyRange.bound([simbolo, -Infinity, -Infinity], [simbolo, antesDe, -Infinity], false, true), 'prev');
+      c.onsuccess = () => {
+        const cur = c.result;
+        if (!cur || salida.length >= n) return ok();
+        salida.push(cur.value as FilaGuardada);
+        cur.continue();
+      };
+      c.onerror = () => mal(c.error);
+    });
+    return salida.reverse();
+  }
+
   /** Borra la "carpeta" completa de este proveedor. */
   async borrar(): Promise<void> {
     this.pendientes = [];

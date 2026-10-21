@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Database, Layers3 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Database, Layers3, Maximize2, Minimize2 } from 'lucide-react';
 import LienzoOrderFlow, { type CapasGrafico } from './LienzoOrderFlow';
 import DomEscalera from './DomEscalera';
 import { motorOrderFlow, type EstadoFeeds } from '@/motores/worker/motorCliente';
@@ -8,6 +8,7 @@ import { useNavegar } from '@/hooks/Navegacion';
 import type { EstadoGrafico } from '@/motores/nucleo/pipeline';
 import type { IdTemporalidad } from '@/motores/nucleo/tipos';
 import Punto from '@/components/ui/Punto';
+import { useHistorial } from './historialGrafico';
 
 const TEMPORALIDADES: { id: IdTemporalidad; etiqueta: string }[] = [
   { id: '1m', etiqueta: '1m' },
@@ -74,6 +75,37 @@ export default function OrderFlowChart({ estado }: { estado: EstadoGrafico | nul
   const { feeds } = useFeeds();
   const navegar = useNavegar();
   const visibleFeed = feeds.feeds.find((f) => f.simbolo === feeds.visible) ?? feeds.feeds[0];
+  const historial = useHistorial(estado?.simbolo ?? visibleFeed?.simbolo, visibleFeed?.proveedor, temporalidad);
+  const [completa, setCompleta] = useState(false);
+  const marco = useRef<HTMLDivElement>(null);
+
+  // Pantalla completa: la del navegador si existe (y en horizontal en el móvil); si no, el panel ocupa toda la ventana.
+  const alternarCompleta = async () => {
+    if (completa) {
+      if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
+      setCompleta(false);
+      return;
+    }
+    setCompleta(true);
+    try {
+      await marco.current?.requestFullscreen?.();
+      await (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> })?.lock?.('landscape');
+    } catch {
+      // Sin API de pantalla completa (iPhone) u orientación bloqueada: basta con ocupar la ventana.
+    }
+  };
+  useEffect(() => {
+    const salir = () => {
+      if (!document.fullscreenElement) setCompleta(false);
+    };
+    const tecla = (e: KeyboardEvent) => e.key === 'Escape' && setCompleta(false);
+    document.addEventListener('fullscreenchange', salir);
+    window.addEventListener('keydown', tecla);
+    return () => {
+      document.removeEventListener('fullscreenchange', salir);
+      window.removeEventListener('keydown', tecla);
+    };
+  }, []);
 
   useEffect(() => {
     motorOrderFlow.vista(capas.footprint ? 140 : 260, capas.footprint, capas.footprint ? 70 : 0, capas.heatmap);
@@ -87,7 +119,7 @@ export default function OrderFlowChart({ estado }: { estado: EstadoGrafico | nul
   const conexion = estado?.conexion ?? 'conectando';
 
   return (
-    <div className="flex h-full flex-col">
+    <div ref={marco} className={`flex flex-col bg-black ${completa ? 'fixed inset-0 z-[70] h-[100dvh]' : 'h-full'}`} data-pantalla-completa={completa}>
       {/* Controles */}
       <div className="flex flex-wrap items-center gap-2 border-b border-borde-suave px-3 py-2.5">
         <div className="flex rounded-lg border border-borde p-0.5" role="group" aria-label="Temporalidad">
@@ -130,6 +162,9 @@ export default function OrderFlowChart({ estado }: { estado: EstadoGrafico | nul
               ))}
             </div>
           )}
+          <button onClick={alternarCompleta} aria-label={completa ? 'Salir de pantalla completa' : 'Pantalla completa'} title={completa ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa'} className="flex items-center gap-1.5 rounded-lg border border-borde px-2 py-1 text-[10.5px] text-plata-200 hover:border-plata-400 hover:text-white">
+            {completa ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+          </button>
           <button onClick={() => navegar('datos')} className="flex items-center gap-1.5 rounded-lg border border-borde px-2.5 py-1 text-[10.5px] text-plata-200 hover:border-plata-400 hover:text-white" title="Cambiar fuente y activos en el Centro de datos">
             <Database size={11} /> {visibleFeed ? NOMBRE_PROVEEDOR[visibleFeed.proveedor] : 'Centro de datos'}
             {feeds.feeds.length === 1 && <span className="font-mono text-plata-400">· {feeds.feeds[0].simbolo}</span>}
@@ -138,11 +173,14 @@ export default function OrderFlowChart({ estado }: { estado: EstadoGrafico | nul
       </div>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="relative h-[460px] min-h-0 lg:h-auto">
-          <LienzoOrderFlow estado={estado} capas={capas} />
-          <span className="pointer-events-none absolute bottom-7 left-3 text-[9.5px] text-plata-600">Rueda: zoom · arrastrar: desplazar · doble clic: volver al vivo</span>
+        <div className={`relative min-h-0 ${completa ? 'h-full' : 'h-[460px] lg:h-auto'}`}>
+          <LienzoOrderFlow estado={estado} capas={capas} historial={historial.barras} alBordeIzquierdo={historial.pedirMas} />
+          <span className="pointer-events-none absolute bottom-7 left-3 text-[9.5px] text-plata-600" data-historial={historial.barras.length}>
+            {historial.cargando ? 'Cargando historial… · ' : historial.nota ? `${historial.nota} · ` : historial.barras.length ? `${historial.barras.length.toLocaleString('es-ES')} velas de historial · ` : ''}
+            Arrastrar: mover · dos dedos o rueda: zoom · eje de precio: estirar · doble toque: volver al vivo
+          </span>
         </div>
-        <div className="min-h-[420px] border-t border-borde-suave lg:min-h-0 lg:border-l lg:border-t-0">
+        <div className={`border-t border-borde-suave lg:min-h-0 lg:border-l lg:border-t-0 ${completa ? 'hidden lg:block' : 'min-h-[420px]'}`}>
           <DomEscalera estado={estado} />
         </div>
       </div>

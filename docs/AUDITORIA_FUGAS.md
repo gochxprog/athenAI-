@@ -78,3 +78,20 @@ const b = backtest(e.cierres, e.posiciones[combo], e.costos, v.oosDesde, v.oosHa
 - División siempre cronológica (nunca `shuffle=True`).
 - Validación Walk-Forward o K-fold **purgado** con embargo, usando `evento_inicio`/`evento_fin` del Etiquetador.
 - La estandarización se ajusta solo con el tramo de entrenamiento.
+
+## 7. Antes del primer modelo: controles automáticos (`src/motores/ml/antifuga.ts`)
+
+Aquí no hay ningún modelo: solo las reglas que el dataset debe cumplir y cómo dividirlo en el tiempo.
+
+| Control | Qué impide | Prueba |
+|---|---|---|
+| `columnasEntrada` | Que la respuesta entre al modelo. `evento_fin`, `evento_barrera`, `etiqueta`, `meta`, `evento_retorno` y `evento_barras` miran al futuro y nunca son entradas; tampoco `market_id`, `evento_inicio` ni `evento_precio`. | `antifuga.test.ts` |
+| Catálogo | Que una Feature se llame como una columna de la respuesta. | `antifuga.test.ts` |
+| Vela para dibujar | Que `open`, `volumen` y `delta` de la vela grabada (para el gráfico) acaben en el dataset: solo entran las Features. | `antifuga.test.ts` |
+| `verificarDataset` | Mercados mezclados, filas desordenadas o repetidas, `evento_fin ≤ evento_inicio`, y cualquier columna casi idéntica a la etiqueta (\|correlación\| ≥ 0,95 = fuga casi segura). Se probó plantando una fuga a propósito. | `antifuga.test.ts` |
+| Features de t₀ | Las Features de cada ejemplo son las de la barra de la decisión, no las de después. | `antifuga.test.ts` |
+| Cortar la historia | Las filas cuya respuesta ya se conocía son idénticas con la historia cortada (Features y etiqueta). | `antifuga.test.ts` |
+| `walkForwardPurgado` | Entrenar con el futuro o con resultados que se solapan con la prueba. Se entrena solo con eventos anteriores cuyo resultado terminó antes de la prueba menos el embargo; nunca se baraja y cada evento se prueba una sola vez. | `antifuga.test.ts` (con ejemplo a mano) |
+
+Lo que ya estaba (secciones 2 a 5) sigue igual: Features point-in-time, Etiquetador causal, Juez fuera de muestra y
+Anti-futuro de las estrategias en Python.

@@ -24,6 +24,8 @@ export interface EstadoSincronizacion {
   nuevas: Record<string, number>;
   remoto: EstadoRemoto | null;
   error: string | null;
+  /** La plataforma se abrió desde la propia grabadora (misma dirección) y aún no tiene la clave: se pide una vez. */
+  detectada: string | null;
 }
 
 const CLAVE = 'athenai.grabadora';
@@ -33,7 +35,7 @@ const PAGINA = 5_000;
 const limpiarUrl = (u: string) => u.trim().replace(/\/+$/, '');
 
 export class ClienteGrabadora {
-  estado: EstadoSincronizacion = { config: null, enCurso: false, ultima: null, nuevas: {}, remoto: null, error: null };
+  estado: EstadoSincronizacion = { config: null, enCurso: false, ultima: null, nuevas: {}, remoto: null, error: null, detectada: null };
   private oyentes = new Set<() => void>();
 
   constructor(
@@ -83,7 +85,24 @@ export class ClienteGrabadora {
     } catch {
       // Almacenamiento bloqueado: vale para esta sesión.
     }
-    this.cambiar({ config: c ? { url: limpiarUrl(c.url), clave: c.clave.trim() } : null, remoto: null, error: null });
+    this.cambiar({ config: c ? { url: limpiarUrl(c.url), clave: c.clave.trim() } : null, remoto: null, error: null, detectada: c ? null : this.estado.detectada });
+  }
+
+  /**
+   * Si la plataforma la sirve la propia grabadora (se abrió con la IP del VPS) y no hay conexión guardada,
+   * lo anota para pedir la clave una sola vez. La clave nunca viaja sola: la escribe el dueño.
+   */
+  async detectarMismoOrigen(origen: string | null = typeof location === 'undefined' ? null : location.origin): Promise<boolean> {
+    if (this.estado.config || !origen || !/^https?:/.test(origen)) return false;
+    try {
+      const r = await this.fetchImpl(`${origen}/api/salud`);
+      const j = r.ok ? ((await r.json()) as { grabadora?: string }) : null;
+      if (j?.grabadora !== 'athenAI' || this.estado.config) return false;
+      this.cambiar({ detectada: limpiarUrl(origen) });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /** Descarga lo nuevo de cada símbolo. Devuelve las filas nuevas por símbolo. */
@@ -134,5 +153,6 @@ export function iniciarGrabadora(): void {
   if (iniciado) return;
   iniciado = true;
   void grabadora.sincronizar();
+  void grabadora.detectarMismoOrigen();
   setInterval(() => void grabadora.sincronizar(), CADA_MS);
 }

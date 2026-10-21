@@ -34,4 +34,20 @@ describe('almacén de Features por fuente', () => {
     expect(await rithmic.resumen()).toEqual([]);
     expect((await bin.resumen()).find((r) => r.simbolo === 'BTCUSDT')?.filas).toBe(antesBinance);
   });
+
+  it('lee hacia atrás por páginas, solo de su símbolo y sin repetir (para el historial del gráfico)', async () => {
+    const a = new AlmacenFeatures('grabadora');
+    const s = await a.nuevaSesion('XAUUSDT', parametrosPorDefecto('XAUUSDT', 0.01), 1);
+    a.guardar('XAUUSDT', s, [1, 2, 3, 4, 5].map((n) => fila(n, n * 1000)));
+    const o = await a.nuevaSesion('SOLUSDT', parametrosPorDefecto('SOLUSDT', 0.01), 1);
+    a.guardar('SOLUSDT', o, [fila(9, 2500)]);
+    await a.vaciar();
+    const p1 = await a.leerAntes('XAUUSDT', Infinity, 2);
+    expect(p1.map((f) => f.cierre)).toEqual([4000, 5000]);
+    const p2 = await a.leerAntes('XAUUSDT', p1[0].cierre, 2);
+    expect(p2.map((f) => f.cierre)).toEqual([2000, 3000]);
+    const p3 = await a.leerAntes('XAUUSDT', p2[0].cierre, 2);
+    expect(p3.map((f) => f.cierre)).toEqual([1000]);
+    expect(await a.leerAntes('XAUUSDT', 1000, 2)).toEqual([]);
+  });
 });

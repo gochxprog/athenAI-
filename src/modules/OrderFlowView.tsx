@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Activity, BookOpen, Brain, Cpu, Download, ListTree, Table2 } from 'lucide-react';
 import Encabezado from '@/components/ui/Encabezado';
@@ -9,6 +9,7 @@ import ResumenMercados from '@/components/orderflow/ResumenMercados';
 import MemoriaMercado from '@/components/orderflow/MemoriaMercado';
 import MotoresOrderFlow from '@/components/orderflow/MotoresOrderFlow';
 import { descargarCsv, motorOrderFlow } from '@/motores/worker/motorCliente';
+import { grabadora } from '@/motores/grabadora/cliente';
 import { DEFINICIONES_FEATURES } from '@/motores/nucleo/features';
 import type { EstadoGrafico } from '@/motores/nucleo/pipeline';
 import type { TipoEvento } from '@/motores/nucleo/tipos';
@@ -31,6 +32,7 @@ export default function OrderFlowView() {
   const [pestana, setPestana] = useState<Pestana>('eventos');
   const { feeds } = useFeeds();
   const visibleFeed = feeds.feeds.find((f) => f.simbolo === feeds.visible) ?? feeds.feeds[0];
+  const grabadas = useFilasGrabadas(visibleFeed?.simbolo);
 
   return (
     <div className="space-y-4">
@@ -40,7 +42,7 @@ export default function OrderFlowView() {
         fuente={visibleFeed ? `${NOMBRE_PROVEEDOR[visibleFeed.proveedor].toUpperCase()} · ${visibleFeed.simbolo}` : 'SIN FUENTE'}
         descripcion="Velas o Footprint, CVD, Open Interest, absorción, agotamiento, pools de liquidez (LHM), big trades, icebergs y stop runs, con el DOM al lado. Calculado por los motores de athenAI en un proceso aparte; lo mismo que ves es lo que aprenden los modelos."
       >
-        <Insignia variante="contorno">{estado ? `${num(estado.metricas.barrasCanonicas)} filas de Features` : 'Arrancando motor…'}</Insignia>
+        <Insignia variante="contorno">{estado ? `${num(grabadas ?? 0)} filas grabadas · ${num(estado.metricas.barrasCanonicas)} en esta sesión` : 'Arrancando motor…'}</Insignia>
       </Encabezado>
 
       <ResumenMercados />
@@ -219,4 +221,27 @@ function Salud({ estado, msProceso }: { estado: EstadoGrafico | null; msProceso:
       </div>
     </Panel>
   );
+}
+
+/** Filas de Features grabadas de un mercado: la carpeta con más historia (la del VPS o la de este navegador). */
+function useFilasGrabadas(simbolo: string | undefined): number | null {
+  const [n, setN] = useState<number | null>(null);
+  useEffect(() => {
+    if (!simbolo) return;
+    let vivo = true;
+    const leer = () =>
+      motorOrderFlow.resumenAlmacen().then(
+        (r) => vivo && setN(Math.max(0, ...(['grabadora', 'binance'] as const).map((p) => r[p]?.find((x) => x.simbolo === simbolo)?.filas ?? 0))),
+        () => undefined,
+      );
+    void leer();
+    const id = setInterval(leer, 60_000);
+    const fuera = grabadora.suscribir(() => !grabadora.estado.enCurso && void leer());
+    return () => {
+      vivo = false;
+      clearInterval(id);
+      fuera();
+    };
+  }, [simbolo]);
+  return n;
 }

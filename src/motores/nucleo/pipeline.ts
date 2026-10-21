@@ -136,6 +136,8 @@ export interface ResumenFlujo {
 }
 
 const CAPACIDAD_FEATURES = 20_000;
+/** Niveles por lado que se envían al DOM de la pantalla: todos los de la vista del libro (solo se dibujan). */
+export const NIVELES_DOM = 200;
 
 /** Liquidez de los 10 primeros niveles por lado y cuánto se aleja el 10.º del precio medio. */
 function libro10(l: OrderBookView | null): ResumenFlujo['libro10'] {
@@ -292,7 +294,7 @@ export class Pipeline {
       // Un fallo al calcular una Feature nunca detiene el motor: la fila sale vacía y marcada como hueco.
       this.erroresFeatures += 1;
       this.ultimoErrorFeatures = e instanceof Error ? e.message : String(e);
-      fila = { n: b.n, inicio: b.inicio, cierre: b.cierre, close: b.ohlc.close, high: b.ohlc.high, low: b.ohlc.low, valores: Object.fromEntries(DEFINICIONES_FEATURES.map((d) => [d.clave, null])) };
+      fila = { n: b.n, inicio: b.inicio, cierre: b.cierre, close: b.ohlc.close, high: b.ohlc.high, low: b.ohlc.low, open: b.ohlc.open, volumen: b.volumen, delta: b.delta, valores: Object.fromEntries(DEFINICIONES_FEATURES.map((d) => [d.clave, null])) };
       this.huecoPendiente = true;
     }
     fila.valores.hueco = this.huecoPendiente ? 1 : 0;
@@ -406,8 +408,8 @@ export class Pipeline {
         porNivel.set(p, x);
       }
       libro = {
-        bids: v.bids.slice(0, 60).map((l) => [l[0], l[1], l[2]]),
-        asks: v.asks.slice(0, 60).map((l) => [l[0], l[1], l[2]]),
+        bids: v.bids.slice(0, NIVELES_DOM).map((l) => [l[0], l[1], l[2]]),
+        asks: v.asks.slice(0, NIVELES_DOM).map((l) => [l[0], l[1], l[2]]),
         paso: v.tickSize * v.group,
         mid: v.mid,
         spread: v.spread,

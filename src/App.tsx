@@ -8,6 +8,7 @@ import type { Modulo } from '@/types/nav';
 import { iniciarNotificaciones } from '@/motores/notificaciones/iniciar';
 import { iniciarPaper } from '@/motores/paper/iniciar';
 import { iniciarGrabadora } from '@/motores/grabadora/cliente';
+import AvisoGrabadora from '@/components/datos/AvisoGrabadora';
 
 // Avisos a Discord / Telegram / ntfy desde que se abre la app (no solo al entrar en un módulo).
 iniciarNotificaciones();
@@ -84,6 +85,7 @@ export default function App() {
         <Sidebar activo={modulo} onSeleccion={navegar} />
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto" id="contenedor-principal">
           <Topbar titulo={meta.titulo} seccion={meta.seccion} />
+          <AvisoGrabadora />
           <main className="flex-1 p-4 md:p-6">
             {/* Sin animación de salida: una salida que no termina (p. ej. por animaciones internas) dejaría la navegación trabada. */}
             <motion.div key={modulo} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: 'easeOut' }}>

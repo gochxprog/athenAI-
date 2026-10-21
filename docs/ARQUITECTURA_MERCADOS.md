@@ -85,6 +85,7 @@ src/motores/modelos/
 ```
 
 - Un modelo por mercado. El dataset sale del CSV del Etiquetador de ESE mercado (columna `market_id`).
-- Validación cronológica: Walk-Forward o K-fold purgado con embargo (`evento_inicio` / `evento_fin`), nunca barajar.
+- Validación cronológica con `walkForwardPurgado` (`src/motores/ml/antifuga.ts`): purga y embargo con
+  `evento_inicio` / `evento_fin`, nunca barajar. Antes de entrenar, `verificarDataset` debe dar `ok`.
 - El modelo lleva su `market_id`. El Juez lo valida con el fuera de muestra de ese mercado, y solo entonces puede
   tener bot de Paper en ese mercado.

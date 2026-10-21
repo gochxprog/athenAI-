@@ -120,6 +120,26 @@ fuera de muestra. Pruebas de blindaje en Walk-Forward y Etiquetador. Detalle en 
 ## Pendientes conocidos
 - **Backtest:** el funding solo se descuenta en datos grabados desde que se guarda (Feature `funding_tasa`).
 
+## Gráfico de Order Flow: historial, gestos y DOM · octubre 2026
+- **Historial** (`src/motores/historial/historial.ts`, solo para dibujar):
+  - velas de 1m, 5m y 15m desde Binance REST `/fapi/v1/klines`, con volumen y delta = 2 × compra agresiva − volumen;
+  - Dollar Bars desde lo grabado del mismo mercado (VPS o este navegador, sin mezclar);
+  - al llegar al borde izquierdo se carga más, hasta 20.000 velas;
+  - el CVD se reinicia a las 00:00 UTC y lo vivo sigue desde el historial;
+  - footprint, absorción, eventos y heatmap solo existen en vivo.
+- **Filas grabadas:** guardan también `open`, `volumen` y `delta` para dibujar la vela. No son Features y no entran al
+  dataset (prueba en `ml/antifuga.test.ts`).
+- **Grabadora en la misma dirección:** si la plataforma se abre desde la IP del VPS, pide la clave una vez y
+  sincroniza sola. La Memoria usa la carpeta del VPS si tiene más historia.
+- **Gestos:**
+  - arrastrar mueve en los dos ejes; solo un gesto claramente vertical fija la escala de precio;
+  - dos dedos o la rueda hacen zoom;
+  - arrastrar el eje de precio lo estira;
+  - doble toque vuelve al vivo; «Escala auto» devuelve la escala automática;
+  - botón de pantalla completa (en horizontal en el móvil).
+- **DOM:** muestra todos los niveles de la vista del libro (hasta 200 por lado) con scroll, «Centrar» y agrupación
+  ×1, ×5, ×10, ×25 y ×100. Solo pantalla: el motor del libro y las Features no cambian (`agruparLibro.test.ts`).
+
 ## Para después (no se construye ahora)
 - Fuente de datos de calidad (Databento o Rithmic): añadirla como fuente, con una función que **descargue datos
   históricos**. Así se hace backtesting con años de historia sin esperar a grabar.

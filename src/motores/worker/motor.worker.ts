@@ -281,6 +281,19 @@ async function calcularMemoria(): Promise<void> {
       let filas: (FilaGuardada | (ReturnType<Pipeline['todasLasFilas']>[number] & { sesion?: number }))[];
       try {
         filas = al ? await al.leer(simbolo) : a.pipeline.todasLasFilas();
+        // Lo grabado 24/7 en el VPS (descargado a «athenai-grabadora») es el MISMO mercado de Binance con mucha más
+        // historia: si tiene más filas, la Memoria usa esa carpeta (sin mezclar las dos).
+        if (a.proveedor === 'binance') {
+          const vps = new AlmacenFeatures('grabadora');
+          try {
+            const g = await vps.leer(simbolo);
+            if (g.length > filas.length) filas = g;
+          } catch {
+            // Sin datos del VPS: se queda con lo de este navegador.
+          } finally {
+            vps.cerrar();
+          }
+        }
       } catch (e) {
         a.memoria = { calculadoEn: Date.now(), filas: 0, regimen: null, memoria: null, faltan: null, error: e instanceof Error ? e.message : String(e) };
         continue;

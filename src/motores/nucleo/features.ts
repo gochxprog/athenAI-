@@ -67,6 +67,13 @@ export interface FilaFeatures {
   /** Máximo y mínimo de la barra (para el Etiquetador; no existen en filas grabadas antes de guardarlos). */
   high?: number;
   low?: number;
+  /**
+   * Apertura, volumen y delta (en la unidad del activo) de la barra: SOLO para dibujar la vela grabada en el gráfico.
+   * No son Features (tienen escala) y no existen en filas grabadas antes de guardarlos.
+   */
+  open?: number;
+  volumen?: number;
+  delta?: number;
   valores: Record<string, number | null>;
 }
 
@@ -220,7 +227,7 @@ export function construirFila(b: BarraAnalizada, previas: readonly BarraAnalizad
     const x = v[k];
     if (x !== null && !Number.isFinite(x)) v[k] = null;
   }
-  return { fila: { n: b.n, inicio: b.inicio, cierre: b.cierre, close, high, low, valores: v }, oi: puntoOi };
+  return { fila: { n: b.n, inicio: b.inicio, cierre: b.cierre, close, high, low, open: b.ohlc.open, volumen: b.volumen, delta: b.delta, valores: v }, oi: puntoOi };
 }
 
 /** Número sin ruido de coma flotante (10 cifras significativas); vacío si no hay dato. */
