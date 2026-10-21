@@ -197,11 +197,15 @@ export function entrenarHMM(x: readonly (readonly number[])[], k = 3, opciones: 
 /**
  * Filtro forward: probabilidad de cada estado en cada barra usando SOLO la información hasta esa barra.
  * Es lo que se usa en vivo y en la validación fuera de muestra (sin mirar al futuro).
+ * `reinicio[t]` = la barra t empieza un tramo nuevo (tras un hueco o un cambio de sesión): el filtro vuelve a la
+ * probabilidad inicial π en vez de arrastrar el estado de antes del corte.
  */
-export function filtrarHMM(m: ModeloHMM, x: readonly (readonly number[])[]): number[][] {
+export function filtrarHMM(m: ModeloHMM, x: readonly (readonly number[])[], reinicio?: readonly boolean[]): number[][] {
   const out: number[][] = [];
   let prev: number[] | null = null;
-  for (const p of x) {
+  for (let t = 0; t < x.length; t += 1) {
+    const p = x[t];
+    if (reinicio?.[t]) prev = null;
     const lg = m.medias.map((mu, i) => logGauss(p, mu, m.varianzas[i]));
     const max = Math.max(...lg);
     const actual: number[] = new Array(m.k);

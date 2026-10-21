@@ -25,8 +25,9 @@ function rejilla(serie: SerieCierres['puntos'], tiempos: number[]): (number | nu
   let j = -1;
   for (const t of tiempos) {
     while (j + 1 < serie.length && serie[j + 1].cierre <= t) j += 1;
-    // Sin dato reciente (más de 3 pasos) se considera ausente: no se rellena un mercado cerrado.
-    out.push(j >= 0 && t - serie[j].cierre <= 3 * PASO ? serie[j].close : null);
+    // Sin una barra en los últimos 5 min se considera ausente. Antes se arrastraba hasta 15 min: el precio
+    // repetido daba retornos 0 seguidos de un salto y empujaba la correlación hacia 0 en el mercado más lento.
+    out.push(j >= 0 && t - serie[j].cierre < PASO ? serie[j].close : null);
   }
   return out;
 }

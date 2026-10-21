@@ -48,18 +48,23 @@ interface Serie {
   x: number[][];
   /** Índice de la fila original de cada observación. */
   idx: number[];
+  /** La observación empieza un tramo nuevo (después de un hueco o de un cambio de sesión). */
+  inicio: boolean[];
 }
 
 /** Construye las observaciones del HMM. Corta en huecos y cambios de sesión (no se mezclan tramos). */
 export function observaciones(filas: readonly (FilaFeatures & { sesion?: number })[]): Serie {
   const x: number[][] = [];
   const idx: number[] = [];
+  const inicio: boolean[] = [];
   let tramo = 0;
+  let nuevo = true;
   for (let i = 0; i < filas.length; i += 1) {
     const f = filas[i];
     const v = f.valores;
     const nuevoTramo = v.hueco === 1 || (i > 0 && f.sesion !== undefined && f.sesion !== filas[i - 1].sesion);
     tramo = nuevoTramo ? 0 : tramo + 1;
+    if (nuevoTramo) nuevo = true;
     if (tramo < VENTANA_EFICIENCIA) continue;
     let suma = 0;
     let sumaAbs = 0;
@@ -74,8 +79,10 @@ export function observaciones(filas: readonly (FilaFeatures & { sesion?: number 
     if (rango === null || rango === undefined || dur === null || dur === undefined || dr === null || dr === undefined) continue;
     x.push([sumaAbs > 0 ? Math.abs(suma) / sumaAbs : 0, Math.log(Math.max(rango, 1e-3)), Math.log(Math.max(dur, 0.05)), Math.abs(dr)]);
     idx.push(i);
+    inicio.push(nuevo);
+    nuevo = false;
   }
-  return { x, idx };
+  return { x, idx, inicio };
 }
 
 function estandarizar(x: number[][]): { z: number[][]; media: number[]; desv: number[] } {
@@ -163,14 +170,14 @@ export function detectarRegimen(filas: readonly (FilaFeatures & { sesion?: numbe
   const ent = estandarizar(serie.x.slice(0, corte));
   const zTodo = serie.x.map((p) => p.map((v, j) => (v - ent.media[j]) / ent.desv[j]));
   const mVal = entrenarHMM(zTodo.slice(0, corte), 3, { semilla });
-  const estadosVal = filtrarHMM(mVal, zTodo).map((p) => p.indexOf(Math.max(...p)));
+  const estadosVal = filtrarHMM(mVal, zTodo, serie.inicio).map((p) => p.indexOf(Math.max(...p)));
   const validacion = validar(filas, serie, nombrar(mVal), estadosVal, corte);
 
   // Modelo final con todo el histórico para el régimen de ahora.
   const { z } = estandarizar(serie.x);
   const m = entrenarHMM(z, 3, { semilla });
   const nombres = nombrar(m);
-  const probs = filtrarHMM(m, z);
+  const probs = filtrarHMM(m, z, serie.inicio);
   const estados = probs.map((p) => nombres[p.indexOf(Math.max(...p))]);
   const ultima = probs[probs.length - 1];
   const actual = estados[estados.length - 1];

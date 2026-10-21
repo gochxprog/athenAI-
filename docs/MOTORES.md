@@ -54,8 +54,8 @@ Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el p
 |---|---|---|
 | Datos | Fuente Binance, Vigía de huecos, Barras, Almacén, Calendario (tabla de abajo) | ✅ revisado, falta tu visto bueno |
 | Order Flow | Los 11 motores revisados uno por uno (tabla de abajo), con pruebas a mano y la pestaña «Cómo funciona cada motor» | ✅ revisado, falta tu visto bueno |
-| Memoria | Régimen (HMM), día gemelo / «hoy es distinto», cruce entre mercados | 🔍 |
-| Panel General | Lectura del momento, Features extremas | 🔍 |
+| Memoria | Régimen (HMM), día gemelo / «hoy es distinto», cruce entre mercados (tabla de abajo) | ✅ revisado, falta tu visto bueno |
+| Panel General | Lectura del momento, Features extremas | ✅ revisado (correcto) |
 
 ## Order Flow · revisión (octubre 2026)
 
@@ -82,6 +82,16 @@ Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el p
 | 3 | Barras | Correcto (dollar bars: el trade que cruza el umbral pertenece a la barra). |
 | 4 | Almacén | Correcto (clave símbolo + cierre + número, escritura en lotes, cambio de sesión = hueco). |
 | 5 | Calendario | Correcto. |
+
+## Memoria · revisión (octubre 2026)
+
+| # | Motor | Resultado de la revisión |
+|---|---|---|
+| 1 | Régimen (HMM) | **Corregido:** el filtro forward arrastraba el estado de antes de un hueco o de otra sesión; ahora se reinicia en cada tramo. Baum-Welch escalado, correcto. |
+| 2 | «Hoy es distinto» | Correcto. |
+| 3 | Día gemelo | **Corregido:** la mediana de los gemelos con número par tomaba el valor de arriba; ahora es la media de los dos centrales. |
+| 4 | Cruce entre mercados | **Corregido:** arrastraba el último precio hasta 15 min y metía retornos 0 falsos (correlación hacia 0); ahora solo cuenta un precio de los 5 min anteriores. |
+| 5 | Panel General (lectura, Features extremas) | Correcto. |
 
 ## Por conectar o por hacer
 

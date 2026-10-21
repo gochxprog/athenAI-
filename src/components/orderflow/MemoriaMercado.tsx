@@ -1,5 +1,6 @@
 import { Brain, GitCompareArrows, History, RefreshCw, TriangleAlert } from 'lucide-react';
 import Panel from '@/components/ui/Panel';
+import TarjetaMotor, { type FichaMotor } from '@/components/ui/TarjetaMotor';
 import { motorOrderFlow } from '@/motores/worker/motorCliente';
 import type { EstadoFeed } from '@/motores/worker/protocolo';
 import type { NombreRegimen } from '@/motores/memoria/regimen';
@@ -171,6 +172,72 @@ export default function MemoriaMercado() {
           </>
         )}
       </Panel>
+
+      <FichasMemoria f={f} />
+    </div>
+  );
+}
+
+const FICHAS: (FichaMotor & { vivo: (f: EstadoFeed) => [string, string][] })[] = [
+  {
+    id: 'regimen',
+    nombre: 'Régimen (HMM de 3 estados)',
+    que: 'clasifica el mercado en rango (va y vuelve), tendencia (va en una dirección) o día raro (muy volátil), aprendiendo solo de tu data.',
+    sirve: 'no usar la misma estrategia en todos los mercados: lo que funciona en rango suele fallar en tendencia.',
+    mirar: 'el régimen actual, cuánto lleva y si la validación dice que es útil.',
+    formulas: [
+      'Por barra: eficiencia de 10 barras = |Σ retornos| / Σ |retornos|; log(rango / ATR); log(duración); |delta / volumen|.',
+      'HMM gaussiano de 3 estados entrenado con Baum-Welch. En vivo solo el filtro forward (nunca mira al futuro); se reinicia tras un hueco o una sesión nueva.',
+      'Nombres: el estado de más volatilidad = raro; de los otros, el más eficiente = tendencia.',
+      'Validación: entrena con el 70 % más antiguo y mira el 30 % siguiente: en «tendencia» las 10 barras siguientes deben ser más direccionales que en «rango».',
+    ],
+    vivo: (x) => [
+      ['Ahora', x.memoria?.regimen ? NOMBRE_REGIMEN[x.memoria.regimen.actual] : '—'],
+      ['Útil fuera de muestra', x.memoria?.regimen ? (x.memoria.regimen.validacion.util ? 'sí' : 'aún no') : '—'],
+    ],
+  },
+  {
+    id: 'distinto',
+    nombre: '¿Hoy es distinto?',
+    que: 'compara las últimas 20 barras con todo lo grabado.',
+    sirve: 'avisarte cuando el mercado hace algo que tu data nunca vio: ahí las estrategias aprendidas son menos fiables.',
+    mirar: 'el percentil: desde 98 salta el aviso.',
+    formulas: [
+      'Huella de 20 barras: dirección, eficiencia, volatilidad, ritmo, agresión, absorción, imbalances, OI, liquidaciones y big trades (cada una estandarizada).',
+      'Distancia euclídea a la ventana más parecida que no se solape.',
+      'Percentil = qué parte de las ventanas del pasado tiene su vecina más cercana más cerca que la de ahora. ≥ 98 % → «hoy es distinto».',
+    ],
+    vivo: (x) => [['Percentil', x.memoria?.memoria ? `${num(x.memoria.memoria.distinto.percentil * 100, 0)} %` : '—']],
+  },
+  {
+    id: 'gemelo',
+    nombre: 'Día gemelo',
+    que: 'los 8 momentos del pasado más parecidos a ahora y qué pasó en las 20 barras siguientes.',
+    sirve: 'memoria de tu propia data: no predice, muestra qué pasó otras veces.',
+    mirar: 'si la mayoría subió o bajó, y cuánto.',
+    formulas: ['Mismas huellas; se eligen las 8 más cercanas que tengan 20 barras de futuro sin huecos y no se solapen entre sí. Retorno = cierre 20 barras después / cierre − 1 (mediana bien calculada con número par).'],
+    vivo: (x) => [['Subieron', x.memoria?.memoria?.resumen ? `${x.memoria.memoria.resumen.subieron} de ${x.memoria.memoria.gemelos.length}` : '—']],
+  },
+  {
+    id: 'cruce',
+    nombre: 'Cruce entre mercados',
+    que: 'cuánto se mueven juntos dos mercados (por ejemplo BTC y oro).',
+    sirve: 'un patrón que aparece en dos mercados poco correlacionados es más fiable.',
+    mirar: 'cerca de 1 se mueven igual; cerca de 0, no tienen que ver.',
+    formulas: ['Rejilla de 5 min, últimas 24 h: en cada punto, el último cierre SOLO si hay una barra en los 5 min anteriores (no se arrastran precios viejos). Correlación de Pearson de los retornos log con al menos 30 puntos.'],
+    vivo: () => [],
+  },
+];
+
+function FichasMemoria({ f }: { f: EstadoFeed }) {
+  return (
+    <div className="space-y-3" data-motores-memoria>
+      <p className="etiqueta">Cómo funciona cada motor de memoria</p>
+      <div className="grid gap-4 xl:grid-cols-2">
+        {FICHAS.map((m) => (
+          <TarjetaMotor key={m.id} m={m} vivo={m.vivo(f)} />
+        ))}
+      </div>
     </div>
   );
 }

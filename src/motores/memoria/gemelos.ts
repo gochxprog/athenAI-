@@ -155,7 +155,7 @@ export function buscarMemoria(filas: readonly Fila[], opciones: { k?: number } =
   });
   const rets = gemelos.map((g) => g.retorno).sort((a, b) => a - b);
   const resumen = gemelos.length
-    ? { subieron: gemelos.filter((g) => g.retorno > 0).length, retornoMedio: rets.reduce((a, v) => a + v, 0) / rets.length, retornoMediano: rets[Math.floor(rets.length / 2)] }
+    ? { subieron: gemelos.filter((g) => g.retorno > 0).length, retornoMedio: rets.reduce((a, v) => a + v, 0) / rets.length, retornoMediano: rets.length % 2 ? rets[(rets.length - 1) / 2] : (rets[rets.length / 2 - 1] + rets[rets.length / 2]) / 2 }
     : null;
   return { ventanas: fines.length, gemelos, resumen, distinto: { percentil, distancia: dActual, aviso, motivo } };
 }

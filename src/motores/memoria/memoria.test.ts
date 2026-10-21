@@ -5,7 +5,7 @@ import { buscarMemoria } from './gemelos';
 import type { FilaFeatures } from '../nucleo/features';
 import { crearAleatorio, normal } from '@/lib/random';
 
-/** Serie sintética con regímenes CONOCIDOS que cambian según una cadena de Markov. */
+/** Serie de prueba con regímenes CONOCIDOS que cambian según una cadena de Markov. */
 function serieConRegimenes(n: number, semilla = 3) {
   const r = crearAleatorio(semilla);
   const verdad: NombreRegimen[] = [];
@@ -164,5 +164,33 @@ describe('Cruce entre mercados', () => {
     const cerrado = [{ cierre: ahora - 86_400_000, close: 10 }];
     const [x] = cruzarMercados([{ simbolo: 'A', puntos: abierto }, { simbolo: 'B', puntos: cerrado }], ahora);
     expect(x.correlacion).toBeNull();
+  });
+});
+
+describe('Revisión de Memoria (valores a mano)', () => {
+  it('filtro forward: tras un reinicio (hueco o sesión nueva) vuelve a la probabilidad inicial π', async () => {
+    const { filtrarHMM } = await import('./hmm');
+    // 2 estados en 1 dimensión: medias 0 y 10, varianza 1, transición pegajosa, π = (0,5; 0,5).
+    const m = { k: 2, d: 1, pi: [0.5, 0.5], a: [[0.99, 0.01], [0.01, 0.99]], medias: [[0], [10]], varianzas: [[1], [1]], logVerosimilitud: 0, iteraciones: 0 };
+    const x = [[0], [0], [5]];
+    // Sin reinicio, x = 5 queda equidistante pero el pasado empuja al estado 0.
+    const seguido = filtrarHMM(m, x);
+    expect(seguido[2][0]).toBeGreaterThan(0.9);
+    // Con reinicio en la tercera barra: 5 está a la misma distancia de 0 y de 10 → 50 % / 50 % exacto.
+    const reiniciado = filtrarHMM(m, x, [false, false, true]);
+    expect(reiniciado[2][0]).toBeCloseTo(0.5, 12);
+  });
+
+  it('cruce: un mercado sin barras en los últimos 5 min no rellena con el precio viejo', async () => {
+    const { cruzarMercados } = await import('./cruce');
+    const t0 = Date.UTC(2026, 9, 21, 0, 0, 0);
+    const pasos = 60;
+    const a = { simbolo: 'A', puntos: Array.from({ length: pasos }, (_, i) => ({ cierre: t0 + i * 300_000, close: 100 + Math.sin(i) })) };
+    // B solo tiene barra cada 15 min: en los puntos intermedios no hay dato fresco.
+    const b = { simbolo: 'B', puntos: Array.from({ length: pasos / 3 }, (_, i) => ({ cierre: t0 + i * 900_000, close: 50 + Math.cos(i) })) };
+    const [c] = cruzarMercados([a, b], t0 + (pasos - 1) * 300_000, (pasos - 1) * 300_000);
+    // Solo cuentan los retornos con los dos extremos frescos en ambos mercados: ninguno (B nunca tiene dos seguidos).
+    expect(c.puntos).toBe(0);
+    expect(c.correlacion).toBeNull();
   });
 });
