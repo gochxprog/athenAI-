@@ -143,4 +143,20 @@ describe('Bots en el VPS · API', () => {
     expect(motor.apagado).toBe(false);
     expect((await post('nada', {})).status).toBe(400);
   });
+
+  it('orden a mano desde la Terminal: abre con stop y objetivo, y se cierra a mercado', async () => {
+    await paso(100);
+    const r = await post('orden', { proveedor: 'binance', simbolo: 'BTCUSDT', lado: 1, riesgoPct: 0.01, stopPrecio: 95, rr: 2, gestion: 'escalonada' });
+    expect(r.status).toBe(200);
+    const id = ((await r.json()) as { bot: { id: string } }).bot.id;
+    expect(id).toBe('manual:binance:BTCUSDT');
+    const m = motor.bots.find((b) => b.id === id)!;
+    expect(m.posicion?.lado).toBe(1);
+    expect(m.gestion?.posicion.stop).toBeLessThan(m.posicion!.precioEntrada);
+    expect((await post('cerrar', { id })).status).toBe(200);
+    expect(m.posicion).toBeNull();
+    const ops = (await (await fetch(`${base}/api/paper/operaciones?bot=${encodeURIComponent(id)}`, { headers: auth })).json()) as { operaciones: OperacionPaper[] };
+    expect(ops.operaciones.at(-1)?.motivo).toBe('manual');
+    expect(ops.operaciones.at(-1)?.gestion?.stopInicial).toBeGreaterThan(0);
+  });
 });

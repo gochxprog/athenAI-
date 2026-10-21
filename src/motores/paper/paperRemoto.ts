@@ -2,6 +2,8 @@
 // Misma forma que MotorPaper para que las pantallas no cambien. Se actualiza cada 2 s mientras alguien mira.
 import type { Bot, MercadoVivo, OperacionPaper } from './ejecutor';
 import type { EventoPaper, NuevoBot } from './motorPaper';
+import type { OrdenManual } from './manual';
+import type { Proveedor } from '../almacen/almacen';
 import { REGLAS_POR_DEFECTO, type ReglasGuardian } from './guardian';
 
 /** Lo que necesita de la grabadora (ClienteGrabadora.api). */
@@ -82,6 +84,11 @@ export class MotorPaperRemoto {
     return (await this.accion<{ bot: Bot }>('crear', d)).bot;
   }
 
+  async ordenManual(d: OrdenManual & { proveedor: Proveedor; simbolo: string }): Promise<Bot> {
+    return (await this.accion<{ bot: Bot }>('orden', d)).bot;
+  }
+
+  cerrarManual = (id: string) => this.accion('cerrar', { id }).then(() => undefined);
   pausar = (id: string) => this.accion('pausar', { id }).then(() => undefined);
   reanudar = (id: string) => this.accion('reanudar', { id }).then(() => undefined);
   borrar = (id: string) => this.accion('borrar', { id }).then(() => undefined);

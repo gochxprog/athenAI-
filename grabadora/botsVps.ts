@@ -165,7 +165,7 @@ export function feedDe(simbolo: string, p: Pipeline, filas: number, guardando: b
   };
 }
 
-export type AccionPaper = 'crear' | 'pausar' | 'reanudar' | 'borrar' | 'apagar' | 'rearmar' | 'reglas';
+export type AccionPaper = 'crear' | 'pausar' | 'reanudar' | 'borrar' | 'apagar' | 'rearmar' | 'reglas' | 'orden' | 'cerrar';
 
 /** Lo que la API de la grabadora expone de los bots. */
 export interface ApiPaper {
@@ -197,6 +197,11 @@ export function crearApiPaper(motor: MotorPaper): ApiPaper {
           return { ok: true };
         case 'rearmar':
           motor.rearmar();
+          return { ok: true };
+        case 'orden':
+          return { bot: await motor.ordenManual(c as unknown as Parameters<MotorPaper['ordenManual']>[0]) };
+        case 'cerrar':
+          await motor.cerrarManual(id);
           return { ok: true };
         case 'reglas':
           motor.setReglas(c as Partial<MotorPaper['reglas']>);

@@ -18,6 +18,7 @@ import { cobrosFunding, comisionUsd, deslizamientoDinamico, type Costos } from '
 import type { Combo } from '../juez/juez';
 import type { Proveedor } from '../almacen/almacen';
 import type { ResumenFlujo } from '../nucleo/pipeline';
+import type { MovimientoStop, PosicionGestionada, ReglasSalida } from '../juez/salidas';
 
 export interface MercadoVivo {
   t: number;
@@ -32,7 +33,7 @@ export interface MercadoVivo {
 
 export type EstadoBot = 'activo' | 'sin-datos' | 'pausado-dia' | 'cuarentena' | 'fuera-de-banda' | 'pausado' | 'apagado';
 
-export type MotivoCierre = 'senal' | 'guardian' | 'hueco' | 'apagado' | 'manual';
+export type MotivoCierre = 'senal' | 'guardian' | 'hueco' | 'apagado' | 'manual' | 'stop' | 'objetivo' | 'break-even' | 'stop-en-ganancia';
 
 export interface PosicionAbierta {
   lado: 1 | -1;
@@ -65,6 +66,8 @@ export interface OperacionPaper {
   retorno: number;
   retornoUnidad: number;
   motivo: MotivoCierre;
+  /** Operación con stop y objetivo (manual por ahora): lo planeado y cómo terminó, en R. */
+  gestion?: { stopInicial: number; objetivo: number; riesgo: number; r: number; mfe: number; mae: number; movimientos: MovimientoStop[] };
 }
 
 export interface Bot {
@@ -106,6 +109,10 @@ export interface Bot {
   hueco: boolean;
   ultimaActualizacion: number;
   curva: { t: number; e: number }[];
+  /** 'manual' = tu cuenta de la Terminal (sin estrategia: no pide señales). Sin campo = bot de estrategia. */
+  origen?: 'bot' | 'manual';
+  /** Stop, objetivo y gestión de la posición abierta (juez/salidas.ts). */
+  gestion?: { posicion: PosicionGestionada; reglas: ReglasSalida } | null;
 }
 
 export const MAX_PUNTOS_CURVA = 1_000;

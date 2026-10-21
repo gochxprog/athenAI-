@@ -56,6 +56,8 @@ class PaperActivo {
   operaciones = (botId?: string) => this.activo.operaciones(botId);
   mercado = (b: Bot) => this.activo.mercado(b);
   crearBot = (d: NuevoBot) => this.activo.crearBot(d);
+  ordenManual = (d: Parameters<MotorPaper['ordenManual']>[0]) => this.activo.ordenManual(d);
+  cerrarManual = (id: string) => this.activo.cerrarManual(id);
   pausar = (id: string) => this.activo.pausar(id);
   reanudar = (id: string) => this.activo.reanudar(id);
   borrar = (id: string) => this.activo.borrar(id);

@@ -15,6 +15,8 @@ import type { Proveedor } from '../almacen/almacen';
 import { anotarCurva, anotarOperacion, aplicarFunding, cerrar, equity, precioMedio, rebalancear, type Bot, type MercadoVivo, type MotivoCierre, type OperacionPaper } from './ejecutor';
 import { exposicionMaxima, fechaUtc, REGLAS_POR_DEFECTO, revisar, revisarOperacion, type ReglasGuardian } from './guardian';
 import type { LibroPaper } from './almacenPaper';
+import { abrirManual, cerrarGestionada, vigilarGestion, type OrdenManual } from './manual';
+import { COSTOS_POR_DEFECTO } from '../juez/costos';
 
 export interface DepsPaper {
   senales: (xs: EstrategiaEnVivo[]) => Promise<SenalEstrategia[]>;
@@ -50,6 +52,10 @@ export interface NuevoBot {
 }
 
 const CLAVE_LOCAL = 'athenai.paper';
+/** Capital Paper de tu cuenta a mano en cada mercado (Terminal). */
+export const CAPITAL_MANUAL = 10_000;
+/** Id de tu cuenta a mano en un mercado. */
+export const idManual = (mercado: string) => `manual:${mercado}`;
 /** Más tiempo que esto sin actualizar (app cerrada) con una posición abierta = hueco: se cierra al volver. */
 export const HUECO_MS = 60_000;
 const GUARDAR_CADA_MS = 10_000;
@@ -202,7 +208,8 @@ export class MotorPaper {
   private async cerrarYRegistrar(b: Bot, motivo: MotivoCierre, m: MercadoVivo | null, revisarReglas: boolean): Promise<void> {
     if (!b.posicion) return;
     const t = this.deps.reloj();
-    const op = cerrar(b, m ?? { t, bid: null, ask: null, precio: b.ultimoPrecio, atr: null, libro10: null, fundingTasa: null, enVivo: false }, motivo);
+    const mm = m ?? { t, bid: null, ask: null, precio: b.ultimoPrecio, atr: null, libro10: null, fundingTasa: null, enVivo: false };
+    const op = b.gestion ? cerrarGestionada(b, mm, motivo) : cerrar(b, mm, motivo);
     if (op) await this.registrar(b, op, revisarReglas);
   }
 
@@ -219,6 +226,44 @@ export class MotorPaper {
       this.anotar(b, acc.texto, true);
       await this.cerrarYRegistrar(b, 'guardian', this.mercado(b), false);
     }
+  }
+
+  /** Orden a mano desde la Terminal (Paper). Tu cuenta de ese mercado se crea la primera vez con CAPITAL_MANUAL. */
+  async ordenManual(d: OrdenManual & { proveedor: Proveedor; simbolo: string }): Promise<Bot> {
+    if (this.apagado) throw new Error('El apagado de emergencia está activo: rearma el sistema primero.');
+    const mercado = mercadoIdSeguro(d.proveedor, d.simbolo);
+    if (!mercado) throw new Error(`Mercado no válido: ${d.proveedor}:${d.simbolo}.`);
+    const t = this.deps.reloj();
+    let b = this.bots.find((x) => x.id === idManual(mercado));
+    if (!b) {
+      b = {
+        id: idManual(mercado), nombre: 'Manual', estrategiaId: 'manual', codigo: '', combo: {}, proveedor: d.proveedor, simbolo: d.simbolo, mercado, creado: t,
+        veredicto: 'MANUAL', score: null, exposicion: 1, capitalInicial: CAPITAL_MANUAL, capital: CAPITAL_MANUAL, posicion: null, estado: 'activo', motivo: '',
+        costos: COSTOS_POR_DEFECTO, retornosJuez: [], dia: { fecha: fechaUtc(t), pico: CAPITAL_MANUAL }, pausadoDia: null, perdidasSeguidas: 0, operaciones: 0,
+        retornoUnidadAcum: 0, ultimoFundingT: t, ultimaSenalT: null, ultimaSenal: null, ultimoPrecio: null, hueco: false, ultimaActualizacion: t, curva: [{ t, e: CAPITAL_MANUAL }], origen: 'manual', gestion: null,
+      };
+      this.bots.push(b);
+    }
+    if (b.estado !== 'activo') throw new Error(b.motivo || 'Tu cuenta a mano está detenida por el Guardián.');
+    const m = this.mercado(b);
+    if (!m?.enVivo) throw new Error('Este mercado no está en vivo ahora: no se puede operar.');
+    const error = abrirManual(b, m, d);
+    if (error) throw new Error(error);
+    const p = b.posicion!;
+    const g = b.gestion!.posicion;
+    this.anotar(b, `Abre ${p.lado > 0 ? 'largo' : 'corto'} a mano a ${precioTxt(p.precioEntrada)} · stop ${precioTxt(g.stop)}${Math.abs(g.objetivo) < 1e300 ? ` · objetivo ${precioTxt(g.objetivo)}` : ''} · riesgo ${precioTxt(p.cantidad * g.riesgo)} USD.`, false, false);
+    await this.guardar(b);
+    this.avisarOyentes();
+    return b;
+  }
+
+  /** Cierra a mercado tu posición a mano. */
+  async cerrarManual(id: string): Promise<void> {
+    const b = this.bots.find((x) => x.id === id && x.origen === 'manual');
+    if (!b?.posicion) return;
+    await this.cerrarYRegistrar(b, 'manual', this.mercado(b), false);
+    await this.guardar(b);
+    this.avisarOyentes();
   }
 
   async pausar(id: string): Promise<void> {
@@ -353,6 +398,11 @@ export class MotorPaper {
     aplicarFunding(b, m!.t, m!.fundingTasa, precioMedio(m!));
     b.ultimoPrecio = precioMedio(m!);
     b.ultimaActualizacion = ahora;
+    // Stop y objetivo (órdenes a mano): se vigilan cada segundo con el lado del libro por el que se saldría.
+    if (b.gestion && b.posicion) {
+      const op = vigilarGestion(b, m!);
+      if (op) await this.registrar(b, op, b.origen !== 'manual');
+    }
     const e = equity(b, m);
     anotarCurva(b, ahora, e);
     if (acc?.tipo === 'caida-dia') {
@@ -369,7 +419,7 @@ export class MotorPaper {
   }
 
   private async procesarSenales(claves: Set<string>): Promise<void> {
-    const bots = this.bots.filter((b) => b.estado === 'activo' && !this.apagado && claves.has(b.mercado));
+    const bots = this.bots.filter((b) => b.estado === 'activo' && b.origen !== 'manual' && !this.apagado && claves.has(b.mercado));
     if (!bots.length) return;
     const xs = await this.deps.senales(bots.map((b) => ({ id: b.id, codigo: b.codigo, combo: b.combo, proveedor: b.proveedor, simbolo: b.simbolo })));
     for (const s of xs) {

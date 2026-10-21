@@ -6,7 +6,7 @@
 //   (también acepta `simbolo=BTCUSDT`, que equivale a binance:BTCUSDT)
 //   GET  /api/paper                    → bots, bitácora, apagado y reglas del Guardián          (con clave)
 //   GET  /api/paper/operaciones?bot=   → operaciones cerradas (de un bot o de todos)          (con clave)
-//   POST /api/paper/{crear|pausar|reanudar|borrar|apagar|rearmar|reglas}  cuerpo JSON      (con clave)
+//   POST /api/paper/{crear|pausar|reanudar|borrar|apagar|rearmar|reglas|orden|cerrar}  cuerpo JSON (con clave)
 // La clave va en la cabecera «Authorization: Bearer <clave>». CORS abierto: la clave es la que protege los datos.
 // La PLATAFORMA (web) pide contraseña antes de mostrar nada: /entrar (la clave de la grabadora) crea una sesión
 // con cookie HttpOnly + SameSite=Strict (+ Secure detrás de HTTPS), válida 30 días; /salir la cierra. Con
