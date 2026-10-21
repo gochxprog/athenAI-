@@ -129,6 +129,7 @@ export default function AgentesView() {
     if (!feeds.feeds.length) return 'Sin fuente';
     if (a.id === 'vigia') return `Vigilando ${vivos}/${feeds.feeds.length} feeds`;
     if (a.id === 'programador') return `${leerEstrategias().length} estrategias`;
+    if (a.id === 'etiquetador') return 'Listo: Laboratorio → Etiquetador';
     if (a.id === 'juez') {
       const xs = leerEstrategias().filter((x) => x.ultimoVeredicto);
       return xs.length ? `${xs.filter((x) => x.ultimoVeredicto === 'APROBADA').length}/${xs.length} aprobadas` : 'Esperando estrategias';
@@ -148,6 +149,8 @@ export default function AgentesView() {
       return [...consolas.vigia, ...reg].sort((x, y) => y.hora.getTime() - x.hora.getTime()).slice(0, 60);
     }
     if (a.id === 'programador' || a.id === 'juez') return lineasLaboratorio(a.id);
+    if (a.id === 'etiquetador')
+      return [{ id: 'etq', hora: new Date(), texto: 'Triple barrera + filtro CUSUM + meta-etiquetado sobre tus barras grabadas. Ábrelo en Laboratorio → Etiquetador.' }];
     return a.id === 'rastreador' ? consolas.rastreador : consolas.flujo;
   };
   const etiquetaDatos = feeds.feeds.length ? `Datos de mercado · ${feeds.feeds.map((f) => f.simbolo).join(' · ')}` : 'Sin fuente de datos';

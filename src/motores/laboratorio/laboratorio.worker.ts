@@ -5,9 +5,10 @@ import { AlmacenFeatures, type FilaGuardada } from '../almacen/almacen';
 import { juzgar } from '../juez/juez';
 import { normalizarPosiciones } from '../juez/backtest';
 import { ejecutarEstrategia, mensajeError, type PyodideMinimo } from './python';
-import type { MensajeLaboratorio, MensajeSenales, PeticionLaboratorio, PeticionSenales, SenalEstrategia } from './protocolo';
+import type { MensajeEtiquetas, MensajeLaboratorio, MensajeSenales, PeticionEtiquetar, PeticionLaboratorio, PeticionSenales, SenalEstrategia } from './protocolo';
+import { datasetCsv, etiquetar } from '../etiquetador/etiquetador';
 
-const ctx = self as unknown as { postMessage: (m: MensajeLaboratorio | MensajeSenales) => void; onmessage: ((e: MessageEvent<PeticionLaboratorio | PeticionSenales>) => void) | null };
+const ctx = self as unknown as { postMessage: (m: MensajeLaboratorio | MensajeSenales | MensajeEtiquetas) => void; onmessage: ((e: MessageEvent<PeticionLaboratorio | PeticionSenales | PeticionEtiquetar>) => void) | null };
 
 let pyodide: Promise<PyodideMinimo> | null = null;
 
@@ -80,6 +81,17 @@ async function senales(p: PeticionSenales): Promise<void> {
 ctx.onmessage = async (e) => {
   if (e.data.tipo === 'senales') {
     await senales(e.data);
+    return;
+  }
+  if (e.data.tipo === 'etiquetar') {
+    const q = e.data;
+    try {
+      const filas = await leer(q.proveedor, q.simbolo);
+      const resultado = etiquetar(filas, q.config, huecosDe(filas));
+      ctx.postMessage({ tipo: 'etiquetas', id: q.id, resultado, csv: datasetCsv(filas, resultado) });
+    } catch (err) {
+      ctx.postMessage({ tipo: 'etiquetas', id: q.id, resultado: null, csv: '', error: err instanceof Error ? err.message : String(err) });
+    }
     return;
   }
   const p = e.data;

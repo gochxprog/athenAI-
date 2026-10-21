@@ -1,17 +1,23 @@
 // Cliente del worker del Laboratorio. Se crea al primer uso; «Cancelar» lo termina (corta bucles infinitos).
-import type { EstrategiaEnVivo, MensajeLaboratorio, MensajeSenales, PeticionLaboratorio, PeticionSenales, RespuestaLaboratorio, SenalEstrategia } from './protocolo';
+import type { EstrategiaEnVivo, MensajeEtiquetas, MensajeLaboratorio, MensajeSenales, PeticionEtiquetar, PeticionLaboratorio, PeticionSenales, RespuestaLaboratorio, SenalEstrategia } from './protocolo';
 
 class LaboratorioCliente {
   private worker: Worker | null = null;
   private siguiente = 1;
   private enSenales = new Map<number, (s: SenalEstrategia[]) => void>();
+  private enEtiquetas = new Map<number, (m: MensajeEtiquetas) => void>();
   private pendiente: { id: number; ok: (r: RespuestaLaboratorio) => void; mal: (e: Error) => void; progreso: (t: string) => void } | null = null;
 
   private asegurar(): Worker {
     if (this.worker) return this.worker;
     const w = new Worker(new URL('./laboratorio.worker.ts', import.meta.url), { type: 'module' });
-    w.onmessage = (e: MessageEvent<MensajeLaboratorio | MensajeSenales>) => {
+    w.onmessage = (e: MessageEvent<MensajeLaboratorio | MensajeSenales | MensajeEtiquetas>) => {
       const m = e.data;
+      if (m.tipo === 'etiquetas') {
+        this.enEtiquetas.get(m.id)?.(m);
+        this.enEtiquetas.delete(m.id);
+        return;
+      }
       if (m.tipo === 'senales') {
         this.enSenales.get(m.id)?.(m.senales);
         this.enSenales.delete(m.id);
@@ -29,6 +35,8 @@ class LaboratorioCliente {
     w.onerror = (e) => {
       for (const ok of this.enSenales.values()) ok([]);
       this.enSenales.clear();
+      for (const [id, ok] of this.enEtiquetas) ok({ tipo: 'etiquetas', id, resultado: null, csv: '', error: e.message || 'Error en el laboratorio' });
+      this.enEtiquetas.clear();
       this.pendiente?.mal(new Error(e.message || 'Error en el laboratorio'));
       this.pendiente = null;
     };
@@ -51,6 +59,15 @@ class LaboratorioCliente {
     return new Promise((ok) => {
       this.enSenales.set(id, ok);
       this.asegurar().postMessage({ tipo: 'senales', id, estrategias } satisfies PeticionSenales);
+    });
+  }
+
+  /** Etiquetador sobre las filas grabadas de un mercado. */
+  etiquetar(p: Omit<PeticionEtiquetar, 'tipo' | 'id'>): Promise<MensajeEtiquetas> {
+    const id = this.siguiente++;
+    return new Promise((ok) => {
+      this.enEtiquetas.set(id, ok);
+      this.asegurar().postMessage({ tipo: 'etiquetar', id, ...p } satisfies PeticionEtiquetar);
     });
   }
 

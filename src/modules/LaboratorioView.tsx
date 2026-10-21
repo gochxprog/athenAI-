@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { BookMarked, Boxes, Cpu, Database, Gauge, Gavel, Layers, LineChart, ListOrdered, Lock, ShieldCheck, TreePine, XCircle, type LucideIcon } from 'lucide-react';
 import Encabezado from '@/components/ui/Encabezado';
+import Etiquetador from '@/components/laboratorio/Etiquetador';
 import EstrategiasPython from '@/components/laboratorio/EstrategiasPython';
 import Panel from '@/components/ui/Panel';
 import Insignia, { InsigniaVeredicto } from '@/components/ui/Insignia';
@@ -23,13 +24,14 @@ const PESTANAS: { id: Pestana; titulo: string; icono: LucideIcon; descripcion: s
 ];
 
 export default function LaboratorioView() {
-  const [modo, setModo] = useState<'python' | 'demo'>('python');
+  const [modo, setModo] = useState<'python' | 'etiquetador' | 'demo'>('python');
   return (
     <div className="space-y-4">
       <div className="flex w-fit gap-1 rounded-xl border border-borde p-1" role="tablist" aria-label="Modo del laboratorio">
         {(
           [
             ['python', 'Mis estrategias (Python) · real'],
+            ['etiquetador', 'Etiquetador · real'],
             ['demo', 'Ejemplos DEMO'],
           ] as const
         ).map(([m, t]) => (
@@ -51,6 +53,16 @@ export default function LaboratorioView() {
             </Insignia>
           </Encabezado>
           <EstrategiasPython />
+        </>
+      ) : modo === 'etiquetador' ? (
+        <>
+          <Encabezado
+            modulo="Laboratorio"
+            titulo="Etiquetador"
+            fuente="DATOS REALES"
+            descripcion="Convierte tu historia grabada en ejemplos para que la máquina aprenda: en cada movimiento relevante (CUSUM), qué barrera tocó primero (ganancia, pérdida o tiempo) y la meta-etiqueta de operar o no."
+          />
+          <Etiquetador />
         </>
       ) : (
         <LaboratorioDemo />

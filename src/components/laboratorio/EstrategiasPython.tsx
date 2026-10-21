@@ -3,12 +3,11 @@ import { Code2, Copy, FilePlus2, Gavel, Play, Square, Trash2 } from 'lucide-reac
 import Panel from '@/components/ui/Panel';
 import Insignia from '@/components/ui/Insignia';
 import { NOMBRE_PROVEEDOR } from '@/components/orderflow/OrderFlowChart';
-import { motorOrderFlow } from '@/motores/worker/motorCliente';
 import { laboratorio } from '@/motores/laboratorio/laboratorioCliente';
 import { notificador } from '@/motores/notificaciones/notificador';
 import type { RespuestaLaboratorio } from '@/motores/laboratorio/protocolo';
-import type { Proveedor, ResumenSimbolo } from '@/motores/worker/protocolo';
 import { COSTOS_POR_DEFECTO } from '@/motores/juez/backtest';
+import { claveFuente, useFuentesGuardadas } from './fuentesGuardadas';
 import { NOMBRE_OBJETIVO, type ObjetivoWfo } from '@/motores/juez/walkForward';
 import { MC_POR_DEFECTO, type MetodoMc } from '@/motores/juez/monteCarlo';
 import { LUCK_POR_DEFECTO, NOMBRE_METODO_LUCK, NOMBRE_METRICA_LUCK, type MetodoLuck, type MetricaLuck } from '@/motores/juez/luckTest';
@@ -19,16 +18,14 @@ import ResultadoJuezVista from './ResultadoJuez';
 import BibliotecaPapers, { AccionesPaper, VisorPaper } from './BibliotecaPapers';
 import { crearPaper, guardarPaper, type Paper } from '@/motores/papers/paper';
 
-type Fuente = { proveedor: Proveedor; simbolo: string; filas: number };
-
-const clave = (f: { proveedor: string; simbolo: string }) => `${f.proveedor}:${f.simbolo}`;
+const clave = claveFuente;
 
 /** Laboratorio real: estrategias en Python sobre tus Features guardadas, juzgadas por el Juez. */
 export default function EstrategiasPython() {
   const [estrategias, setEstrategias] = useState<EstrategiaGuardada[]>(leerEstrategias);
   const [selId, setSelId] = useState(estrategias[0].id);
   const sel = estrategias.find((x) => x.id === selId) ?? estrategias[0];
-  const [fuentes, setFuentes] = useState<Fuente[]>([]);
+  const fuentes = useFuentesGuardadas();
   const [datos, setDatos] = useState('');
   const [otro, setOtro] = useState('');
   const [comision, setComision] = useState(COSTOS_POR_DEFECTO.comisionPb);
@@ -55,14 +52,8 @@ export default function EstrategiasPython() {
 
   useEffect(() => guardarEstrategias(estrategias), [estrategias]);
   useEffect(() => {
-    motorOrderFlow.resumenAlmacen().then((r) => {
-      const xs: Fuente[] = [];
-      for (const [p, lista] of Object.entries(r) as [Proveedor, ResumenSimbolo[]][]) for (const s of lista) if (s.filas > 0) xs.push({ proveedor: p, simbolo: s.simbolo, filas: s.filas });
-      xs.sort((a, b) => b.filas - a.filas);
-      setFuentes(xs);
-      setDatos((d) => d || (xs[0] ? clave(xs[0]) : ''));
-    }, () => setFuentes([]));
-  }, []);
+    if (fuentes[0]) setDatos((d) => d || clave(fuentes[0]));
+  }, [fuentes]);
 
   const cambiar = (cambios: Partial<EstrategiaGuardada>) => setEstrategias((xs) => xs.map((x) => (x.id === sel.id ? { ...x, ...cambios, actualizada: Date.now() } : x)));
   // Un duplicado hereda las variantes ya probadas: sigue siendo la misma idea sobre los mismos datos.

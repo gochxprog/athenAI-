@@ -4,6 +4,7 @@ import type { Proveedor } from '../almacen/almacen';
 import type { ConfigWfo } from '../juez/walkForward';
 import type { ConfigMc } from '../juez/monteCarlo';
 import type { ConfigLuck } from '../juez/luckTest';
+import type { ConfigEtiquetador, ResultadoEtiquetador } from '../etiquetador/etiquetador';
 
 export interface PeticionLaboratorio {
   tipo?: 'juzgar';
@@ -84,3 +85,14 @@ export interface SenalEstrategia {
 }
 
 export type MensajeSenales = { tipo: 'senales'; id: number; senales: SenalEstrategia[] };
+
+/** Etiquetador: triple barrera + CUSUM + meta-etiquetado sobre las filas grabadas de un mercado. */
+export interface PeticionEtiquetar {
+  tipo: 'etiquetar';
+  id: number;
+  proveedor: Proveedor;
+  simbolo: string;
+  config: ConfigEtiquetador;
+}
+
+export type MensajeEtiquetas = { tipo: 'etiquetas'; id: number; resultado: ResultadoEtiquetador | null; csv: string; error?: string };

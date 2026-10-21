@@ -65,6 +65,9 @@ export interface FilaFeatures {
   /** Instante en que la fila quedó disponible (= cierre de la barra). */
   cierre: number;
   close: number;
+  /** Máximo y mínimo de la barra (para el Etiquetador; no existen en filas grabadas antes de guardarlos). */
+  high?: number;
+  low?: number;
   valores: Record<string, number | null>;
 }
 
@@ -184,7 +187,7 @@ export function construirFila(b: BarraAnalizada, previas: readonly BarraAnalizad
     const x = v[k];
     if (x !== null && !Number.isFinite(x)) v[k] = null;
   }
-  return { fila: { n: b.n, inicio: b.inicio, cierre: b.cierre, close, valores: v }, oi: puntoOi };
+  return { fila: { n: b.n, inicio: b.inicio, cierre: b.cierre, close, high, low, valores: v }, oi: puntoOi };
 }
 
 /** Número sin ruido de coma flotante (10 cifras significativas); vacío si no hay dato. */

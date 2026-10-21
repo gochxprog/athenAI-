@@ -42,7 +42,7 @@ Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el p
 
 | Motor | Qué mide | Estado |
 |---|---|---|
-| Etiquetador (triple barrera) | Qué pasó después de cada barra: ganancia, stop o tiempo | ⬜ |
+| Etiquetador (`etiquetador/etiquetador.ts`) | CUSUM simétrico (eventos), triple barrera con σ exponencial (TP/SL × σ, tiempo), etiqueta −1/0/+1 y meta-etiqueta; dataset CSV con las Features | ✅ |
 | Patrones | Agrupa momentos parecidos y qué pasó después | ⬜ |
 | Selección de Features | Qué datos sirven y cuáles son ruido | ⬜ |
 | Machine learning (LightGBM) | Probabilidad de ganar por mercado | ⬜ |

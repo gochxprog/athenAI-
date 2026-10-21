@@ -241,7 +241,7 @@ export const AGENTES: Agente[] = [
   { id: 'rastreador', nombre: 'Rastreador', capa: 1, rol: 'Régimen del mercado (rango / tendencia / raro), día gemelo y aviso de "hoy es distinto"', motor: 'Memoria del mercado (HMM + similitud)', bloque: 'B', real: true },
   { id: 'programador', nombre: 'Programador', capa: 2, rol: 'Corre las estrategias que escribes en Python sobre las Features guardadas', motor: 'Editor Python (Pyodide)', bloque: 'C', real: true },
   { id: 'juez', nombre: 'Juez', capa: 2, rol: 'Prueba todo con Walk-Forward, Monte Carlo, Luck test y robustez, y da el veredicto', motor: 'Motor de validación', bloque: 'C', real: true },
-  { id: 'etiquetador', nombre: 'Etiquetador', capa: 2, rol: 'Marca en el pasado qué pasó después de cada barra (triple barrera) para que los modelos aprendan', motor: 'Triple barrera', bloque: 'D', real: false },
+  { id: 'etiquetador', nombre: 'Etiquetador', capa: 2, rol: 'Marca en el pasado qué pasó después de cada movimiento relevante (CUSUM + triple barrera + meta-etiqueta) para que los modelos aprendan', motor: 'Triple barrera + CUSUM', bloque: 'D', real: true },
   { id: 'lector', nombre: 'Lector', capa: 2, rol: 'Entrena los modelos (machine learning y deep learning) y separa las Features útiles del ruido', motor: 'LightGBM / red neuronal', bloque: 'D', real: false },
   { id: 'sintetizador', nombre: 'Sintetizador', capa: 2, rol: 'Resume lo aprendido en hipótesis legibles y en el informe semanal', motor: 'Informes', bloque: 'E', real: false },
   { id: 'guardian', nombre: 'Guardián', capa: 3, rol: 'Riesgo de los bots: límites de pérdida, correlación entre mercados y apagado de emergencia', motor: 'Supervisor de riesgo', bloque: 'E', real: false },
