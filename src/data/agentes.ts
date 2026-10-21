@@ -34,3 +34,17 @@ export const AGENTES: Agente[] = [
   { id: 'ejecutor', nombre: 'Ejecutor', capa: 3, rol: 'Ejecuta en Paper las señales de los bots aprobados al precio vivo, con comisión, deslizamiento y funding', motor: 'Ejecutor de Paper', bloque: 'E', real: true },
 ];
 
+/** Seña de cada agente: su color (camiseta, luz del puesto y punto del rótulo) y algo en la cabeza. */
+export type Accesorio = 'antena' | 'auriculares' | 'sombrero' | 'gorra' | 'birrete' | 'cinta' | 'gorro' | 'boina' | 'casco' | 'visera';
+export const ESTILO_AGENTE: Record<AgenteId, { color: string; accesorio: Accesorio; nombreAccesorio: string }> = {
+  vigia: { color: '#22d3ee', accesorio: 'antena', nombreAccesorio: 'antena' },
+  flujo: { color: '#3b82f6', accesorio: 'auriculares', nombreAccesorio: 'auriculares' },
+  rastreador: { color: '#22c55e', accesorio: 'sombrero', nombreAccesorio: 'sombrero de explorador' },
+  programador: { color: '#a855f7', accesorio: 'gorra', nombreAccesorio: 'gorra al revés' },
+  juez: { color: '#eab308', accesorio: 'birrete', nombreAccesorio: 'birrete' },
+  etiquetador: { color: '#f97316', accesorio: 'cinta', nombreAccesorio: 'cinta en la frente' },
+  lector: { color: '#ec4899', accesorio: 'gorro', nombreAccesorio: 'gorro de lana' },
+  sintetizador: { color: '#14b8a6', accesorio: 'boina', nombreAccesorio: 'boina' },
+  guardian: { color: '#ef4444', accesorio: 'casco', nombreAccesorio: 'casco' },
+  ejecutor: { color: '#84cc16', accesorio: 'visera', nombreAccesorio: 'visera' },
+};

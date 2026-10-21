@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { ContactShadows, Grid, Html, OrbitControls, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
-import { AGENTES, CAPAS, type AgenteId } from '@/data/agentes';
+import { AGENTES, CAPAS, ESTILO_AGENTE, type Accesorio, type AgenteId } from '@/data/agentes';
 
 /** Filas por capa (detectores delante, ejecución al fondo), mirando hacia el núcleo de datos. */
 const FILAS: Record<1 | 2 | 3, { z: number; paso: number }> = {
@@ -25,6 +25,138 @@ const PUESTOS = (() => {
   }
   return out;
 })();
+
+/** El accesorio va dentro del grupo de la cabeza (se mueve con ella). La cara (visor) mira hacia −z. */
+function AccesorioCabeza({ tipo, color, vivo }: { tipo: Accesorio; color: string; vivo: boolean }) {
+  const mat = <meshStandardMaterial color={color} metalness={0.2} roughness={0.55} emissive={color} emissiveIntensity={vivo ? 0.18 : 0} transparent opacity={vivo ? 1 : 0.55} />;
+  switch (tipo) {
+    case 'antena':
+      return (
+        <group>
+          <mesh position={[0, 0.2, 0]}>
+            <cylinderGeometry args={[0.008, 0.008, 0.14, 8]} />
+            <meshStandardMaterial color="#8e929a" metalness={0.8} roughness={0.3} />
+          </mesh>
+          <mesh position={[0, 0.29, 0]}>
+            <sphereGeometry args={[0.028, 16, 16]} />
+            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={vivo ? 1.6 : 0} />
+          </mesh>
+        </group>
+      );
+    case 'auriculares':
+      return (
+        <group>
+          <mesh>
+            <torusGeometry args={[0.165, 0.014, 8, 24, Math.PI]} />
+            {mat}
+          </mesh>
+          {[-0.165, 0.165].map((x) => (
+            <mesh key={x} position={[x, -0.01, 0]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[0.05, 0.05, 0.04, 20]} />
+              {mat}
+            </mesh>
+          ))}
+        </group>
+      );
+    case 'sombrero':
+      return (
+        <group position={[0, 0.1, 0]}>
+          <mesh>
+            <cylinderGeometry args={[0.27, 0.27, 0.014, 32]} />
+            {mat}
+          </mesh>
+          <mesh position={[0, 0.065, 0]}>
+            <cylinderGeometry args={[0.12, 0.14, 0.12, 24]} />
+            {mat}
+          </mesh>
+        </group>
+      );
+    case 'gorra':
+      return (
+        <group>
+          <mesh position={[0, 0.03, 0]}>
+            <sphereGeometry args={[0.158, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
+            {mat}
+          </mesh>
+          {/* Al revés: la visera hacia la nuca (+z). */}
+          <mesh position={[0, 0.05, 0.17]}>
+            <boxGeometry args={[0.2, 0.012, 0.12]} />
+            {mat}
+          </mesh>
+        </group>
+      );
+    case 'birrete':
+      return (
+        <group position={[0, 0.13, 0]}>
+          <mesh>
+            <cylinderGeometry args={[0.13, 0.14, 0.07, 24]} />
+            {mat}
+          </mesh>
+          <mesh position={[0, 0.045, 0]} rotation={[0, Math.PI / 4, 0]}>
+            <boxGeometry args={[0.3, 0.015, 0.3]} />
+            {mat}
+          </mesh>
+          <mesh position={[0.13, -0.02, -0.13]}>
+            <sphereGeometry args={[0.018, 10, 10]} />
+            <meshStandardMaterial color="#e5e7eb" />
+          </mesh>
+        </group>
+      );
+    case 'cinta':
+      return (
+        <mesh position={[0, 0.05, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.148, 0.022, 10, 32]} />
+          {mat}
+        </mesh>
+      );
+    case 'gorro':
+      return (
+        <group>
+          <mesh position={[0, 0.03, 0]}>
+            <sphereGeometry args={[0.16, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
+            {mat}
+          </mesh>
+          <mesh position={[0, 0.2, 0]}>
+            <sphereGeometry args={[0.05, 16, 16]} />
+            <meshStandardMaterial color="#f3f4f6" roughness={0.9} />
+          </mesh>
+        </group>
+      );
+    case 'boina':
+      return (
+        <mesh position={[0.02, 0.12, 0]} rotation={[0, 0, -0.25]} scale={[1, 0.35, 1]}>
+          <sphereGeometry args={[0.17, 24, 16]} />
+          {mat}
+        </mesh>
+      );
+    case 'casco':
+      return (
+        <group>
+          <mesh position={[0, 0.02, 0]}>
+            <sphereGeometry args={[0.172, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
+            {mat}
+          </mesh>
+          <mesh position={[0, 0.15, 0]}>
+            <boxGeometry args={[0.03, 0.04, 0.3]} />
+            {mat}
+          </mesh>
+        </group>
+      );
+    case 'visera':
+      return (
+        <group>
+          <mesh position={[0, 0.06, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[0.15, 0.016, 10, 32]} />
+            {mat}
+          </mesh>
+          <mesh position={[0, 0.07, -0.19]} rotation={[0.25, 0, 0]}>
+            <boxGeometry args={[0.2, 0.01, 0.1]} />
+            {mat}
+          </mesh>
+        </group>
+      );
+  }
+}
 
 const GRIS_OSCURO = '#1a1b1e';
 const GRIS = '#2c2e33';
@@ -152,6 +284,7 @@ function Monitor({ activo, apagado }: { activo: boolean; apagado: boolean }) {
 function Puesto({ id, seleccionado, onSeleccion, estado }: { id: AgenteId; seleccionado: boolean; onSeleccion: (id: AgenteId) => void; estado: string }) {
   const { pos, rot } = PUESTOS[id];
   const agente = AGENTES.find((a) => a.id === id)!;
+  const estilo = ESTILO_AGENTE[id];
   const cabeza = useRef<THREE.Group>(null);
   const cuerpo = useRef<THREE.Group>(null);
   const anillo = useRef<THREE.Mesh>(null);
@@ -200,6 +333,12 @@ function Puesto({ id, seleccionado, onSeleccion, estado }: { id: AgenteId; selec
         <meshBasicMaterial color="#ffffff" transparent opacity={0.2} />
       </mesh>
 
+      {/* Luz del puesto en su color (encendida si trabaja). */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0.15]}>
+        <circleGeometry args={[0.75, 48]} />
+        <meshBasicMaterial color={estilo.color} transparent opacity={vivo ? (seleccionado ? 0.22 : 0.12) : 0.04} depthWrite={false} />
+      </mesh>
+
       {/* Escritorio */}
       <RoundedBox args={[1.3, 0.05, 0.7]} radius={0.01} position={[0, 0.72, -0.2]} castShadow>
         <meshStandardMaterial color={GRIS} metalness={0.4} roughness={0.55} />
@@ -232,6 +371,11 @@ function Puesto({ id, seleccionado, onSeleccion, estado }: { id: AgenteId; selec
           <capsuleGeometry args={[0.17, 0.36, 8, 20]} />
           <meshStandardMaterial color={vivo ? GRIS_CLARO : GRIS} metalness={0.75} roughness={0.28} />
         </mesh>
+        {/* Camiseta de su color (encima del cuerpo, sin cambiarlo). */}
+        <mesh position={[0, 0.76, 0]}>
+          <cylinderGeometry args={[0.176, 0.176, 0.26, 28]} />
+          <meshStandardMaterial color={estilo.color} metalness={0.15} roughness={0.6} transparent opacity={vivo ? 0.95 : 0.45} />
+        </mesh>
         <group ref={cabeza} position={[0, 1.22, 0]}>
           <mesh castShadow>
             <sphereGeometry args={[0.15, 32, 32]} />
@@ -242,6 +386,7 @@ function Puesto({ id, seleccionado, onSeleccion, estado }: { id: AgenteId; selec
             <boxGeometry args={[0.2, 0.035, 0.06]} />
             <meshStandardMaterial color={vivo ? '#ffffff' : '#3a3c40'} emissive="#ffffff" emissiveIntensity={vivo ? (seleccionado ? 2.2 : 1.2) : 0} />
           </mesh>
+          <AccesorioCabeza tipo={estilo.accesorio} color={estilo.color} vivo={vivo} />
         </group>
       </group>
 
@@ -251,7 +396,10 @@ function Puesto({ id, seleccionado, onSeleccion, estado }: { id: AgenteId; selec
           onClick={() => onSeleccion(id)}
           className={`block cursor-pointer whitespace-nowrap rounded-md border text-center ${compacto ? 'px-1.5 py-1' : 'px-2.5 py-1.5'} backdrop-blur transition-colors ${seleccionado ? 'border-white bg-white text-black' : vivo ? 'border-borde bg-black/70 text-white hover:border-plata-300' : 'border-borde-suave bg-black/60 text-plata-400 hover:border-plata-500'}`}
         >
-          <p className={`${compacto ? 'text-[9px]' : 'text-[11px]'} font-medium leading-none`}>{agente.nombre}</p>
+          <p className={`${compacto ? 'text-[9px]' : 'text-[11px]'} flex items-center justify-center gap-1.5 font-medium leading-none`}>
+            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: estilo.color, opacity: vivo ? 1 : 0.45 }} />
+            {agente.nombre}
+          </p>
           {!compacto && <p className={`mt-0.5 text-[9px] uppercase tracking-[0.14em] ${seleccionado ? 'text-black/60' : 'text-plata-500'}`}>{estado}</p>}
         </button>
       </Html>

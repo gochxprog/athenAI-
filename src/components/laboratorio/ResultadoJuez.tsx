@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Check, Download, Minus, X } from 'lucide-react';
 import Panel from '@/components/ui/Panel';
 import AbanicoTrayectorias from '@/components/charts/AbanicoTrayectorias';
@@ -713,18 +714,39 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
         </p>
       </div>
 
-      <SeccionBacktest r={r} />
-      <SeccionMetricas r={r} />
-      <SeccionWalkForward r={r} />
-      <SeccionMonteCarlo r={r} />
-      <SeccionLuck r={r} />
+      <PestanasJuez r={r} />
+    </div>
+  );
+}
 
+/** Los motores del Juez en pestañas, uno por pestaña (solo presentación: cada sección es la misma de siempre). */
+const PESTANAS_JUEZ: { id: string; titulo: string; Seccion: (p: { r: RespuestaLaboratorio }) => JSX.Element | null }[] = [
+  { id: 'backtest', titulo: '1 · Backtest', Seccion: SeccionBacktest },
+  { id: 'metricas', titulo: '2 · Métricas', Seccion: SeccionMetricas },
+  { id: 'wfo', titulo: '3 · Walk-Forward', Seccion: SeccionWalkForward },
+  { id: 'mc', titulo: '4 · Monte Carlo', Seccion: SeccionMonteCarlo },
+  { id: 'luck', titulo: '5 · Luck test', Seccion: SeccionLuck },
+  { id: 'robustez', titulo: '6 · Robustez', Seccion: SeccionRobustez },
+  { id: 'sobreajuste', titulo: '7–8 · DSR y PBO', Seccion: SeccionSobreajuste },
+  { id: 'antifuturo', titulo: '9 · Anti-futuro', Seccion: SeccionAntiFuturo },
+  { id: 'veredicto', titulo: '10 · Veredicto', Seccion: SeccionVeredicto },
+];
 
-      <SeccionRobustez r={r} />
-
-      <SeccionSobreajuste r={r} />
-      <SeccionAntiFuturo r={r} />
-      <SeccionVeredicto r={r} />
+function PestanasJuez({ r }: { r: RespuestaLaboratorio }) {
+  const [activa, setActiva] = useState<string>('backtest');
+  const todas = activa === 'todas';
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 overflow-x-auto rounded-xl border border-borde p-1" role="tablist" aria-label="Motores del Juez">
+        {[...PESTANAS_JUEZ.map((x) => [x.id, x.titulo] as const), ['todas', 'Ver todos'] as const].map(([id, titulo]) => (
+          <button key={id} role="tab" aria-selected={activa === id} data-pestana-juez={id} onClick={() => setActiva(id)} className={`shrink-0 rounded-lg px-3 py-2 text-xs ${activa === id ? 'bg-white text-black' : 'text-plata-300 hover:text-white'}`}>
+            {titulo}
+          </button>
+        ))}
+      </div>
+      {PESTANAS_JUEZ.filter((x) => todas || x.id === activa).map(({ id, Seccion }) => (
+        <Seccion key={id} r={r} />
+      ))}
     </div>
   );
 }

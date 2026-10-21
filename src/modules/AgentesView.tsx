@@ -9,7 +9,7 @@ import Punto from '@/components/ui/Punto';
 import Consola, { type LineaConsola } from '@/components/ui/Consola';
 import { NOMBRE_PROVEEDOR, useFeeds } from '@/components/orderflow/OrderFlowChart';
 import { motorPaper } from '@/motores/paper/iniciar';
-import { AGENTES, CAPAS, type Agente, type AgenteId } from '@/data/agentes';
+import { AGENTES, CAPAS, ESTILO_AGENTE, type Agente, type AgenteId } from '@/data/agentes';
 import type { EstadoFeed } from '@/motores/worker/protocolo';
 import { conSigno, decimalesDe, num } from '@/lib/format';
 import { leerEstrategias } from '@/components/laboratorio/plantillas';
@@ -181,6 +181,15 @@ export default function AgentesView() {
           <div className="pointer-events-none absolute bottom-4 left-4 flex items-center gap-2 text-[10px] text-plata-500">
             <MousePointerClick size={12} /> Haz clic en un agente para abrir su consola
           </div>
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 border-t border-borde-suave px-4 py-2.5 text-[10.5px] text-plata-400" data-leyenda-agentes>
+          {AGENTES.map((a) => (
+            <span key={a.id} className={`flex items-center gap-1.5 ${a.real ? '' : 'opacity-50'}`}>
+              <span className="inline-block h-2 w-2 rounded-full" style={{ background: ESTILO_AGENTE[a.id].color }} />
+              <span className="text-plata-200">{a.nombre}</span> · {ESTILO_AGENTE[a.id].nombreAccesorio}
+            </span>
+          ))}
+          <span className="text-plata-500">· su puesto se ilumina de su color cuando trabaja; atenuado = sin motor todavía</span>
         </div>
       </Panel>
 
