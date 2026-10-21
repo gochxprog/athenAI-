@@ -32,6 +32,7 @@ export function crearPaper(datos: Omit<Paper, 'id' | 'creado'>, ahora = Date.now
     resultado: {
       ...r,
       equityOos: reducir(r.equityOos, 400),
+      retornosIs: (r.retornosIs ?? []).slice(-300),
       operacionesOos: [],
       monteCarlo: r.monteCarlo ? { ...r.monteCarlo, caminos: r.monteCarlo.caminos.slice(0, 30) } : null,
     },

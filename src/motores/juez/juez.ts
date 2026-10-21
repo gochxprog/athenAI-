@@ -89,6 +89,13 @@ export interface ResultadoJuez {
   wfo: { objetivo: ObjetivoWfo; lIs: number; lOos: number; embargo: number; wfe: number | null; clase: ClaseWfe | null };
   /** Capital fuera de muestra, por barra (empieza en 1 al inicio del primer tramo). */
   equityOos: number[];
+  /**
+   * Retorno de cada operación del tramo de entrenamiento (antes del primer OOS, menos el embargo) con la variante
+   * elegida SOLO con ese tramo. Solo para dibujar la curva In-Sample: no decide nada.
+   */
+  retornosIs?: number[];
+  /** Correlación (Pearson) de los retornos OOS por barra entre variantes (máx. 12): solo para dibujar. */
+  correlacion?: { etiquetas: string[]; matriz: number[][] };
   /** Operaciones fuera de muestra (índices de barra de la serie completa). */
   operacionesOos: Operacion[];
   /** Índice de la barra donde empieza la parte fuera de muestra. */
@@ -148,7 +155,9 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
   // Variante para los vecinos: elegida SOLO con barras anteriores al primer OOS; θ* y vecinos se miden en el OOS.
   const objetivo = wfo.objetivo;
   const seleccionPrevia = elegirVariante({ cierres: e.cierres, tiempos: e.tiempos, posiciones, costos, opciones: fx }, 0, Math.max(0, inicioOos - wfo.embargo), objetivo).combo;
-  const metOos = posiciones.map((p) => metricas(backtest(e.cierres, p, costos, inicioOos, n, fx), e.tiempos, inicioOos, n));
+  const bOos = posiciones.map((p) => backtest(e.cierres, p, costos, inicioOos, n, fx));
+  const metOos = bOos.map((b) => metricas(b, e.tiempos, inicioOos, n));
+  const retornosIs = posiciones[seleccionPrevia] ? backtest(e.cierres, posiciones[seleccionPrevia], costos, 0, Math.max(0, inicioOos - wfo.embargo), fx).operaciones.map((o) => o.retorno) : [];
   // Variante que se lleva a vivo: la que el Walk-Forward elegiría HOY (mismo objetivo, últimas L_IS barras).
   const comboVivo = wfo.ventanas.length ? elegirVariante({ cierres: e.cierres, tiempos: e.tiempos, posiciones, costos, opciones: fx }, Math.max(0, n - wfo.lIs), n, objetivo).combo : mejor;
 
@@ -223,6 +232,8 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
     tramos,
     wfo: { objetivo: wfo.objetivo, lIs: wfo.lIs, lOos: wfo.lOos, embargo: wfo.embargo, wfe: wfo.wfe, clase: wfo.clase },
     equityOos,
+    retornosIs,
+    correlacion: correlacionVariantes(e.combos, bOos.map((b) => b.retornos.slice(inicioOos)), metOos),
     operacionesOos: opsOos,
     inicioOos,
     monteCarlo: mc,
@@ -235,4 +246,32 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
     pboDetalle,
     ensayos,
   };
+}
+
+/** Correlación de Pearson entre los retornos OOS de las variantes (las 12 de mejor Sharpe OOS). Solo presentación. */
+function correlacionVariantes(combos: readonly Combo[], series: number[][], met: readonly Metricas[]): { etiquetas: string[]; matriz: number[][] } {
+  const orden = series.map((_, i) => i).sort((a, b) => (met[b]?.sharpe ?? -Infinity) - (met[a]?.sharpe ?? -Infinity)).slice(0, 12);
+  const etiquetas = orden.map((i) => Object.entries(combos[i] ?? {}).map(([k, v]) => `${k}=${String(v)}`).join(' ') || `#${i + 1}`);
+  const corr = (a: number[], b: number[]) => {
+    const n = Math.min(a.length, b.length);
+    if (n < 3) return 0;
+    let ma = 0;
+    let mb = 0;
+    for (let i = 0; i < n; i += 1) {
+      ma += a[i];
+      mb += b[i];
+    }
+    ma /= n;
+    mb /= n;
+    let sab = 0;
+    let saa = 0;
+    let sbb = 0;
+    for (let i = 0; i < n; i += 1) {
+      sab += (a[i] - ma) * (b[i] - mb);
+      saa += (a[i] - ma) ** 2;
+      sbb += (b[i] - mb) ** 2;
+    }
+    return saa > 0 && sbb > 0 ? sab / Math.sqrt(saa * sbb) : 0;
+  };
+  return { etiquetas, matriz: orden.map((i) => orden.map((k) => (i === k ? 1 : corr(series[i], series[k])))) };
 }
