@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { ContactShadows, Grid, Html, OrbitControls, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { AGENTES, CAPAS, ESTILO_AGENTE, type Accesorio, type AgenteId } from '@/data/agentes';
+import { ALTO, ANCHO, PANTALLAS } from './pantallas';
 
 /** Filas por capa (detectores delante, ejecución al fondo), mirando hacia el núcleo de datos. */
 const FILAS: Record<1 | 2 | 3, { z: number; paso: number }> = {
@@ -247,16 +248,29 @@ function FlujoPaquetes() {
   );
 }
 
-function Monitor({ activo, apagado }: { activo: boolean; apagado: boolean }) {
-  const lineas = useRef<(THREE.Mesh | null)[]>([]);
-  const fases = useMemo(() => Array.from({ length: 6 }, () => Math.random() * 10), []);
+function Monitor({ id, color, activo, apagado }: { id: AgenteId; color: string; activo: boolean; apagado: boolean }) {
+  // Cada agente muestra en su pantalla algo de su trabajo (dibujo en un canvas; solo decoración).
+  const { lienzo, textura } = useMemo(() => {
+    const c = document.createElement('canvas');
+    c.width = ANCHO;
+    c.height = ALTO;
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return { lienzo: c, textura: tex };
+  }, []);
+  useEffect(() => () => textura.dispose(), [textura]);
+  const ultimo = useRef(-1);
   useFrame(({ clock }) => {
-    lineas.current.forEach((l, i) => {
-      if (!l) return;
-      const t = clock.elapsedTime * (activo ? 1.6 : 0.6) + fases[i];
-      l.scale.x = apagado ? 0.15 : 0.25 + Math.abs(Math.sin(t)) * 0.75;
-      l.position.x = -0.28 + (l.scale.x * 0.56) / 2;
-    });
+    // Sin motor: un solo cuadro quieto. Con motor: ~10 cuadros por segundo (más rápido si está seleccionado).
+    const t = apagado ? 0 : clock.elapsedTime * (activo ? 1.6 : 1);
+    if (apagado ? ultimo.current === 0 : clock.elapsedTime - ultimo.current < 0.1) return;
+    ultimo.current = apagado ? 0 : clock.elapsedTime;
+    const g = lienzo.getContext('2d');
+    if (!g) return;
+    g.fillStyle = '#0b0c0e';
+    g.fillRect(0, 0, ANCHO, ALTO);
+    PANTALLAS[id](g, t, color);
+    textura.needsUpdate = true;
   });
   return (
     <group position={[0, 0.98, -0.28]} rotation={[-0.12, 0, 0]}>
@@ -265,14 +279,8 @@ function Monitor({ activo, apagado }: { activo: boolean; apagado: boolean }) {
       </RoundedBox>
       <mesh position={[0, 0, 0.017]}>
         <planeGeometry args={[0.72, 0.42]} />
-        <meshBasicMaterial color="#0b0c0e" />
+        <meshBasicMaterial map={textura} toneMapped={false} transparent opacity={apagado ? 0.35 : 1} />
       </mesh>
-      {fases.map((_, i) => (
-        <mesh key={i} ref={(el) => (lineas.current[i] = el)} position={[0, 0.15 - i * 0.06, 0.02]}>
-          <planeGeometry args={[0.56, 0.012]} />
-          <meshBasicMaterial color="#ffffff" transparent opacity={apagado ? 0.08 : 0.35 + (i % 3) * 0.2} />
-        </mesh>
-      ))}
       <mesh position={[0, -0.32, 0.05]}>
         <boxGeometry args={[0.05, 0.18, 0.05]} />
         <meshStandardMaterial color={GRIS} metalness={0.5} roughness={0.5} />
@@ -349,7 +357,7 @@ function Puesto({ id, seleccionado, onSeleccion, estado }: { id: AgenteId; selec
           <meshStandardMaterial color={GRIS_OSCURO} metalness={0.5} roughness={0.5} />
         </mesh>
       ))}
-      <Monitor activo={vivo && (seleccionado || hover)} apagado={!vivo} />
+      <Monitor id={id} color={estilo.color} activo={vivo && (seleccionado || hover)} apagado={!vivo} />
       <mesh position={[0, 0.755, 0.0]}>
         <boxGeometry args={[0.42, 0.015, 0.14]} />
         <meshStandardMaterial color={GRIS_OSCURO} />
