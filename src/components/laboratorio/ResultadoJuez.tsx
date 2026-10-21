@@ -392,7 +392,7 @@ function SeccionRobustez({ r }: { r: RespuestaLaboratorio }) {
       </div>
       {v.lista.length > 0 && (
         <div className="overflow-x-auto">
-          <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-plata-500">Vecinos de los parámetros elegidos {JSON.stringify(r.combos[r.resultado.dentroMuestra.combo])}</p>
+          <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-plata-500">Vecinos de los parámetros elegidos antes del primer tramo fuera de muestra {JSON.stringify(r.combos[r.resultado.robustez.vecinos.base ?? r.resultado.dentroMuestra.combo])} · medidos fuera de muestra</p>
           <table className="w-full min-w-[520px] text-left text-[11px]">
             <thead>
               <tr className="text-[9.5px] uppercase tracking-[0.12em] text-plata-500">
@@ -435,7 +435,7 @@ function SeccionRobustez({ r }: { r: RespuestaLaboratorio }) {
         <summary className="cursor-pointer text-plata-100">Cómo se calcula</summary>
         <ul className="mt-2 list-disc space-y-1 pl-4">
           <li>Costos ×2: los mismos parámetros elegidos en cada ventana del Walk-Forward, con comisión × 2 y deslizamiento × 2. Pasa con Profit Factor &gt; 1,2 y retorno &gt; 0.</li>
-          <li>Vecinos: desde los mejores parámetros, cada uno se mueve un paso de tu rejilla (arriba y abajo) dejando los demás igual. Aceptable = gana. Pasa si ≥ 70 % son aceptables. Si el Sharpe cae de media más de un 50 %: «isla de optimización».</li>
+          <li>Vecinos: los mejores parámetros se eligen SOLO con los datos anteriores al primer tramo fuera de muestra, y ellos y sus vecinos se miden en el tramo fuera de muestra (sin fuga de información). Cada parámetro se mueve un paso de tu rejilla (arriba y abajo) dejando los demás igual. Aceptable = gana. Pasa si ≥ 70 % son aceptables. Si el Sharpe cae de media más de un 50 %: «isla de optimización».</li>
           <li>Otro mercado: los mismos parámetros, sin reoptimizar. No debe destruir capital: retorno &gt; −10 % y caída ≤ 2 × la del original (mínimo 10 %).</li>
           <li>Estabilidad: el tramo fuera de muestra se corta en 10 sub-periodos; cada uno se clasifica por dirección (sube o baja) y volatilidad (alta o baja frente a la mediana). Pasa si gana en ≥ 60 % y ningún sub-periodo aporta ≥ 90 % de las ganancias.</li>
           <li>Pruebas críticas: costos ×2, vecinos y estabilidad. 0 fallos: aprobado; 1: alerta; 2 o más: rechazado.</li>

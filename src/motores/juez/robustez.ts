@@ -2,8 +2,10 @@
 //
 // A. Costos ×2: los mismos θ* del Walk-Forward con comisión × 2 y deslizamiento × 2, fuera de muestra.
 //    Pasa si Profit Factor > 1,2 y retorno neto > 0.
-// B. Parámetros vecinos: desde θ* (la mejor variante), cada parámetro se mueve UN paso contiguo de la rejilla
-//    (θ_p − δ y θ_p + δ), dejando los demás iguales. Rentabilidad aceptable = retorno > 0.
+// B. Parámetros vecinos: θ* se elige SOLO con las barras anteriores al primer OOS (el primer IS), y θ* y sus
+//    vecinos se miden en el tramo fuera de muestra, que no se usó para elegir (sin fuga de información).
+//    Cada parámetro se mueve UN paso contiguo de la rejilla (θ_p − δ y θ_p + δ), dejando los demás iguales.
+//    Rentabilidad aceptable = retorno > 0.
 //    Pasa si ≥ 70 % de los vecinos son aceptables. Caída = (Sharpe θ* − Sharpe vecino) / |Sharpe θ*|;
 //    si la caída media supera el 50 % → alerta de «isla de optimización».
 // C. Otro mercado: θ* congelado, sin reoptimizar, en otro activo. No debe destruir capital:
@@ -44,7 +46,8 @@ export type EstadoRobustez = 'aprobado' | 'alerta' | 'rechazado';
 
 export interface ResultadoRobustez {
   costos2x: { retorno: number; factorBeneficio: number | null; ok: boolean };
-  vecinos: { lista: Vecino[]; proporcion: number | null; caidaMedia: number | null; isla: boolean; ok: boolean | null };
+  /** `base` = variante de la que salen los vecinos (elegida antes del primer OOS). */
+  vecinos: { base: number; lista: Vecino[]; proporcion: number | null; caidaMedia: number | null; isla: boolean; ok: boolean | null };
   otroMercado: (Metricas & { simbolo: string; ok: boolean }) | null;
   estabilidad: { subperiodos: Subperiodo[]; consistencia: number; concentracion: number | null; ok: boolean };
   fallas: number;
@@ -96,10 +99,10 @@ export function robustez(e: {
   tiempos: readonly number[];
   posiciones: readonly (readonly number[])[];
   combos: readonly Combo[];
-  /** θ*: la mejor variante. */
+  /** θ* elegido solo con barras anteriores al primer OOS. */
   mejor: number;
-  /** Métricas de cada variante en toda la serie (las mismas que usa el Juez). */
-  metCompletas: readonly Metricas[];
+  /** Métricas de cada variante en el tramo fuera de muestra [inicioOos, n). */
+  metOos: readonly Metricas[];
   /** Ventanas del Walk-Forward (para repetirlas con costos ×2). */
   ventanas: readonly { oosDesde: number; oosHasta: number; combo: number }[];
   inicioOos: number;
@@ -124,16 +127,16 @@ export function robustez(e: {
   const costos2x = { retorno: m2.retornoTotal, factorBeneficio: m2.factorBeneficio, ok: m2.retornoTotal > 0 && (m2.factorBeneficio ?? 0) > PF_MINIMO_COSTOS };
 
   // B. Parámetros vecinos.
-  const sB = e.metCompletas[e.mejor]?.sharpe ?? null;
+  const sB = e.metOos[e.mejor]?.sharpe ?? null;
   const lista: Vecino[] = vecinosContiguos(e.combos, e.mejor).map(({ combo, cambio }) => {
-    const m = e.metCompletas[combo];
+    const m = e.metOos[combo];
     const caida = sB !== null && sB > 0 && m.sharpe !== null ? (sB - m.sharpe) / Math.abs(sB) : null;
     return { combo, cambio, retorno: m.retornoTotal, sharpe: m.sharpe, caida, aceptable: m.retornoTotal > 0 };
   });
   const caidas = lista.map((v) => v.caida).filter((x): x is number => x !== null);
   const caidaMedia = caidas.length ? caidas.reduce((a, x) => a + x, 0) / caidas.length : null;
   const proporcion = lista.length ? lista.filter((v) => v.aceptable).length / lista.length : null;
-  const vecinos = { lista, proporcion, caidaMedia, isla: caidaMedia !== null && caidaMedia > CAIDA_ISLA, ok: proporcion === null ? null : proporcion >= VECINOS_MINIMO };
+  const vecinos = { base: e.mejor, lista, proporcion, caidaMedia, isla: caidaMedia !== null && caidaMedia > CAIDA_ISLA, ok: proporcion === null ? null : proporcion >= VECINOS_MINIMO };
 
   // C. Otro mercado.
   const otroMercado = e.otroMercado ? { ...e.otroMercado, ok: e.otroMercado.retornoTotal > -0.1 && e.otroMercado.maxDrawdown <= Math.max(0.1, 2 * e.ddOos) } : null;

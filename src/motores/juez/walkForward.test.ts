@@ -1,6 +1,6 @@
 // Verificación del motor 3 (Walk-Forward) con la especificación WFO del usuario.
 import { describe, expect, it } from 'vitest';
-import { anualizado, clasificarWfe, ventanasWfo, walkForward } from './walkForward';
+import { anualizado, clasificarWfe, elegirVariante, EMBARGO_WFO, ventanasWfo, walkForward } from './walkForward';
 import { crearAleatorio, normal } from '@/lib/random';
 
 const SIN = { comisionPb: 0, deslizamientoPb: 0 };
@@ -101,5 +101,42 @@ describe('Motor 3 · Walk-Forward', () => {
     expect(clasificarWfe(0.4)).toBe('débil');
     expect(clasificarWfe(0.2)).toBe('sobreajuste');
     expect(clasificarWfe(null)).toBeNull();
+  });
+});
+
+describe('Blindaje contra la fuga de información (sin barajar, sin futuro)', () => {
+  // Mercado de prueba fijo: 900 barras y 4 variantes de momentum.
+  const r = crearAleatorio(77);
+  const cierres: number[] = [100];
+  for (let i = 1; i < 900; i += 1) cierres.push(cierres[i - 1] * (1 + (r() - 0.5) * 0.01));
+  const tiempos = cierres.map((_, i) => i * 60_000);
+  const mom = (c: number[], k: number) => c.map((x, i) => (i < k ? 0 : Math.sign(x - c[i - k])));
+  const costos = { comisionPb: 1, deslizamientoPb: 0 };
+
+  it('las ventanas son cronológicas: IS antes del embargo, OOS después y sin solaparse entre sí', () => {
+    const vs = ventanasWfo(900);
+    for (const v of vs) {
+      expect(v.isHasta).toBe(v.oosDesde - EMBARGO_WFO);
+      expect(v.isDesde).toBeLessThan(v.isHasta);
+    }
+    for (let i = 1; i < vs.length; i += 1) expect(vs[i].oosDesde).toBe(vs[i - 1].oosHasta);
+  });
+
+  it('cambiar el futuro NO cambia la variante elegida en cada ventana (θ* solo ve su IS)', () => {
+    const pos = (c: number[]) => [3, 5, 8, 13].map((k) => mom(c, k));
+    const base = walkForward({ cierres, tiempos, posiciones: pos(cierres), costos });
+    for (const v of base.ventanas) {
+      // Se destroza todo lo que viene después del IS de esta ventana.
+      const alterados = cierres.map((x, i) => (i >= v.isHasta ? x * (1 + 0.05 * Math.sin(i)) : x));
+      const otra = walkForward({ cierres: alterados, tiempos, posiciones: pos(alterados), costos });
+      expect(otra.ventanas.find((w) => w.isDesde === v.isDesde)?.combo).toBe(v.combo);
+    }
+  });
+
+  it('elegirVariante solo usa [desde, hasta): las barras de fuera no cuentan', () => {
+    const posiciones = [mom(cierres, 3), mom(cierres, 13)];
+    const a = elegirVariante({ cierres, tiempos, posiciones, costos }, 0, 400, 'sharpe').combo;
+    const alterados = cierres.map((x, i) => (i >= 400 ? x * 3 : x));
+    expect(elegirVariante({ cierres: alterados, tiempos, posiciones, costos }, 0, 400, 'sharpe').combo).toBe(a);
   });
 });

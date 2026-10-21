@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { robustez, subperiodos, vecinosContiguos } from './robustez';
 import { backtest, metricas } from './backtest';
-import { walkForward } from './walkForward';
+import { elegirVariante, walkForward } from './walkForward';
 import type { Combo } from './juez';
 import { crearAleatorio, normal } from '@/lib/random';
 
@@ -22,12 +22,11 @@ const momentum = (c: number[], k: number) => c.map((x, i) => (i < k ? 0 : Math.s
 
 function correr(cierres: number[], tiempos: number[], combos: Combo[], posiciones: number[][], comisionPb = 2) {
   const costos = { comisionPb, deslizamientoPb: 0 };
-  const completos = posiciones.map((p) => backtest(cierres, p, costos));
-  const met = completos.map((b) => metricas(b, tiempos));
-  const mejor = met.reduce((m, x, i) => ((x.sharpe ?? -Infinity) > (met[m].sharpe ?? -Infinity) ? i : m), 0);
   const w = walkForward({ cierres, tiempos, posiciones, costos });
+  const mejor = elegirVariante({ cierres, tiempos, posiciones, costos }, 0, w.inicioOos - w.embargo, 'sharpe').combo;
+  const met = posiciones.map((p) => metricas(backtest(cierres, p, costos, w.inicioOos, cierres.length), tiempos, w.inicioOos, cierres.length));
   const oos = metricas({ retornos: w.retornos, equity: [], operaciones: w.operaciones }, tiempos, w.inicioOos, cierres.length);
-  return robustez({ cierres, tiempos, posiciones, combos, mejor, metCompletas: met, ventanas: w.ventanas, inicioOos: w.inicioOos, retornosOos: w.retornos, ddOos: oos.maxDrawdown, costos });
+  return robustez({ cierres, tiempos, posiciones, combos, mejor, metOos: met, ventanas: w.ventanas, inicioOos: w.inicioOos, retornosOos: w.retornos, ddOos: oos.maxDrawdown, costos });
 }
 
 describe('Motor 6 · Robustez', () => {

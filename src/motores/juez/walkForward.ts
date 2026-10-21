@@ -65,6 +65,20 @@ export function valorObjetivo(b: ResultadoBacktest, tiempos: readonly number[], 
   return m.factorBeneficio ?? -Infinity;
 }
 
+/**
+ * θ* = argmax del objetivo usando SOLO las barras [desde, hasta). Es la única regla de elección de variante:
+ * la usan las ventanas del Walk-Forward y la elección de la variante que se lleva a vivo.
+ */
+export function elegirVariante(e: { cierres: readonly number[]; tiempos: readonly number[]; posiciones: readonly (readonly number[])[]; costos: Costos; opciones?: OpcionesBacktest }, desde: number, hasta: number, objetivo: ObjetivoWfo): { combo: number; valor: number; b: ResultadoBacktest } {
+  let mejor: { combo: number; valor: number; b: ResultadoBacktest } | null = null;
+  e.posiciones.forEach((p, combo) => {
+    const b = backtest(e.cierres, p, e.costos, desde, hasta, e.opciones);
+    const valor = valorObjetivo(b, e.tiempos, desde, hasta, objetivo);
+    if (!mejor || valor > mejor.valor) mejor = { combo, valor, b };
+  });
+  return mejor ?? { combo: 0, valor: -Infinity, b: backtest(e.cierres, [], e.costos, desde, hasta, e.opciones) };
+}
+
 /** Rendimiento anualizado aritmético: media del retorno por barra × barras por año. */
 export function anualizado(retornos: readonly number[], tiempos: readonly number[], desde: number, hasta: number): number {
   if (hasta - desde < 2) return 0;
@@ -117,17 +131,8 @@ export function walkForward(e: { cierres: readonly number[]; tiempos: readonly n
   const operaciones: Operacion[] = [];
   const ventanas: VentanaResultado[] = [];
   for (const v of vs) {
-    // A. IS: θ* = argmax del objetivo, solo con barras del IS.
-    const candidatos = e.posiciones.map((p) => {
-      const b = backtest(e.cierres, p, e.costos, v.isDesde, v.isHasta, e.opciones);
-      return { b, val: valorObjetivo(b, e.tiempos, v.isDesde, v.isHasta, objetivo) };
-    });
-    let combo = 0;
-    candidatos.forEach((c, ci) => {
-      if (c.val > candidatos[combo].val) combo = ci;
-    });
-    const mejor = candidatos[combo].val;
-    const bIs = candidatos[combo].b;
+    // A. IS: θ* = argmax del objetivo, solo con barras del IS (antes del embargo; nunca el OOS).
+    const { combo, valor: mejor, b: bIs } = elegirVariante(e, v.isDesde, v.isHasta, objetivo);
     // B. OOS: θ* congelado.
     const b = backtest(e.cierres, e.posiciones[combo], e.costos, v.oosDesde, v.oosHasta, e.opciones);
     for (let i = v.oosDesde; i < v.oosHasta; i += 1) {

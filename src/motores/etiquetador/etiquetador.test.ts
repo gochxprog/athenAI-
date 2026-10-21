@@ -101,3 +101,38 @@ describe('Etiquetador · completo', () => {
     expect(csv[1].split(',')[10]).toBe(String(res.etiquetas[0].t0));
   });
 });
+
+describe('Blindaje del Etiquetador contra el futuro', () => {
+  const r = crearAleatorio(31);
+  const serie: ReturnType<typeof fila>[] = [];
+  let c = 100;
+  for (let i = 0; i < 1_500; i += 1) {
+    c *= 1 + normal(r) * 0.003;
+    serie.push(fila(c, i, c * (1 + Math.abs(normal(r)) * 0.001), c * (1 - Math.abs(normal(r)) * 0.001)));
+  }
+  const cfg = { pt: 2, sl: 2, tMax: 20, cusumMult: 1, span: 50 };
+
+  it('σ y E[r] de la barra t solo usan barras ≤ t (cortar el futuro no los cambia)', () => {
+    const todo = volatilidadEwm(serie.map((f) => f.close), 50);
+    const corto = volatilidadEwm(serie.slice(0, 700).map((f) => f.close), 50);
+    for (let t = 0; t < 700; t += 1) {
+      expect(corto.sigma[t]).toEqual(todo.sigma[t]);
+      expect(corto.mediaPrevia[t]).toEqual(todo.mediaPrevia[t]);
+    }
+  });
+
+  it('un evento en t₀ solo depende de las barras hasta t₀ + tMax: con la serie cortada ahí, su etiqueta es idéntica', () => {
+    const todo = etiquetar(serie, cfg);
+    expect(todo.etiquetas.length).toBeGreaterThan(20);
+    for (const e of todo.etiquetas.slice(0, 15)) {
+      const corto = etiquetar(serie.slice(0, e.t0 + cfg.tMax + 1), cfg);
+      expect(corto.etiquetas.find((x) => x.t0 === e.t0)).toEqual(e);
+    }
+  });
+
+  it('eventos sin tMax barras por delante no se etiquetan (no se inventa un final que no ocurrió)', () => {
+    const corto = etiquetar(serie.slice(0, 600), cfg);
+    for (const e of corto.etiquetas) expect(e.barrera === 'tiempo' ? e.t0 + cfg.tMax : e.t1).toBeLessThan(600);
+    expect(corto.sinFuturo).toBeGreaterThanOrEqual(0);
+  });
+});

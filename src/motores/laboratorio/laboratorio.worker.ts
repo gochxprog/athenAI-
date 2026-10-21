@@ -135,7 +135,7 @@ ctx.onmessage = async (e) => {
       progreso(`Robustez: misma estrategia en ${p.otro.simbolo}…`);
       const otras = await leer(p.otro.proveedor, p.otro.simbolo);
       if (otras.length >= 100) {
-        const combo = ejec.combos[resultado.dentroMuestra.combo];
+        const combo = ejec.combos[resultado.comboVivo];
         let otraPos: number[];
         try {
           otraPos = normalizarPosiciones(ejecutarEstrategia(py, `${p.codigo}\nPARAMETROS = ${JSON.stringify(Object.fromEntries(Object.entries(combo).map(([k, v]) => [k, [v]])))}\n`, otras).posiciones[0], otras.length);
@@ -151,7 +151,7 @@ ctx.onmessage = async (e) => {
       id: p.id,
       respuesta: {
         lados: (() => {
-          const pos = ejec.posiciones[resultado.dentroMuestra.combo] ?? [];
+          const pos = ejec.posiciones[resultado.comboVivo] ?? [];
           return { largos: pos.filter((x) => x > 0).length, cortos: pos.filter((x) => x < 0).length };
         })(),
         resultado,

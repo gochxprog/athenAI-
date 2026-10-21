@@ -103,6 +103,11 @@ Features). Guarda en disco (`/var/lib/athenai-grabadora`, un archivo por símbol
 clave y la plataforma los descarga a la carpeta «athenai-grabadora» (Datos → Grabadora 24/7), al abrirla y cada 5 min.
 Instalación con `instalar.sh` (servicio de systemd que arranca solo). Paquete: `npm run grabadora:paquete`. ✅ falta tu visto bueno.
 
+## Fuga de información · auditoría (octubre 2026)
+Sin barajado de barras; Walk-Forward cronológico con embargo. Corregido: la variante para los bots se elige como lo
+haría hoy el Walk-Forward (`comboVivo`, últimas L_IS barras) y la prueba de vecinos elige antes del primer OOS y mide
+fuera de muestra. Pruebas de blindaje en Walk-Forward y Etiquetador. Detalle en `AUDITORIA_FUGAS.md`.
+
 ## Por conectar o por hacer
 
 | Pantalla | Motor | Estado |
