@@ -124,3 +124,20 @@ export function monteCarlo(trades: readonly number[], azar: () => number, config
     },
   };
 }
+
+/**
+ * Banda esperada tras k operaciones (para comparar un bot en vivo con lo que dijo el Juez):
+ * se sacan k operaciones al azar CON reemplazo de las del Juez, se encadenan Π(1 + r) − 1, se repite `simulaciones`
+ * veces y se toman los percentiles 5, 50 y 95 del retorno acumulado.
+ */
+export function bandaTrasOperaciones(trades: readonly number[], k: number, azar: () => number, simulaciones = 2_000): { p5: number; p50: number; p95: number } | null {
+  if (!trades.length || k < 1) return null;
+  const finales: number[] = [];
+  for (let s = 0; s < simulaciones; s += 1) {
+    let e = 1;
+    for (let i = 0; i < k; i += 1) e *= 1 + trades[Math.floor(azar() * trades.length)];
+    finales.push(e - 1);
+  }
+  finales.sort((a, b) => a - b);
+  return { p5: percentil(finales, 0.05), p50: percentil(finales, 0.5), p95: percentil(finales, 0.95) };
+}

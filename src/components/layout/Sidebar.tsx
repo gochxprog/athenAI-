@@ -5,6 +5,7 @@ import { MENU } from '@/data/menu';
 import { AGENTES } from '@/data/agentes';
 import { useFeeds } from '@/components/orderflow/OrderFlowChart';
 import { leerEstrategias } from '@/components/laboratorio/plantillas';
+import { motorPaper } from '@/motores/paper/iniciar';
 import Punto, { type EstadoPunto } from '@/components/ui/Punto';
 import type { Modulo } from '@/types/nav';
 
@@ -26,12 +27,12 @@ export default function Sidebar({ activo, onSeleccion }: Props) {
     orderflow: { e: vivos ? 'activo' : 'detenido' },
     laboratorio: { n: estrategias.filter((x) => x.ultimoVeredicto).length, e: 'activo' },
     investigacion: { e: 'espera' },
-    estrategias: { n: estrategias.length, e: 'espera' },
+    estrategias: { n: estrategias.length, e: estrategias.length ? 'activo' : 'espera' },
     conocimiento: { e: 'espera' },
     agentes: { n: AGENTES.filter((a) => a.real).length, e: vivos ? 'activo' : 'espera' },
-    paper: { e: 'espera' },
-    decisiones: { e: 'espera' },
-    maquinas: { e: 'espera' },
+    paper: { n: motorPaper.bots.length, e: motorPaper.apagado ? 'detenido' : motorPaper.bots.some((b) => b.estado === 'activo') ? 'activo' : 'espera' },
+    decisiones: { e: 'activo' },
+    maquinas: { e: 'activo' },
     datos: { e: grabando ? 'activo' : vivos ? 'espera' : 'detenido' },
   };
 

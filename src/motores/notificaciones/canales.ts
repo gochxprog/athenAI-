@@ -9,7 +9,7 @@ export const TIPOS_AVISO: { id: TipoAviso; nombre: string; descripcion: string; 
   { id: 'evento', nombre: 'Eventos fuertes', descripcion: '30 min antes y al entrar en la ventana de no operar (FOMC, CPI…).', disponible: true },
   { id: 'regimen', nombre: 'Cambio de régimen', descripcion: 'Rango, tendencia o día raro en cada mercado.', disponible: true },
   { id: 'juez', nombre: 'Decisiones del Juez', descripcion: 'Cada veredicto: aprobada, rechazada (y por qué) o datos insuficientes.', disponible: true },
-  { id: 'bot', nombre: 'Bots', descripcion: 'Aperturas, cierres y pausas del Guardián (cuando existan los bots, Bloque E).', disponible: false },
+  { id: 'bot', nombre: 'Bots', descripcion: 'Aperturas y cierres de los bots de Paper, pausas del Guardián y apagado de emergencia.', disponible: true },
 ];
 
 export interface ConfigNotificaciones {

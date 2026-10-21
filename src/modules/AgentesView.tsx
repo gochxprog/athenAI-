@@ -8,6 +8,7 @@ import Insignia from '@/components/ui/Insignia';
 import Punto from '@/components/ui/Punto';
 import Consola, { type LineaConsola } from '@/components/ui/Consola';
 import { NOMBRE_PROVEEDOR, useFeeds } from '@/components/orderflow/OrderFlowChart';
+import { motorPaper } from '@/motores/paper/iniciar';
 import { AGENTES, CAPAS, type Agente, type AgenteId } from '@/data/agentes';
 import type { EstadoFeed } from '@/motores/worker/protocolo';
 import { conSigno, decimalesDe, num } from '@/lib/format';
@@ -130,6 +131,8 @@ export default function AgentesView() {
     if (a.id === 'vigia') return `Vigilando ${vivos}/${feeds.feeds.length} feeds`;
     if (a.id === 'programador') return `${leerEstrategias().length} estrategias`;
     if (a.id === 'etiquetador') return 'Listo: Laboratorio → Etiquetador';
+    if (a.id === 'ejecutor') return `${motorPaper.bots.filter((b) => b.posicion).length}/${motorPaper.bots.length} bots en posición`;
+    if (a.id === 'guardian') return motorPaper.apagado ? 'Apagado de emergencia activo' : `Vigilando ${motorPaper.bots.filter((b) => b.estado === 'activo').length} bots`;
     if (a.id === 'juez') {
       const xs = leerEstrategias().filter((x) => x.ultimoVeredicto);
       return xs.length ? `${xs.filter((x) => x.ultimoVeredicto === 'APROBADA').length}/${xs.length} aprobadas` : 'Esperando estrategias';
@@ -149,6 +152,8 @@ export default function AgentesView() {
       return [...consolas.vigia, ...reg].sort((x, y) => y.hora.getTime() - x.hora.getTime()).slice(0, 60);
     }
     if (a.id === 'programador' || a.id === 'juez') return lineasLaboratorio(a.id);
+    if (a.id === 'ejecutor' || a.id === 'guardian')
+      return motorPaper.bitacora.slice(0, 40).map((x, i) => ({ id: `paper-${x.t}-${i}`, hora: new Date(x.t), texto: `${x.nombre}: ${x.texto}` }));
     if (a.id === 'etiquetador')
       return [{ id: 'etq', hora: new Date(), texto: 'Triple barrera + filtro CUSUM + meta-etiquetado sobre tus barras grabadas. Ábrelo en Laboratorio → Etiquetador.' }];
     return a.id === 'rastreador' ? consolas.rastreador : consolas.flujo;

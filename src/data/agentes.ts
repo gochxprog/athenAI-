@@ -30,7 +30,7 @@ export const AGENTES: Agente[] = [
   { id: 'etiquetador', nombre: 'Etiquetador', capa: 2, rol: 'Marca en el pasado qué pasó después de cada movimiento relevante (CUSUM + triple barrera + meta-etiqueta) para que los modelos aprendan', motor: 'Triple barrera + CUSUM', bloque: 'D', real: true },
   { id: 'lector', nombre: 'Lector', capa: 2, rol: 'Entrena los modelos (machine learning y deep learning) y separa las Features útiles del ruido', motor: 'LightGBM / red neuronal', bloque: 'D', real: false },
   { id: 'sintetizador', nombre: 'Sintetizador', capa: 2, rol: 'Resume lo aprendido en hipótesis legibles y en el informe semanal', motor: 'Informes', bloque: 'E', real: false },
-  { id: 'guardian', nombre: 'Guardián', capa: 3, rol: 'Riesgo de los bots: límites de pérdida, correlación entre mercados y apagado de emergencia', motor: 'Supervisor de riesgo', bloque: 'E', real: false },
-  { id: 'ejecutor', nombre: 'Ejecutor', capa: 3, rol: 'Envía las órdenes de los bots aprobados con órdenes limit (pasivas)', motor: 'Ejecución', bloque: 'E', real: false },
+  { id: 'guardian', nombre: 'Guardián', capa: 3, rol: 'Riesgo de los bots: límites de pérdida, correlación entre mercados y apagado de emergencia', motor: 'Guardián (caída del día, pérdidas seguidas, banda del Juez, apagado)', bloque: 'E', real: true },
+  { id: 'ejecutor', nombre: 'Ejecutor', capa: 3, rol: 'Ejecuta en Paper las señales de los bots aprobados al precio vivo, con comisión, deslizamiento y funding', motor: 'Ejecutor de Paper', bloque: 'E', real: true },
 ];
 

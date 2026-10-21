@@ -20,8 +20,8 @@ Todo lo que tiene la plataforma hoy, pantalla por pantalla y motor por motor.
 | Cerebro | **Investigación** | Red de hipótesis (aplazada a propósito) | ⏸ |
 | Cerebro | **Estrategias** | Tus estrategias con el veredicto, la nota y la curva de su última prueba del Juez | 🟢 |
 | Cerebro | **Conocimiento** | Patrones encontrados (llega con el bloque de machine learning) | ⏸ |
-| Cerebro | **Agentes** | Sala 3D con los 10 agentes. Vigía, Flujo, Rastreador, Programador y Juez trabajan de verdad | 🟢 (5 de 10) |
-| Dinero | **Paper Trading** | Bots en Paper con el Guardián (siguiente motor) | ⏸ |
+| Cerebro | **Agentes** | Sala 3D con los 10 agentes. Vigía, Flujo, Rastreador, Programador, Juez, Etiquetador, Ejecutor y Guardián trabajan de verdad | 🟢 (8 de 10) |
+| Dinero | **Paper Trading** | Bots en Paper sobre el precio en vivo, con el Guardián, libro de operaciones y apagado de emergencia | 🟢 |
 | Dinero | **Decisiones** | Bitácora real: pruebas del Juez, avisos y registro del motor | 🟢 |
 | Sistema | **Máquinas** | Telemetría real del navegador (memoria, núcleos, workers) | 🟢 |
 | Sistema | **Datos (Centro de datos)** | Fuentes y activos, grabación, almacenamiento, calendario de eventos fuertes, notificaciones y diagnóstico de Binance | 🟢 |
@@ -142,11 +142,11 @@ Laboratorio con «Explicación simple» y «Cómo se calcula».
 | | Rastreador | Régimen y memoria del mercado | 🟢 |
 | 2 · Decisión | Programador | Corre tus estrategias en Python | 🟢 |
 | | Juez | Los 10 motores | ✅ |
-| | Etiquetador | Marca en el pasado qué pasó después | ⬜ |
+| | Etiquetador | Marca en el pasado qué pasó después | ✅ |
 | | Lector | Entrena los modelos de machine learning | ⬜ |
 | | Sintetizador | Informes y resúmenes | ⬜ |
-| 3 · Ejecución | Guardián | Riesgo de los bots, apagado de emergencia | ⬜ |
-| | Ejecutor | Envía las órdenes | ⬜ |
+| 3 · Ejecución | Guardián | Riesgo de los bots: caída del día, pérdidas seguidas, banda del Juez, apagado de emergencia | 🟢 |
+| | Ejecutor | Opera en Paper al precio vivo con comisión, deslizamiento y funding | 🟢 |
 
 ---
 
@@ -161,7 +161,6 @@ Laboratorio con «Explicación simple» y «Cómo se calcula».
    
    Todo lo que encuentren pasa por el mismo Juez.
 2. **Pantallas que aún no tienen motor** (dicen «sin motor» y no muestran datos de ejemplo):
-   - Paper Trading (bots + Guardián): es el siguiente;
    - Conocimiento;
    - Investigación, con la Red de hipótesis (aplazada a propósito).
 3. **VPS 24/7:** grabar y avisar aunque el computador esté apagado.

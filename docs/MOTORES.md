@@ -63,7 +63,7 @@ Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el p
 |---|---|---|
 | Estrategias | Catálogo con veredicto y curva (usa el Juez) | 🔍 conectado a datos reales |
 | Decisiones | Bitácora real (Juez, avisos, registro del motor) | 🔍 conectado a datos reales |
-| Paper Trading | Ejecución en Paper, P&L, Guardián | ⬜ siguiente |
+| Paper Trading | Ejecutor (llenado a bid/ask + deslizamiento dinámico, comisión, funding), libro de operaciones en IndexedDB + CSV, banda P5–P95 del Juez, Guardián (caída del día, pérdidas seguidas, sin datos, exposición por nota, apagado de emergencia), avisos | 🔍 hecho, falta tu visto bueno (`paper/`) |
 | Máquinas | Telemetría del navegador | 🔍 conectado a datos reales |
 
 ## Pendientes conocidos
