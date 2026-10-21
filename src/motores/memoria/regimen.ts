@@ -3,7 +3,7 @@
 // Entradas por dollar bar (independientes del precio del activo):
 //   - eficiencia de 10 barras (|Σ retornos| / Σ |retornos|): 1 = el precio va en una dirección, 0 = va y vuelve;
 //   - log(rango / ATR): volatilidad relativa de la barra;
-//   - log(duración): lo rápido que se negocia el volumen de la barra;
+//   - duración (z robusto del log de la duración): lo rápido que se negocia la barra;
 //   - |delta / volumen|: lo desequilibrada que está la agresión.
 // Se entrena un HMM de 3 estados y se nombran por sus características:
 //   el de mayor volatilidad = "raro"; de los otros dos, el de mayor eficiencia = "tendencia"; el otro = "rango".
@@ -74,10 +74,10 @@ export function observaciones(filas: readonly (FilaFeatures & { sesion?: number 
       sumaAbs += Math.abs(r);
     }
     const rango = v.rango_atr;
-    const dur = v.duracion_s;
+    const dur = v.duracion_z;
     const dr = v.delta_ratio;
     if (rango === null || rango === undefined || dur === null || dur === undefined || dr === null || dr === undefined) continue;
-    x.push([sumaAbs > 0 ? Math.abs(suma) / sumaAbs : 0, Math.log(Math.max(rango, 1e-3)), Math.log(Math.max(dur, 0.05)), Math.abs(dr)]);
+    x.push([sumaAbs > 0 ? Math.abs(suma) / sumaAbs : 0, Math.log(Math.max(rango, 1e-3)), dur, Math.abs(dr)]);
     idx.push(i);
     inicio.push(nuevo);
     nuevo = false;

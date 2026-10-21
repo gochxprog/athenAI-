@@ -34,7 +34,7 @@ export interface DiagonalImbalanceOptions {
   readonly ratioThreshold?: number;
   /** Denominador 0 con numerador > 0: true = cuenta como imbalance (ratio ∞). */
   readonly zeroDenominatorCounts?: boolean;
-  /** Fila donde se marca el Sell Imbalance: "bidRow" = Bid[P]/Ask[P+tick] (convención ATAS/URUS); "askRow" = Bid[P−tick]/Ask[P]. */
+  /** Fila donde se marca el Sell Imbalance: "bidRow" = Bid[P]/Ask[P+tick] (convención ATAS); "askRow" = Bid[P−tick]/Ask[P]. */
   readonly sellMarkRow?: "bidRow" | "askRow";
 }
 

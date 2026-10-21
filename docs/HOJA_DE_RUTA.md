@@ -10,16 +10,16 @@ Marca de progreso: ✅ hecho · 🔶 en curso · ⬜ pendiente.
 **Funciona de verdad**
 
 - ✅ **Centro de datos** (módulo Datos):
-  - fuentes: Binance Futures (por defecto, sin API key), Rithmic (por puente) y servidor Urus;
+  - fuentes: Binance Futures (por defecto, sin API key), y Rithmic (por puente);
   - hasta 6 activos a la vez;
   - al aplicar una configuración, el pipeline se limpia y empieza de cero.
-- ✅ **Motores de Urus** en vivo por activo:
+- ✅ **Motores de Order Flow** en vivo por activo:
   - CVD, absorción, agotamiento e imbalances;
   - big trades, icebergs y stop runs;
   - pools de liquidez (LHM), Open Interest y DOM.
 - ✅ **Features para el ML**:
   - 38 datos por cada dollar bar, sin mirar al futuro;
-  - se guardan en una "carpeta" por fuente: `athenai-binance`, `athenai-rithmic` y `athenai-urus`;
+  - se guardan en una "carpeta" por fuente: `athenai-binance` y `athenai-rithmic`;
   - se exportan a CSV.
 - ✅ **Gráfico de Order Flow**: velas o Footprint, 1m/5m/15m/Dollar/Volume, CVD, OI, LHM y DOM.
 - ✅ **Bloque C completo**: estrategias en Python con prueba anti-futuro y el Juez real (Walk-Forward, Monte Carlo, Luck test, robustez, Deflated Sharpe, PBO).
@@ -60,7 +60,7 @@ Ejemplo: una escudería de Fórmula 1. Los agentes son ingenieros, mecánicos y 
 | Capa | Agente | Qué hace | Motor | Bloque |
 |---|---|---|---|---|
 | 1 · Detectores | **Vigía** | Vigila conexiones, latencia y huecos en los datos | Centro de datos / feeds | A |
-| | **Flujo** | Lee el Order Flow: imbalances, stacking/pulling, absorción, agotamiento, CVD, liquidaciones | Motores de Urus | A |
+| | **Flujo** | Lee el Order Flow: imbalances, stacking/pulling, absorción, agotamiento, CVD, liquidaciones | Motores de Order Flow | A |
 | | **Rastreador** | Régimen del mercado y memoria (día gemelo, "hoy es distinto") | Memoria del mercado (HMM + similitud) | B ✅ |
 | 2 · Contexto y decisión | **Programador** | Corre las estrategias que escribes en Python | Editor + Pyodide | C ✅ |
 | | **Juez** | Prueba todo y da el veredicto | Motor de validación | C ✅ |
@@ -196,11 +196,11 @@ Dónde verlo: **Laboratorio → «Mis estrategias (Python) · real»**.
 
 | Grupo | Motor | Qué da |
 |---|---|---|
-| Datos | Fuentes Binance, Rithmic (puente), Urus | Trades, libro, OI y liquidaciones en vivo |
+| Datos | Fuentes Binance y Rithmic (puente) | Trades, libro, OI y liquidaciones en vivo |
 | | Vigía | Huecos y cortes marcados (`hueco`) |
 | | Barras | Dollar bars (canónicas), 1m/5m/15m, volumen |
 | | Almacén | Una carpeta (IndexedDB) por fuente |
-| Order flow (Urus) | Footprint y Microstructure | Imbalances, stacked, POC, delta-POC |
+| Order flow | Footprint y Microstructure | Imbalances, stacked, POC, delta-POC |
 | | Absorción y Agotamiento | Scores 0–100 por lado |
 | | Big trades, Icebergs, Stop runs | Eventos con magnitud |
 | | Open Interest | ΔOI, cuadrante precio/OI, flush |

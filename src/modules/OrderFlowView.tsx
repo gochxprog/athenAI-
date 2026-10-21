@@ -38,7 +38,7 @@ export default function OrderFlowView() {
         modulo="Order Flow"
         titulo="Gráficos de Order Flow"
         fuente={visibleFeed ? `${NOMBRE_PROVEEDOR[visibleFeed.proveedor].toUpperCase()} · ${visibleFeed.simbolo}` : 'SIN FUENTE'}
-        descripcion="Velas o Footprint, CVD, Open Interest, absorción, agotamiento, pools de liquidez (LHM), big trades, icebergs y stop runs, con el DOM al lado. Calculado por los motores de Urus en un proceso aparte; lo mismo que ves es lo que aprenden los modelos."
+        descripcion="Velas o Footprint, CVD, Open Interest, absorción, agotamiento, pools de liquidez (LHM), big trades, icebergs y stop runs, con el DOM al lado. Calculado por los motores de athenAI en un proceso aparte; lo mismo que ves es lo que aprenden los modelos."
       >
         <Insignia variante="contorno">{estado ? `${num(estado.metricas.barrasCanonicas)} filas de Features` : 'Arrancando motor…'}</Insignia>
       </Encabezado>
@@ -100,7 +100,7 @@ function Eventos({ estado }: { estado: EstadoGrafico | null }) {
   );
 }
 
-const COLUMNAS_VISTA = ['delta', 'trades_rel', 'cvd_sesion', 'imb_compra', 'imb_venta', 'absorcion_ask', 'absorcion_bid', 'agotamiento_prev_alcista', 'agotamiento_prev_bajista', 'bigtrades_compra_usd', 'bigtrades_venta_usd', 'icebergs_bid', 'stoprun_alto', 'oi_delta_pct', 'obi_10', 'pool_ask_dist_atr'];
+const COLUMNAS_VISTA = ['delta_z', 'trades_rel', 'cvd_sesion_ratio', 'imb_compra_frac', 'imb_venta_frac', 'absorcion_ask', 'absorcion_bid', 'agotamiento_prev_alcista', 'agotamiento_prev_bajista', 'bigtrades_compra_frac', 'bigtrades_venta_frac', 'icebergs_bid', 'stoprun_alto', 'oi_delta_pct', 'obi_10', 'pool_ask_dist_atr'];
 
 function Features({ estado }: { estado: EstadoGrafico | null }) {
   const [exportando, setExportando] = useState(false);

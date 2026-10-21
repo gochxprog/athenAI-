@@ -93,6 +93,10 @@ Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el p
 | 4 | Cruce entre mercados | **Corregido:** arrastraba el último precio hasta 15 min y metía retornos 0 falsos (correlación hacia 0); ahora solo cuenta un precio de los 5 min anteriores. |
 | 5 | Panel General (lectura, Features extremas) | Correcto. |
 
+## Features · auditoría (octubre 2026)
+Las 39 Features quedaron sin escala (ratios, fracciones y z robustos con ventana móvil) y protegidas contra división
+por cero, NaN e infinitos; un fallo de cálculo ya no detiene el motor. Detalle en `AUDITORIA_FEATURES.md`. ✅ falta tu visto bueno.
+
 ## Por conectar o por hacer
 
 | Pantalla | Motor | Estado |

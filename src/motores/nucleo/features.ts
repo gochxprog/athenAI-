@@ -1,8 +1,8 @@
 // Catálogo de Features que aprenden los modelos y su cálculo por barra canónica.
 // Regla de oro: una fila se construye en el instante del CIERRE de la barra con información disponible hasta
 // ese instante. Nada calculado después (p. ej. el agotamiento de esta misma barra) entra en su fila.
-import { computeOpenInterest } from '../urus/open-interest/engine';
-import type { OpenInterestCandlePoint } from '../urus/open-interest/types';
+import { computeOpenInterest, robustZ } from '../flujo/open-interest/engine';
+import type { OpenInterestCandlePoint } from '../flujo/open-interest/types';
 import type { BarraAnalizada } from './serieBarras';
 import type { MotorMercado } from './motorMercado';
 import type { EventoMotor } from './tipos';
@@ -19,42 +19,42 @@ export const DEFINICIONES_FEATURES: DefinicionFeature[] = [
   { clave: 'retorno', nombre: 'Retorno de la barra', grupo: 'Precio', motor: 'Barras', descripcion: 'close / open − 1' },
   { clave: 'rango_atr', nombre: 'Rango / ATR', grupo: 'Precio', motor: 'Barras', descripcion: '(high − low) / ATR(14) de barras previas' },
   { clave: 'dist_vwap_atr', nombre: 'Distancia al VWAP', grupo: 'Precio', motor: 'Flujo', descripcion: '(close − VWAP del día UTC) / ATR(14). Vacío si no se grabó el día desde las 00:00 UTC o hubo un corte' },
-  { clave: 'delta', nombre: 'Delta', grupo: 'Flujo', motor: 'Footprint', descripcion: 'Volumen agresor comprador − vendedor (BTC)' },
+  { clave: 'delta_z', nombre: 'Delta (z)', grupo: 'Flujo', motor: 'Footprint', descripcion: 'z robusto del delta de la barra frente a las 120 barras previas: 0,6745 × (delta − mediana) / MAD, recortado a ±10' },
   { clave: 'delta_ratio', nombre: 'Delta / volumen', grupo: 'Flujo', motor: 'Footprint', descripcion: 'Delta normalizado en [−1, 1]' },
-  { clave: 'trades_rel', nombre: 'Trades relativos', grupo: 'Flujo', motor: 'Barras', descripcion: 'Número de trades / media de las 20 barras previas (en dollar bars el volumen es casi constante por construcción)' },
-  { clave: 'duracion_s', nombre: 'Duración', grupo: 'Flujo', motor: 'Barras', descripcion: 'Segundos que tardó en completarse la dollar bar (actividad)' },
-  { clave: 'cvd_sesion', nombre: 'CVD de sesión', grupo: 'Flujo', motor: 'SessionCVD (Urus)', descripcion: 'Delta acumulado de la sesión automática (SYD/TOK/LON/NY). Vacío si no se vio la sesión desde su inicio o hubo un corte (sería un número a medias)' },
-  { clave: 'cvd_pendiente_5', nombre: 'Pendiente del CVD', grupo: 'Flujo', motor: 'SessionCVD (Urus)', descripcion: 'Delta sumado de las últimas 5 barras (esta y las 4 anteriores): no salta cuando cambia la sesión' },
-  { clave: 'imb_compra', nombre: 'Imbalances compradores', grupo: 'Footprint', motor: 'Microstructure (Urus)', descripcion: 'Niveles con imbalance diagonal comprador ≥ 3:1' },
-  { clave: 'imb_venta', nombre: 'Imbalances vendedores', grupo: 'Footprint', motor: 'Microstructure (Urus)', descripcion: 'Niveles con imbalance diagonal vendedor ≥ 3:1' },
-  { clave: 'stacked_compra', nombre: 'Stacked compradores', grupo: 'Footprint', motor: 'Microstructure (Urus)', descripcion: 'Rachas de ≥ 3 imbalances compradores consecutivos' },
-  { clave: 'stacked_venta', nombre: 'Stacked vendedores', grupo: 'Footprint', motor: 'Microstructure (Urus)', descripcion: 'Rachas de ≥ 3 imbalances vendedores consecutivos' },
-  { clave: 'poc_pos', nombre: 'Posición del POC', grupo: 'Footprint', motor: 'Footprint (Urus)', descripcion: 'POC dentro del rango de la barra (0 = low, 1 = high)' },
-  { clave: 'delta_poc_pos', nombre: 'Posición del delta-POC', grupo: 'Footprint', motor: 'Microstructure (Urus)', descripcion: 'Nivel de mayor |delta| dentro del rango (0–1)' },
-  { clave: 'absorcion_ask', nombre: 'Absorción en el ask', grupo: 'Absorción / Agotamiento', motor: 'AbsorptionEngine (Urus)', descripcion: 'Score máximo (0–100) de compradores agresivos absorbidos' },
-  { clave: 'absorcion_bid', nombre: 'Absorción en el bid', grupo: 'Absorción / Agotamiento', motor: 'AbsorptionEngine (Urus)', descripcion: 'Score máximo (0–100) de vendedores agresivos absorbidos' },
-  { clave: 'agotamiento_prev_alcista', nombre: 'Agotamiento alcista (barra previa)', grupo: 'Absorción / Agotamiento', motor: 'ExhaustionEngine (Urus)', descripcion: 'Score del agotamiento comprador de la barra anterior, confirmado al cierre de esta' },
-  { clave: 'agotamiento_prev_bajista', nombre: 'Agotamiento bajista (barra previa)', grupo: 'Absorción / Agotamiento', motor: 'ExhaustionEngine (Urus)', descripcion: 'Score del agotamiento vendedor de la barra anterior, confirmado al cierre de esta' },
-  { clave: 'bigtrades_compra_usd', nombre: 'Big trades compradores', grupo: 'Big trades', motor: 'BigTradeDetector (Urus)', descripcion: 'Nocional (USD) de bloques compradores grandes en la barra' },
-  { clave: 'bigtrades_venta_usd', nombre: 'Big trades vendedores', grupo: 'Big trades', motor: 'BigTradeDetector (Urus)', descripcion: 'Nocional (USD) de bloques vendedores grandes en la barra' },
-  { clave: 'icebergs_bid', nombre: 'Icebergs en el bid', grupo: 'Icebergs / Stop runs', motor: 'IcebergTracker (Urus)', descripcion: 'Icebergs compradores confirmados durante la barra' },
-  { clave: 'icebergs_ask', nombre: 'Icebergs en el ask', grupo: 'Icebergs / Stop runs', motor: 'IcebergTracker (Urus)', descripcion: 'Icebergs vendedores confirmados durante la barra' },
-  { clave: 'stoprun_alto', nombre: 'Stop run de máximos', grupo: 'Icebergs / Stop runs', motor: 'StopRunSeries (Urus)', descripcion: 'Barridos de máximos confirmados durante la barra' },
-  { clave: 'stoprun_bajo', nombre: 'Stop run de mínimos', grupo: 'Icebergs / Stop runs', motor: 'StopRunSeries (Urus)', descripcion: 'Barridos de mínimos confirmados durante la barra' },
-  { clave: 'liq_largos_usd', nombre: 'Liquidaciones de largos', grupo: 'Open Interest', motor: 'Binance forceOrder', descripcion: 'Nocional (USD) de largos liquidados durante la barra (presión vendedora forzada)' },
-  { clave: 'liq_cortos_usd', nombre: 'Liquidaciones de cortos', grupo: 'Open Interest', motor: 'Binance forceOrder', descripcion: 'Nocional (USD) de cortos liquidados durante la barra (presión compradora forzada)' },
+  { clave: 'trades_rel', nombre: 'Trades relativos', grupo: 'Flujo', motor: 'Barras', descripcion: 'Número de trades / media de las 20 barras previas' },
+  { clave: 'duracion_z', nombre: 'Duración (z)', grupo: 'Flujo', motor: 'Barras', descripcion: 'z robusto de log(segundos que tardó la barra) frente a las 120 previas: < 0 = más rápido de lo normal' },
+  { clave: 'cvd_sesion_ratio', nombre: 'CVD de sesión / volumen', grupo: 'Flujo', motor: 'CVD de sesión', descripcion: 'CVD de la sesión / volumen negociado en la sesión, en [−1, 1]. Vacío si no se vio la sesión desde su inicio o hubo un corte' },
+  { clave: 'flujo_5_ratio', nombre: 'Flujo de 5 barras', grupo: 'Flujo', motor: 'CVD de sesión', descripcion: 'Σ delta / Σ volumen de las 5 últimas barras, en [−1, 1]' },
+  { clave: 'imb_compra_frac', nombre: 'Imbalances compradores', grupo: 'Footprint', motor: 'Microestructura', descripcion: 'Niveles con imbalance diagonal comprador ≥ 3:1 / niveles de la barra (0–1)' },
+  { clave: 'imb_venta_frac', nombre: 'Imbalances vendedores', grupo: 'Footprint', motor: 'Microestructura', descripcion: 'Niveles con imbalance diagonal vendedor ≥ 3:1 / niveles de la barra (0–1)' },
+  { clave: 'stacked_compra', nombre: 'Stacked compradores', grupo: 'Footprint', motor: 'Microestructura', descripcion: 'Rachas de ≥ 3 imbalances compradores consecutivos' },
+  { clave: 'stacked_venta', nombre: 'Stacked vendedores', grupo: 'Footprint', motor: 'Microestructura', descripcion: 'Rachas de ≥ 3 imbalances vendedores consecutivos' },
+  { clave: 'poc_pos', nombre: 'Posición del POC', grupo: 'Footprint', motor: 'Footprint', descripcion: 'POC dentro del rango de la barra (0 = low, 1 = high)' },
+  { clave: 'delta_poc_pos', nombre: 'Posición del delta-POC', grupo: 'Footprint', motor: 'Microestructura', descripcion: 'Nivel de mayor |delta| dentro del rango (0–1)' },
+  { clave: 'absorcion_ask', nombre: 'Absorción en el ask', grupo: 'Absorción / Agotamiento', motor: 'Absorción', descripcion: 'Score máximo (0–100) de compradores agresivos absorbidos' },
+  { clave: 'absorcion_bid', nombre: 'Absorción en el bid', grupo: 'Absorción / Agotamiento', motor: 'Absorción', descripcion: 'Score máximo (0–100) de vendedores agresivos absorbidos' },
+  { clave: 'agotamiento_prev_alcista', nombre: 'Agotamiento alcista (barra previa)', grupo: 'Absorción / Agotamiento', motor: 'Agotamiento', descripcion: 'Score del agotamiento comprador de la barra anterior, confirmado al cierre de esta' },
+  { clave: 'agotamiento_prev_bajista', nombre: 'Agotamiento bajista (barra previa)', grupo: 'Absorción / Agotamiento', motor: 'Agotamiento', descripcion: 'Score del agotamiento vendedor de la barra anterior, confirmado al cierre de esta' },
+  { clave: 'bigtrades_compra_frac', nombre: 'Big trades compradores', grupo: 'Big trades', motor: 'Big trades', descripcion: 'Nocional de bloques compradores grandes / nocional de la barra' },
+  { clave: 'bigtrades_venta_frac', nombre: 'Big trades vendedores', grupo: 'Big trades', motor: 'Big trades', descripcion: 'Nocional de bloques vendedores grandes / nocional de la barra' },
+  { clave: 'icebergs_bid', nombre: 'Icebergs en el bid', grupo: 'Icebergs / Stop runs', motor: 'Icebergs', descripcion: 'Icebergs compradores confirmados durante la barra' },
+  { clave: 'icebergs_ask', nombre: 'Icebergs en el ask', grupo: 'Icebergs / Stop runs', motor: 'Icebergs', descripcion: 'Icebergs vendedores confirmados durante la barra' },
+  { clave: 'stoprun_alto', nombre: 'Stop run de máximos', grupo: 'Icebergs / Stop runs', motor: 'Stop runs', descripcion: 'Barridos de máximos confirmados durante la barra' },
+  { clave: 'stoprun_bajo', nombre: 'Stop run de mínimos', grupo: 'Icebergs / Stop runs', motor: 'Stop runs', descripcion: 'Barridos de mínimos confirmados durante la barra' },
+  { clave: 'liq_largos_frac', nombre: 'Liquidaciones de largos', grupo: 'Open Interest', motor: 'Binance forceOrder', descripcion: 'Nocional de largos liquidados durante la barra / nocional de la barra (presión vendedora forzada)' },
+  { clave: 'liq_cortos_frac', nombre: 'Liquidaciones de cortos', grupo: 'Open Interest', motor: 'Binance forceOrder', descripcion: 'Nocional de cortos liquidados durante la barra / nocional de la barra (presión compradora forzada)' },
   { clave: 'funding_tasa', nombre: 'Funding', grupo: 'Open Interest', motor: 'Binance markPrice', descripcion: 'Tasa de funding vigente al cierre de la barra (se cobra o paga cada 8 h; positiva = los largos pagan a los cortos)' },
-  { clave: 'oi_delta_pct', nombre: 'ΔOI %', grupo: 'Open Interest', motor: 'OpenInterest (Urus)', descripcion: 'Cambio porcentual del interés abierto en la barra' },
-  { clave: 'oi_delta_z', nombre: 'ΔOI z robusto', grupo: 'Open Interest', motor: 'OpenInterest (Urus)', descripcion: 'z-score robusto (mediana/MAD) del ΔOI' },
-  { clave: 'oi_cuadrante', nombre: 'Cuadrante precio/OI', grupo: 'Open Interest', motor: 'OpenInterest (Urus)', descripcion: '1 longs nuevos · 2 cobertura shorts · 3 shorts nuevos · 4 liquidación longs · 0 neutral' },
-  { clave: 'oi_flush', nombre: 'Flush de OI', grupo: 'Open Interest', motor: 'OpenInterest (Urus)', descripcion: '1 si hubo cierre masivo de posiciones con movimiento y volumen' },
-  { clave: 'obi_10', nombre: 'OBI (10 niveles)', grupo: 'Libro (DOM)', motor: 'Formulas (Urus)', descripcion: '(Σ bid − Σ ask) / (Σ bid + Σ ask) de los 10 primeros niveles del libro (agrupado, ≈ 1 USD en BTC), en [−1, 1]' },
-  { clave: 'microprice_ticks', nombre: 'MicroPrice − mid', grupo: 'Libro (DOM)', motor: 'Formulas (Urus)', descripcion: '(MicroPrice − precio medio) / tick, con el mejor bid y ask reales: > 0 = presión compradora en el primer nivel' },
-  { clave: 'pool_ask_dist_atr', nombre: 'Pool ask más cercano', grupo: 'Liquidez (LHM)', motor: 'LiquidityPoolEngine (Urus)', descripcion: 'Distancia al pool vendedor más cercano / ATR' },
-  { clave: 'pool_bid_dist_atr', nombre: 'Pool bid más cercano', grupo: 'Liquidez (LHM)', motor: 'LiquidityPoolEngine (Urus)', descripcion: 'Distancia al pool comprador más cercano / ATR' },
-  { clave: 'pools_barridos', nombre: 'Pools barridos', grupo: 'Liquidez (LHM)', motor: 'LiquidityPoolEngine (Urus)', descripcion: 'Pools de liquidez absorbidos por el precio durante la barra' },
+  { clave: 'oi_delta_pct', nombre: 'ΔOI %', grupo: 'Open Interest', motor: 'Open Interest', descripcion: 'Cambio porcentual del interés abierto en la barra' },
+  { clave: 'oi_delta_z', nombre: 'ΔOI z robusto', grupo: 'Open Interest', motor: 'Open Interest', descripcion: 'z-score robusto (mediana/MAD) del ΔOI' },
+  { clave: 'oi_cuadrante', nombre: 'Cuadrante precio/OI', grupo: 'Open Interest', motor: 'Open Interest', descripcion: '1 longs nuevos · 2 cobertura shorts · 3 shorts nuevos · 4 liquidación longs · 0 neutral' },
+  { clave: 'oi_flush', nombre: 'Flush de OI', grupo: 'Open Interest', motor: 'Open Interest', descripcion: '1 si hubo cierre masivo de posiciones con movimiento y volumen' },
+  { clave: 'obi_10', nombre: 'OBI (10 niveles)', grupo: 'Libro (DOM)', motor: 'Libro', descripcion: '(Σ bid − Σ ask) / (Σ bid + Σ ask) de los 10 primeros niveles del libro (agrupado, ≈ 1 USD en BTC), en [−1, 1]' },
+  { clave: 'microprice_spread', nombre: 'MicroPrice / spread', grupo: 'Libro (DOM)', motor: 'Libro', descripcion: '(MicroPrice − precio medio) / (spread / 2), en [−1, 1]: > 0 = presión compradora en el primer nivel' },
+  { clave: 'pool_ask_dist_atr', nombre: 'Pool ask más cercano', grupo: 'Liquidez (LHM)', motor: 'Pools de liquidez', descripcion: 'Distancia al pool vendedor más cercano / ATR' },
+  { clave: 'pool_bid_dist_atr', nombre: 'Pool bid más cercano', grupo: 'Liquidez (LHM)', motor: 'Pools de liquidez', descripcion: 'Distancia al pool comprador más cercano / ATR' },
+  { clave: 'pools_barridos', nombre: 'Pools barridos', grupo: 'Liquidez (LHM)', motor: 'Pools de liquidez', descripcion: 'Pools de liquidez absorbidos por el precio durante la barra' },
   { clave: 'ventana_evento', nombre: 'Ventana de evento fuerte', grupo: 'Contexto', motor: 'Calendario', descripcion: '1 si la barra cierra dentro de la ventana de un evento de alto impacto (FOMC, CPI…): zona de no operar' },
-  { clave: 'hueco', nombre: 'Hueco de datos', grupo: 'Calidad de datos', motor: 'Vigía', descripcion: '1 si durante la barra se cortó la conexión o se resincronizó el libro: no entrenar con esta fila sin revisarla' },
+  { clave: 'hueco', nombre: 'Hueco de datos', grupo: 'Calidad de datos', motor: 'Vigía', descripcion: '1 si durante la barra se cortó la conexión, se resincronizó el libro o faltaron trades: no entrenar con esta fila sin revisarla' },
 ];
 
 export interface FilaFeatures {
@@ -88,6 +88,32 @@ function atr(barras: readonly BarraAnalizada[], periodo = 14): number | null {
 
 const posicion = (precio: number | null, low: number, high: number) => (precio === null || high <= low ? null : (precio - low) / (high - low));
 
+/** División segura: null si el divisor es ~0 o algo no es finito (nunca NaN ni ±∞). */
+export function div(a: number | null | undefined, b: number | null | undefined): number | null {
+  if (a === null || a === undefined || b === null || b === undefined || !Number.isFinite(a) || !Number.isFinite(b) || Math.abs(b) < 1e-12) return null;
+  const r = a / b;
+  return Number.isFinite(r) ? r : null;
+}
+
+/** Barras previas que forman la ventana de los z robustos, y mínimo para que el z tenga sentido. */
+export const VENTANA_Z = 120;
+export const MIN_Z = 30;
+const TOPE_Z = 10;
+
+/**
+ * z robusto de `x` frente a la ventana de valores PREVIOS (nunca incluye la barra actual ni el futuro):
+ * z = 0,6745 × (x − mediana) / MAD, recortado a ±10. null con menos de MIN_Z valores.
+ */
+export function zMovil(x: number | null, previos: readonly number[]): number | null {
+  if (x === null || !Number.isFinite(x)) return null;
+  const v = previos.filter(Number.isFinite).slice(-VENTANA_Z);
+  if (v.length < MIN_Z) return null;
+  const z = robustZ(x, v);
+  return z === null ? null : Math.max(-TOPE_Z, Math.min(TOPE_Z, z));
+}
+
+const logDuracion = (x: { inicio: number; cierre: number }) => Math.log(Math.max(0.001, (x.cierre - x.inicio) / 1000));
+
 /**
  * Construye la fila de la barra `b` (recién cerrada). `previas` son las barras canónicas anteriores.
  */
@@ -96,22 +122,27 @@ export function construirFila(b: BarraAnalizada, previas: readonly BarraAnalizad
   const a = atr(previas);
   const { open, high, low, close } = b.ohlc;
 
-  v.retorno = open > 0 ? close / open - 1 : null;
-  v.rango_atr = a ? (high - low) / a : null;
-  v.dist_vwap_atr = a && mercado.vwapSesion !== null && mercado.vwapCompleto ? (close - mercado.vwapSesion) / a : null;
-  v.delta = b.delta;
-  v.delta_ratio = b.volumen > 0 ? b.delta / b.volumen : null;
+  // Todas las Features son independientes de la escala (precio, tamaño de barra, hora): ratios, fracciones o
+  // z robustos con barras previas. Así el modelo no aprende «BTC a 85.000» ni «barras de 10 M».
+  const proporcion = open > 0 ? div(close, open) : null;
+  v.retorno = proporcion === null ? null : proporcion - 1;
+  v.rango_atr = div(high - low, a);
+  v.dist_vwap_atr = mercado.vwapSesion !== null && mercado.vwapCompleto ? div(close - mercado.vwapSesion, a) : null;
+  const ventana = previas.slice(-VENTANA_Z);
+  v.delta_z = zMovil(b.delta, ventana.map((x) => x.delta));
+  v.delta_ratio = div(b.delta, b.volumen);
   const ult20 = previas.slice(-20);
-  const mediaTrades = ult20.length ? ult20.reduce((s, x) => s + x.trades, 0) / ult20.length : 0;
-  v.trades_rel = mediaTrades > 0 ? b.trades / mediaTrades : null;
-  v.duracion_s = (b.cierre - b.inicio) / 1000;
-  v.cvd_sesion = mercado.cvdCompleto ? mercado.cvdSesion : null;
-  // Pendiente del CVD = Σ delta de las 5 últimas barras. Restar CVD de sesión saltaba al reiniciarse la sesión.
-  v.cvd_pendiente_5 = previas.length >= 4 ? previas.slice(-4).reduce((s, x) => s + x.delta, b.delta) : null;
+  v.trades_rel = ult20.length ? div(b.trades, ult20.reduce((s, x) => s + x.trades, 0) / ult20.length) : null;
+  v.duracion_z = zMovil(logDuracion(b), ventana.map(logDuracion));
+  v.cvd_sesion_ratio = mercado.cvdCompleto ? div(mercado.cvdSesion, mercado.cvdVolumenSesion) : null;
+  // Flujo de 5 barras = Σ delta / Σ volumen (esta y las 4 anteriores).
+  const cinco = previas.length >= 4 ? [...previas.slice(-4), b] : null;
+  v.flujo_5_ratio = cinco ? div(cinco.reduce((s, x) => s + x.delta, 0), cinco.reduce((s, x) => s + x.volumen, 0)) : null;
 
   const sen = b.senales;
-  v.imb_compra = sen.levels.filter((l) => l.buyingImbalance).length;
-  v.imb_venta = sen.levels.filter((l) => l.sellingImbalance).length;
+  const niveles = sen.levels.length;
+  v.imb_compra_frac = div(sen.levels.filter((l) => l.buyingImbalance).length, niveles);
+  v.imb_venta_frac = div(sen.levels.filter((l) => l.sellingImbalance).length, niveles);
   v.stacked_compra = sen.stackedImbalances.filter((s) => s.direction === 'buying').length;
   v.stacked_venta = sen.stackedImbalances.filter((s) => s.direction === 'selling').length;
   v.poc_pos = posicion(b.footprint.pocPrice, low, high);
@@ -130,18 +161,19 @@ export function construirFila(b: BarraAnalizada, previas: readonly BarraAnalizad
   const eventos: EventoMotor[] = mercado.eventosDisponibles(b.cierre, b.inicio);
   const sumar = (tipo: EventoMotor['tipo'], lado: EventoMotor['lado'], campo: 'n' | 'magnitud') =>
     eventos.filter((e) => e.tipo === tipo && e.lado === lado).reduce((s, e) => s + (campo === 'n' ? 1 : e.magnitud), 0);
-  v.bigtrades_compra_usd = sumar('bigtrade', 'compra', 'magnitud');
-  v.bigtrades_venta_usd = sumar('bigtrade', 'venta', 'magnitud');
+  // Montos en USD → fracción del nocional de la barra (una barra de 10 M con 2 M de big trades = 0,2).
+  v.bigtrades_compra_frac = div(sumar('bigtrade', 'compra', 'magnitud'), b.nocional);
+  v.bigtrades_venta_frac = div(sumar('bigtrade', 'venta', 'magnitud'), b.nocional);
   v.icebergs_bid = sumar('iceberg', 'venta', 'n');
   v.icebergs_ask = sumar('iceberg', 'compra', 'n');
   v.stoprun_alto = sumar('stoprun', 'compra', 'n');
   v.stoprun_bajo = sumar('stoprun', 'venta', 'n');
   v.pools_barridos = eventos.filter((e) => e.tipo === 'pool-barrido').length;
-  v.liq_largos_usd = sumar('liquidacion', 'venta', 'magnitud');
-  v.liq_cortos_usd = sumar('liquidacion', 'compra', 'magnitud');
+  v.liq_largos_frac = div(sumar('liquidacion', 'venta', 'magnitud'), b.nocional);
+  v.liq_cortos_frac = div(sumar('liquidacion', 'compra', 'magnitud'), b.nocional);
   v.funding_tasa = mercado.fundingTasa;
 
-  // Open Interest: motor de Urus sobre una ventana ACOTADA de barras (Urus recalculaba toda la historia).
+  // Open Interest sobre una ventana ACOTADA de barras (no se recalcula toda la historia).
   let puntoOi: OpenInterestCandlePoint | null = null;
   if (mercado.oi.tamaño > 0) {
     const velas = [...previas.slice(-119), b].map((x) => ({
@@ -171,17 +203,18 @@ export function construirFila(b: BarraAnalizada, previas: readonly BarraAnalizad
     // Los calcula el motor del libro (un solo cálculo): OBI sobre los niveles de la vista, MicroPrice con el
     // mejor bid y ask reales (no con los niveles agrupados, que lo desplazaban hasta un grupo entero).
     v.obi_10 = libro.obi?.n10 ?? null;
-    v.microprice_ticks = libro.microPrice != null && libro.mid !== null ? (libro.microPrice - libro.mid) / libro.tickSize : null;
+    // (MicroPrice − mid) / (spread / 2): −1 = toda la presión en el bid, +1 = en el ask. Sin depender del tick.
+    v.microprice_spread = libro.microPrice != null && libro.mid !== null && libro.spread !== null ? div(libro.microPrice - libro.mid, libro.spread / 2) : null;
   } else {
     v.obi_10 = null;
-    v.microprice_ticks = null;
+    v.microprice_spread = null;
   }
 
   const pools = mercado.poolsVivos();
   const asks = pools.filter((p) => p.side === 'ask' && p.price > close).map((p) => p.price - close);
   const bids = pools.filter((p) => p.side === 'bid' && p.price < close).map((p) => close - p.price);
-  v.pool_ask_dist_atr = a && asks.length ? Math.min(...asks) / a : null;
-  v.pool_bid_dist_atr = a && bids.length ? Math.min(...bids) / a : null;
+  v.pool_ask_dist_atr = asks.length ? div(Math.min(...asks), a) : null;
+  v.pool_bid_dist_atr = bids.length ? div(Math.min(...bids), a) : null;
 
   for (const k of Object.keys(v)) {
     const x = v[k];

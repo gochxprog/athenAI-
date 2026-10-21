@@ -1,5 +1,5 @@
 // Web Worker del motor de Order Flow: todo el cálculo vive aquí, fuera del hilo de la interfaz.
-// Un Pipeline por activo asignado y cada activo con su fuente (se pueden mezclar Binance, Rithmic y Urus).
+// Un Pipeline por activo asignado y cada activo con su fuente (se pueden mezclar Binance y Rithmic).
 // La UI recibe el estado del activo que mira (5 Hz) y un resumen de todos los feeds (1 Hz).
 // Al aplicar una configuración se cierran todas las fuentes y se descarta todo el estado (pipeline limpio);
 // las Features nuevas de cada activo se guardan en la "carpeta" de SU fuente, nunca mezcladas.
@@ -7,10 +7,10 @@ import { Pipeline } from '../nucleo/pipeline';
 import { filasACsv } from '../nucleo/features';
 import { featuresExtremas } from '../investigacion/extremos';
 import { inferirTick, parametrosParaSimbolo, parametrosPorDefecto, type ParametrosSimbolo } from '../nucleo/parametros';
-import { FuenteUrus } from '../fuentes/urusSSE';
+import { FuentePuente } from '../fuentes/puenteSSE';
 import { FuenteBinance } from '../fuentes/binance';
 import { iniciarSesionRithmic } from '../fuentes/rithmicPuente';
-import { AlmacenFeatures, borrarCarpetaSintetica, PROVEEDORES, type FilaGuardada } from '../almacen/almacen';
+import { AlmacenFeatures, borrarCarpetasViejas, PROVEEDORES, type FilaGuardada } from '../almacen/almacen';
 import { detectarRegimen, MIN_BARRAS_REGIMEN } from '../memoria/regimen';
 import { buscarMemoria, MIN_VENTANAS } from '../memoria/gemelos';
 import { cruzarMercados, type CruceMercados, type SerieCierres } from '../memoria/cruce';
@@ -22,8 +22,8 @@ const ctx = self as unknown as { postMessage: (m: MensajeDelMotor) => void; onme
 
 const HZ_ESTADO = 5;
 
-// La plataforma solo trabaja con mercado real: se borra cualquier carpeta de datos sintéticos que quede.
-borrarCarpetaSintetica();
+// Se borran las carpetas de fuentes que ya no existen.
+borrarCarpetasViejas();
 
 interface Activo {
   proveedor: Proveedor;
@@ -92,7 +92,7 @@ function procesar(simbolo: string, m: MensajeMercado, gen: number): void {
   if (!a) return;
   if (m.tipo === 'trades') {
     if (!m.trades.length) return;
-    // Fuentes sin metadatos (Urus, Rithmic): se calibra con el primer lote real.
+    // Fuentes sin metadatos (Rithmic por puente): se calibra con el primer lote real.
     if (!a.calibrado) {
       const precios = m.trades.map((t) => t.price);
       a = calibrar(simbolo, parametrosParaSimbolo(simbolo, inferirTick(simbolo, precios), precios[precios.length - 1], 0));
@@ -188,7 +188,7 @@ function detenerTodo(): void {
 
 const vaciarAlmacenes = () => Promise.all([...almacenes.values()].map((al) => al.vaciar().catch(() => 0)));
 
-const NOMBRE: Record<Proveedor, string> = { binance: 'Binance USD-M Futures', rithmic: 'Rithmic (puente)', urus: 'Servidor Urus' };
+const NOMBRE: Record<Proveedor, string> = { binance: 'Binance USD-M Futures', rithmic: 'Rithmic (puente)' };
 
 async function aplicar(c: ConfigCentro): Promise<void> {
   detenerTodo();
@@ -238,14 +238,8 @@ async function iniciarFuente(proveedor: Proveedor, simbolos: string[], c: Config
       void f.iniciar();
       break;
     }
-    case 'urus': {
-      const fs = simbolos.map((s) => new FuenteUrus({ baseUrl: c.urus.baseUrl, simbolo: s, onMensaje: emitir(s) }));
-      detenerFuentes.push(() => fs.forEach((f) => f.detener()));
-      fs.forEach((f) => f.iniciar());
-      break;
-    }
     case 'rithmic': {
-      let fs: FuenteUrus[] = [];
+      let fs: FuentePuente[] = [];
       let cancelado = false;
       detenerFuentes.push(() => {
         cancelado = true;
@@ -260,7 +254,7 @@ async function iniciarFuente(proveedor: Proveedor, simbolos: string[], c: Config
         return;
       }
       if (cancelado) return;
-      fs = simbolos.map((s) => new FuenteUrus({ baseUrl: c.rithmic.puente, simbolo: s, onMensaje: emitir(s) }));
+      fs = simbolos.map((s) => new FuentePuente({ baseUrl: c.rithmic.puente, simbolo: s, onMensaje: emitir(s) }));
       fs.forEach((f) => f.iniciar());
       break;
     }

@@ -6,8 +6,8 @@
 import { Anillo, CintaTrades } from './anillo';
 import { SerieBarras, type BarraAnalizada } from './serieBarras';
 import { MotorMercado, type MetricasFlujo } from './motorMercado';
-import { construirFila, type FilaFeatures } from './features';
-import type { OrderBookView } from '../urus/order-flow/order-book';
+import { construirFila, DEFINICIONES_FEATURES, type FilaFeatures } from './features';
+import type { OrderBookView } from '../flujo/order-flow/order-book';
 import { parametrosPorDefecto, type ParametrosSimbolo } from './parametros';
 import { eventoEnVentana, type EventoCalendario } from './calendario';
 import { type EstadoConexion, type EventoMotor, type IdTemporalidad, type MensajeMercado } from './tipos';
@@ -76,7 +76,7 @@ export interface EstadoGrafico {
 }
 
 /**
- * Heatmap de liquidez (tipo Bookmap): liquidez pasiva del libro en el tiempo, del historial LHM de Urus.
+ * Heatmap de liquidez (tipo Bookmap): liquidez pasiva del libro en el tiempo, del historial de liquidez (LHM).
  * `datos` es una matriz columna a columna (columna = instante, fila = nivel de precio) con intensidad 0–255
  * en escala logarítmica entre la mediana (0) y el percentil 99 (255) de los tamaños: solo destacan los muros.
  */
@@ -172,6 +172,9 @@ export class Pipeline {
   private ultimoIdTrade = -1;
   /** Veces que faltaron trades (ids no consecutivos) desde que arrancó. */
   tradesPerdidos = 0;
+  /** Filas cuyo cálculo falló (salen vacías y con hueco = 1) y el último error. */
+  erroresFeatures = 0;
+  ultimoErrorFeatures: string | null = null;
   /** Eventos fuertes del calendario (fechas conocidas de antemano). */
   calendario: EventoCalendario[] = [];
   conexion: EstadoConexion = 'detenido';
@@ -282,7 +285,16 @@ export class Pipeline {
 
   private filaCanonica(b: BarraAnalizada): FilaFeatures {
     const previas = this.canonica.barras.ultimos(121).slice(0, -1);
-    const { fila } = construirFila(b, previas, this.mercado);
+    let fila: FilaFeatures;
+    try {
+      fila = construirFila(b, previas, this.mercado).fila;
+    } catch (e) {
+      // Un fallo al calcular una Feature nunca detiene el motor: la fila sale vacía y marcada como hueco.
+      this.erroresFeatures += 1;
+      this.ultimoErrorFeatures = e instanceof Error ? e.message : String(e);
+      fila = { n: b.n, inicio: b.inicio, cierre: b.cierre, close: b.ohlc.close, high: b.ohlc.high, low: b.ohlc.low, valores: Object.fromEntries(DEFINICIONES_FEATURES.map((d) => [d.clave, null])) };
+      this.huecoPendiente = true;
+    }
     fila.valores.hueco = this.huecoPendiente ? 1 : 0;
     fila.valores.ventana_evento = eventoEnVentana(this.calendario.filter((e) => e.impacto === 'alto'), b.cierre) ? 1 : 0;
     this.huecoPendiente = false;

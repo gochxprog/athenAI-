@@ -1,12 +1,12 @@
 // Tipos del núcleo de Order Flow de athenAI.
-// Los motores de Urus (src/motores/urus) se usan tal cual; aquí solo se define cómo se alimentan.
-import type { AggTrade } from '../urus/market-data/types';
-import type { OrderBookView } from '../urus/order-flow/order-book';
-import type { OpenInterestSnapshot } from '../urus/open-interest/types';
+// Los motores de Order Flow (src/motores/flujo) se alimentan con estos mensajes.
+import type { AggTrade } from '../flujo/market-data/types';
+import type { OrderBookView } from '../flujo/order-flow/order-book';
+import type { OpenInterestSnapshot } from '../flujo/open-interest/types';
 
 export type { AggTrade, OrderBookView, OpenInterestSnapshot };
 
-/** Mensajes normalizados que cualquier fuente (Binance directo, servidor Urus, Rithmic) entrega al pipeline. */
+/** Mensajes normalizados que cualquier fuente (Binance directo, Rithmic por puente) entrega al pipeline. */
 export type MensajeMercado =
   | { tipo: 'trades'; trades: AggTrade[] }
   | { tipo: 'libro'; vista: OrderBookView }

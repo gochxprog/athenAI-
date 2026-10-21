@@ -173,7 +173,7 @@ export class SessionCVDEngine {
   private static readonly MAX_SEEN_IDS = 10_000;
   /**
    * athenAI: anillo de tamaño fijo para expulsar el ID más antiguo en O(1).
-   * Urus usaba `array.shift()` sobre 10.000 elementos por cada trade (O(n) por trade).
+   * Antes se usaba `array.shift()` sobre 10.000 elementos por cada trade (O(n) por trade).
    */
   private readonly seenRing = new Float64Array(SessionCVDEngine.MAX_SEEN_IDS);
   private seenHead = 0;

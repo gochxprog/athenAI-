@@ -274,7 +274,7 @@ export class LiquidityPoolEngine {
     }
 
     // athenAI: la racha de un bucket que quedó fuera del rango de la foto (el precio se alejó) nunca se borraba en
-    // Urus: el Map crecía sin límite con las horas. Fuera de cobertura no hay información para sostener la racha.
+    // antes: el Map crecía sin límite con las horas. Fuera de cobertura no hay información para sostener la racha.
     for (const key of this.streak.keys()) {
       if (key < keyMin - 1 || key > keyMax + 1) this.streak.delete(key);
     }
@@ -326,7 +326,7 @@ export class LiquidityPoolEngine {
       }
       return;
     }
-    // athenAI: en Urus, cada AUTO_REFRESH_MS (5 min) el modo automático forzaba una RECONSTRUCCIÓN completa
+    // Antes, cada AUTO_REFRESH_MS (5 min) el modo automático forzaba una RECONSTRUCCIÓN completa
     // (borrar todo y reprocesar hasta 12.000 columnas de golpe): un congelamiento periódico del hilo y, además,
     // pools que cambiaban retroactivamente. Ahora solo se recalcula el umbral en el sitio; los pools vivos
     // se reevalúan con él en las columnas siguientes.

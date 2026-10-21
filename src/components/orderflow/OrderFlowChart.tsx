@@ -60,13 +60,12 @@ export function useFeeds() {
 export const NOMBRE_PROVEEDOR: Record<Proveedor, string> = {
   binance: 'Binance Futures',
   rithmic: 'Rithmic',
-  urus: 'Servidor Urus',
 };
 
 /**
  * Panel de gráficos de Order Flow: velas / Footprint por temporalidad, subpaneles CVD y OI,
  * overlays de absorción/agotamiento, LHM y eventos, más el DOM. Los datos vienen del Worker del motor,
- * que recibe la estructura de Urus (aggTrades + vista del libro + OI) de la fuente elegida en el Centro de datos.
+ * que recibe aggTrades + vista del libro + OI) de la fuente elegida en el Centro de datos.
  */
 export default function OrderFlowChart({ estado }: { estado: EstadoGrafico | null }) {
   const [temporalidad, setTemporalidad] = useState<IdTemporalidad>(estado?.temporalidad ?? '1m');

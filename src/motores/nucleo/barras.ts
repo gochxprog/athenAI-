@@ -1,11 +1,11 @@
 // Constructor INCREMENTAL de barras con Footprint.
 //
-// Urus reconstruye en cada lote de trades el Map de niveles y el array de velas completo
+// aggregateFootprintTrades reconstruye en cada lote de trades el Map de niveles y el array de velas completo
 // (applyAggTradesToFootprint): correcto pero genera mucha basura y pausas del recolector con las horas.
 // Aquí cada trade actualiza un único Map mutable de la barra en curso; el objeto FootprintCandle se crea
-// UNA vez, al cerrar la barra, con las mismas funciones de Urus (getPriceLevel, selectPoc), por lo que
-// los niveles son idénticos a los de Urus (ver barras.test.ts).
-import { getCandleStart, getPriceLevel, selectPoc, type FootprintCandle, type FootprintLevel } from '../urus/order-flow/footprint';
+// UNA vez, al cerrar la barra, con las mismas funciones del footprint (getPriceLevel, selectPoc), por lo que
+// los niveles son idénticos a los de aggregateFootprintTrades (ver barras.test.ts).
+import { getCandleStart, getPriceLevel, selectPoc, type FootprintCandle, type FootprintLevel } from '../flujo/order-flow/footprint';
 import type { AggTrade, Temporalidad } from './tipos';
 
 export interface Ohlc {
@@ -61,7 +61,7 @@ export class ConstructorBarras {
     if (!(paso > 0)) throw new Error('Paso de precio inválido');
   }
 
-  /** Multiplicador sobre el tick que usan las funciones de Urus (paso = tick × multiplicador). */
+  /** Multiplicador sobre el tick que usan las funciones del footprint (paso = tick × multiplicador). */
   get multiplicador(): number {
     return Math.max(1, Math.round(this.paso / this.tickSize));
   }

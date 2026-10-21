@@ -41,7 +41,7 @@ function serieConRegimenes(n: number, semilla = 3) {
     }
     close *= 1 + ret;
     verdad.push(reg);
-    filas.push({ n: i, inicio: i * 1000, cierre: i * 1000 + 999, close, sesion: 1, valores: { retorno: ret, rango_atr: rango, duracion_s: dur, delta_ratio: dr, hueco: 0 } });
+    filas.push({ n: i, inicio: i * 1000, cierre: i * 1000 + 999, close, sesion: 1, valores: { retorno: ret, rango_atr: rango, duracion_z: Math.log(dur), delta_ratio: dr, hueco: 0 } });
   }
   return { filas, verdad };
 }
@@ -84,7 +84,7 @@ describe('Detector de régimen', () => {
 
   it('con ruido puro no se declara útil', () => {
     const r = crearAleatorio(9);
-    const filas: FilaFeatures[] = Array.from({ length: 3000 }, (_, i) => ({ n: i, inicio: i, cierre: i, close: 100, valores: { retorno: normal(r) * 0.001, rango_atr: Math.exp(normal(r) * 0.2), duracion_s: 30 * Math.exp(normal(r) * 0.2), delta_ratio: normal(r) * 0.2, hueco: 0 } }));
+    const filas: FilaFeatures[] = Array.from({ length: 3000 }, (_, i) => ({ n: i, inicio: i, cierre: i, close: 100, valores: { retorno: normal(r) * 0.001, rango_atr: Math.exp(normal(r) * 0.2), duracion_z: normal(r) * 0.2, delta_ratio: normal(r) * 0.2, hueco: 0 } }));
     const res = detectarRegimen(filas)!;
     expect(res.validacion.util).toBe(false);
   });
@@ -109,7 +109,7 @@ describe('Memoria: día gemelo y "hoy es distinto"', () => {
   it('avisa cuando lo de ahora no se parece a nada grabado', () => {
     const { filas } = serieConRegimenes(3000, 6);
     for (let i = filas.length - 20; i < filas.length; i += 1) {
-      filas[i].valores = { ...filas[i].valores, rango_atr: 9, duracion_s: 0.3, liq_largos_usd: 5e7, retorno: -0.01, delta_ratio: -0.9 };
+      filas[i].valores = { ...filas[i].valores, rango_atr: 9, duracion_z: -8, liq_largos_frac: 5, retorno: -0.01, delta_ratio: -0.9 };
     }
     const res = buscarMemoria(filas)!;
     expect(res.distinto.aviso).toBe(true);

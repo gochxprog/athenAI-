@@ -23,7 +23,7 @@ export const CAPAS: Record<Agente['capa'], string> = { 1: 'Detectores', 2: 'Cont
 // Regla: ningún agente aparece trabajando sin un motor real detrás.
 export const AGENTES: Agente[] = [
   { id: 'vigia', nombre: 'Vigía', capa: 1, rol: 'Vigila las conexiones de cada mercado: estado, latencia, cortes y huecos en los datos', motor: 'Centro de datos · feeds', bloque: 'A', real: true },
-  { id: 'flujo', nombre: 'Flujo', capa: 1, rol: 'Lee el Order Flow de cada mercado: absorción, agotamiento, imbalances, CVD, big trades y liquidaciones', motor: 'Motores de Urus', bloque: 'A', real: true },
+  { id: 'flujo', nombre: 'Flujo', capa: 1, rol: 'Lee el Order Flow de cada mercado: absorción, agotamiento, imbalances, CVD, big trades y liquidaciones', motor: 'Motores de Order Flow', bloque: 'A', real: true },
   { id: 'rastreador', nombre: 'Rastreador', capa: 1, rol: 'Régimen del mercado (rango / tendencia / raro), día gemelo y aviso de "hoy es distinto"', motor: 'Memoria del mercado (HMM + similitud)', bloque: 'B', real: true },
   { id: 'programador', nombre: 'Programador', capa: 2, rol: 'Corre las estrategias que escribes en Python sobre las Features guardadas', motor: 'Editor Python (Pyodide)', bloque: 'C', real: true },
   { id: 'juez', nombre: 'Juez', capa: 2, rol: 'Prueba todo con Walk-Forward, Monte Carlo, Luck test y robustez, y da el veredicto', motor: 'Motor de validación', bloque: 'C', real: true },

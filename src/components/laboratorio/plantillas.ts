@@ -50,7 +50,7 @@ def estrategia(filas, p):
     pos = []
     vistos = []                    # solo pendientes PASADAS: nada del futuro
     for f in filas:
-        x = f.get("cvd_pendiente_5")
+        x = f.get("flujo_5_ratio")
         lado = 0
         if x is not None and len(vistos) >= 50:
             orden = sorted(abs(v) for v in vistos[-500:])

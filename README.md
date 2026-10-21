@@ -1,70 +1,45 @@
 # AthenAI · Quant Agentic
 
-Frontend de un sistema de trading cuantitativo agéntico. Los datos de mercado son reales (Binance Futures por defecto, desde el **Centro de datos**). Los modelos, el Juez y los bots todavía son DEMO. No hay operativa ni dinero reales.
+Plataforma de trading cuantitativo con datos de mercado reales (Binance USD-M Futures por defecto; Rithmic por puente). Solo Paper Trading: el dinero real está bloqueado.
 
-**Hoja de ruta y notas del proyecto:** [`docs/HOJA_DE_RUTA.md`](docs/HOJA_DE_RUTA.md)
+**Lista de motores y su estado:** [`docs/MOTORES.md`](docs/MOTORES.md) · **Inventario:** [`docs/INVENTARIO.md`](docs/INVENTARIO.md) · **Hoja de ruta:** [`docs/HOJA_DE_RUTA.md`](docs/HOJA_DE_RUTA.md)
 
-React 18 + Vite + TypeScript + Tailwind CSS · Three.js / React Three Fiber · Framer Motion.
+React 18 + Vite + TypeScript + Tailwind CSS · Three.js / React Three Fiber · Framer Motion · Python en el navegador (Pyodide) para las estrategias.
 
 ```bash
 npm install
 npm run dev        # servidor local
 npm run build      # typecheck + build de producción en dist/
 npm run lint
-npm test           # pruebas (motores de Urus + núcleo de athenAI)
-npm run soak       # prueba de resistencia: 8 h de mercado simulado
-npm run binance-simulado  # Binance USD-M local (REST + WS) para probar la fuente sin internet
+npm test           # pruebas de todos los motores
 ```
 
-## Lógica del sistema
+## Cómo funciona
 
-- **Modelos (aprenden):** DL-Net-01 (Deep Learning, vive en la esfera del Cerebro), LGBM-Flow-02 y RF-Alpha-01 (Machine Learning, viven en el Laboratorio). Proponen hipótesis y patrones **solo desde datos de mercado / Order Flow**.
-- **Juez (decide):** código plano con reglas bloqueadas (Walk-Forward, costos, luck test, sobreajuste). Valida, nunca predice.
-- **Bots (ejecutan):** solo estrategias aprobadas, con reglas estáticas y el modelo congelado; nunca reentrenan en vivo.
-- **Fuente de datos:** Binance USD-M Futures → Recorder → dollar bars → Features.
+- **Datos:** Binance → Vigía de huecos → dollar bars → 39 Features por barra (sin escala: ratios, fracciones y z robustos) → almacén en el navegador (IndexedDB, una carpeta por fuente).
+- **Order Flow:** libro (DOM), footprint e imbalances, CVD, big trades, absorción, agotamiento, icebergs, stop runs, Open Interest, heatmap de liquidez y pools, liquidaciones y funding (`src/motores/flujo/`).
+- **Memoria:** régimen (HMM), «hoy es distinto», día gemelo y cruce entre mercados.
+- **Laboratorio:** estrategias en Python y el **Juez** (10 motores: Backtest, Métricas, Walk-Forward, Monte Carlo, Luck test, Robustez, Deflated Sharpe, PBO, Anti-futuro y Veredicto), más el Etiquetador (triple barrera).
+- **Paper Trading:** bots de estrategias aprobadas sobre el precio en vivo, con el Guardián (caída del día, pérdidas seguidas, banda del Juez, apagado de emergencia).
 
-## Módulos
-
-| | Módulo | Contenido |
-|---|---|---|
-| — | Order Flow | Velas / Footprint (1m, 5m, 15m, Dollar Bars, Volume Bars), CVD, OI, absorción/agotamiento, LHM, big trades, icebergs, stop runs y DOM. Features para el ML con exportación CSV |
-| A | Panel General | Fuentes de datos → esfera 3D de Deep Learning → métricas del motor, cadena de flujo y log del día |
-| B | Investigación | Constelación 3D de hipótesis por tema, panel de evidencia y envío al Laboratorio |
-| C | Conocimiento | Patrones descubiertos (sin catálogo), espacio aprendido, firma por Feature y estadísticas del Juez |
-| D | Laboratorio | Pipeline y pestañas separadas: curva de equity (In-Sample / Out-of-Sample), Walk-Forward, Monte Carlo y luck test animados, reglas del Juez y núcleo ML |
-| — | Estrategias | Biblioteca con todos los veredictos, incluidas las rechazadas |
-| E | Agentes | Sala 3D con Rastreador, Lector, Sintetizador y Flujo, y su consola en tiempo real |
-| F | Paper Trading · Decisiones | Bots monitorizados, posiciones en vivo, cuenta real bloqueada y bitácora de decisiones |
-| G | Máquinas · Datos | Telemetría de infraestructura. **Centro de datos**: fuente (Binance por defecto, Rithmic por puente, servidor Urus, Simulación), activos que aprende, feeds y una carpeta de Features por fuente |
-
-## Motores de Order Flow (Urus)
-
-Los motores de Urus viven en `src/motores/urus/` y se ejecutan en un Web Worker. La fuente puede ser:
-
-- **DEMO:** flujo sintético con la forma de Binance.
-- **Servidor de Urus:** por SSE.
-
-Detalles, hallazgos de rendimiento y garantías anti look-ahead en [`docs/AUDITORIA_URUS.md`](docs/AUDITORIA_URUS.md).
+Cada motor se revisa con el mismo proceso: qué mide, fórmulas en el código, pruebas con valores calculados a mano, explicación en pantalla y visto bueno.
 
 ## Estructura
 
 ```
 src/
-├── App.tsx                 # layout, carga diferida y navegación por hash (#/modulo, botón Atrás)
-├── modules/                # una vista por módulo
-├── components/
-│   ├── three/              # EsferaCerebro (three.js), Constelacion y SalaAgentes3D (R3F)
-│   ├── charts/             # Sparkline, BarrasH, CurvaEquity, MonteCarlo, WalkForward, LuckTest
-│   ├── layout/             # Sidebar, Topbar
-│   └── ui/                 # Panel, Insignia, Punto, Consola, PanelLateral…
-├── data/mock.ts            # datos DEMO coherentes entre sí
+├── modules/          # una vista por módulo
+├── components/       # gráficos, laboratorio, Order Flow, Datos, UI
 ├── motores/
-│   ├── urus/               # motores de Urus (con sus pruebas)
-│   ├── nucleo/             # barras incrementales, pipeline, Features
-│   ├── fuentes/            # DEMO y servidor Urus (SSE)
-│   └── worker/             # Web Worker del motor
-├── lib/simulacion.ts       # mercado BTCUSDT, contadores del motor y log en vivo
-└── hooks/SistemaDemo.tsx   # reloj único de 1 s que alimenta toda la app
+│   ├── flujo/        # motores de Order Flow (con sus pruebas)
+│   ├── nucleo/       # barras, pipeline, Features
+│   ├── fuentes/      # Binance y puente de Rithmic
+│   ├── memoria/      # régimen, gemelos, cruce
+│   ├── juez/         # los 10 motores del Juez
+│   ├── etiquetador/  # triple barrera + CUSUM
+│   ├── paper/        # Ejecutor y Guardián
+│   └── worker/       # Web Worker del motor
+└── data/agentes.ts   # los 10 agentes
 ```
 
 Estilo estrictamente monocromo: fondo #000, superficies de vidrio en grises, bordes #2A2A2E. Los estados se expresan con puntos llenos / huecos, signos +/− y etiquetas, nunca con color.

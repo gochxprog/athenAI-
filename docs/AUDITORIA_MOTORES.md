@@ -1,10 +1,10 @@
-# Integración de los motores de Urus en athenAI
+# Motores de Order Flow de athenAI: rendimiento y garantías
 
-Fecha: 20-oct-2026 · Origen: `URUS_integrado_20261018_v4.zip` (la plataforma Urus no se modificó).
+Fecha: 20-oct-2026 (revisados uno por uno en octubre de 2026, ver `MOTORES.md`).
 
-## 1. Qué se trajo y cómo
+## 1. Dónde están
 
-Los motores de Urus se copiaron **sin cambiar su lógica** a `src/motores/urus/` junto con sus pruebas:
+Los motores de Order Flow viven en `src/motores/flujo/`, cada uno con sus pruebas:
 
 | Carpeta | Motores |
 |---|---|
@@ -12,13 +12,11 @@ Los motores de Urus se copiaron **sin cambiar su lógica** a `src/motores/urus/`
 | `open-interest/` | Motor de OI (z robusto, cuadrantes, flush, acumulación silenciosa, divergencias) |
 | `big-trades/` | **BigTradeDetector** (bloques por τ, z-score y nocional mínimo) |
 | `lhm/` | Historial de liquidez y **LiquidityPoolEngine** (pools de liquidez + huellas barridas) |
-| `realtime/` | Protocolo SSE y backoff del servidor de Urus |
+| `realtime/` | Protocolo SSE y backoff (puente de Rithmic) |
 
-Resultado: **252 pruebas originales de Urus pasan dentro de athenAI**. A ellas se suman 14 pruebas nuevas del núcleo de athenAI.
+Todas las pruebas de los motores pasan junto con las del núcleo de athenAI.
 
-Los únicos cambios en código de Urus están marcados con comentarios `athenAI:` y no alteran ningún resultado de las pruebas originales.
-
-## 2. Por qué Urus se traba con las horas
+## 2. Qué se corrigió para que no se trabe con las horas
 
 | Hallazgo | Dónde | Efecto con el tiempo | Solución en athenAI |
 |---|---|---|---|
@@ -33,7 +31,7 @@ Los únicos cambios en código de Urus están marcados con comentarios `athenAI:
 
 ## 3. Para que el ML no aprenda del futuro
 
-- **Agotamiento:** el `ExhaustionEngine` de Urus usa la **vela siguiente** para confirmar. athenAI evalúa el agotamiento de la barra *N* solo cuando cierra la *N+1*, y lo escribe en la fila de la *N+1*.
+- **Agotamiento:** el motor de agotamiento usa la **vela siguiente** para confirmar. athenAI evalúa el agotamiento de la barra *N* solo cuando cierra la *N+1*, y lo escribe en la fila de la *N+1*.
 - **Cada evento lleva `disponibleEn`:** es el instante del flujo en que el motor pudo afirmarlo. Una fila de Features solo usa eventos con `disponibleEn ≤ cierre de la barra`.
 - **El reloj es siempre el del flujo de datos, nunca `Date.now()`:** la misma cinta produce los mismos eventos en vivo y en un backtest.
 - **Prueba automática:** las filas pasadas son **idénticas** aunque lleguen datos posteriores (`pipeline.test.ts`).
@@ -41,9 +39,9 @@ Los únicos cambios en código de Urus están marcados con comentarios `athenAI:
 ## 4. Arquitectura en athenAI
 
 ```
-Fuente (Binance | servidor Urus por SSE)  ──►  Web Worker del motor
+Fuente (Binance | Rithmic por puente)  ──►  Web Worker del motor
                                               ├─ MotorMercado: DOM, LHM, icebergs, stop runs, big trades, CVD, OI
-                                              ├─ Serie canónica: dollar bars de 10 M USD ──► Features (34) ──► CSV
+                                              ├─ Serie canónica: dollar bars de 10 M USD ──► Features (39) ──► CSV
                                               └─ Serie del gráfico: 1m · 5m · 15m · Dollar · Volume
                                                    (se reconstruye desde la cinta; no toca las Features)
 UI (hilo principal) ◄── estado compacto a 5 Hz ── dibuja en canvas (velas / Footprint / CVD / OI / LHM / DOM)
@@ -80,8 +78,7 @@ La fuente ya no se elige en el gráfico: se configura en **Datos → Centro de d
 | Fuente | Qué necesita | Notas |
 |---|---|---|
 | **Binance Futures** (por defecto) | Nada: datos públicos | aggTrades y liquidaciones por `wss://fstream.binance.com/market/stream`, libro L2 por `/public/stream` (snapshot + diffs encadenados por `pu`), Open Interest cada 5 s. La ruta antigua `/stream` desde el 23-abr-2026 solo entrega el libro |
-| **Rithmic** | Usuario, contraseña, sistema, gateway y la URL de un **puente R\|Protocol** | Rithmic no acepta conexiones desde un navegador. athenAI hace `POST {puente}/api/rithmic/login` y luego lee el mercado con el protocolo de Urus. Sin puente, el feed muestra el error |
-| **Servidor Urus** | URL del servidor | `GET /api/realtime/stream`, `POST /api/realtime/subscriptions`, `GET /api/oi` (CORS para el origen de athenAI) |
+| **Rithmic** | Usuario, contraseña, sistema, gateway y la URL de un **puente R\|Protocol** | Rithmic no acepta conexiones desde un navegador. athenAI hace `POST {puente}/api/rithmic/login` y luego lee el mercado con el protocolo del puente de athenAI. Sin puente, el feed muestra el error |
 
 Al pulsar **Aplicar y empezar a aprender**:
 
@@ -99,11 +96,8 @@ La configuración se guarda en el navegador. La contraseña de Rithmic **no** se
 
 Se pueden **mezclar fuentes por activo** (por ejemplo BTC y ETH de Binance y NQ de Rithmic). Al aplicar se cierran todas las fuentes y todo vuelve a fluir; toda la plataforma (Panel General, Order Flow, Agentes, barra superior) lee de ese mismo chorro.
 
-Cada fuente tiene su propia base IndexedDB (su "carpeta"): `athenai-binance`, `athenai-rithmic`, `athenai-urus`.
+Cada fuente tiene su propia base IndexedDB (su "carpeta"): `athenai-binance` y `athenai-rithmic`.
 
 - Cada fila lleva `simbolo` y `sesion`. La sesión cambia al reaplicar o reconectar, porque la numeración de barras se reinicia.
 - Cada carpeta se exporta a CSV por activo o se borra sin tocar las demás.
 
-### Probar sin internet
-
-`npm run binance-simulado` levanta un Binance USD-M local (REST + WebSocket con el formato real). En **Endpoints (avanzado)** pon `http://localhost:8899` y `ws://localhost:8899`.

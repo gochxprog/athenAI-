@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { inferirTick, parametrosParaSimbolo, redondeoAmable } from './parametros';
 
 describe('parámetros por activo', () => {
-  it('BTCUSDT conserva la calibración original de Urus', () => {
+  it('BTCUSDT conserva la calibración original', () => {
     const p = parametrosParaSimbolo('BTCUSDT', 0.1, 84_700, 18e9);
     expect(p.pasos).toEqual({ '1m': 5, '5m': 10, '15m': 20, dollar: 5, volume: 5 });
     expect(p.temporalidades.dollar).toEqual({ id: 'dollar', tipo: 'dolar', usd: 10_000_000 });

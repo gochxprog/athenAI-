@@ -1,7 +1,7 @@
 /**
  * ICEBERGS (probables) — órdenes que se REPONEN en un nivel del libro (lógica pura, sin I/O).
  *
- * Definición propia de URUS. Sin datos MBO no se ve la orden oculta: se INFIERE comparando, para cada par de columnas
+ * Definición propia de athenAI. Sin datos MBO no se ve la orden oculta: se INFIERE comparando, para cada par de columnas
  * REALES consecutivas del historial del libro (≈ 1 por segundo), lo que se ejecutó en un nivel contra lo que el libro
  * muestra:
  *   consumido  = min(fill, visible_antes)             fill = trades agresores que golpearon ese nivel en el intervalo

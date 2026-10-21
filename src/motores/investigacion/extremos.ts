@@ -14,7 +14,7 @@ export interface FeatureExtrema {
 }
 
 /** Indicadores (0/1), categorías o acumulados: su z no dice nada útil. */
-const EXCLUIDAS = new Set(['hueco', 'ventana_evento', 'oi_cuadrante', 'oi_flush', 'cvd_sesion']);
+const EXCLUIDAS = new Set(['hueco', 'ventana_evento', 'oi_cuadrante', 'oi_flush']);
 const NOMBRE = new Map(DEFINICIONES_FEATURES.map((d) => [d.clave, d.nombre]));
 
 export function featuresExtremas(filas: readonly FilaFeatures[], n = 3, ventana = 200, minimo = 30): FeatureExtrema[] {

@@ -18,8 +18,8 @@
 // Libro sincronizado con el procedimiento oficial de Binance Futures: se guardan los diffs mientras llega el
 // snapshot, se descartan los que tienen u < lastUpdateId, el primero debe cumplir U ≤ lastUpdateId ≤ u y cada
 // diff siguiente debe encadenar (pu === u anterior). Si se rompe la cadena se resincroniza.
-import { OrderBookEngine } from '../urus/order-flow/order-book';
-import { Backoff } from '../urus/realtime/backoff';
+import { OrderBookEngine } from '../flujo/order-flow/order-book';
+import { Backoff } from '../flujo/realtime/backoff';
 import type { AggTrade, Liquidacion, MensajeMercado } from '../nucleo/tipos';
 import { inferirTick } from '../nucleo/parametros';
 

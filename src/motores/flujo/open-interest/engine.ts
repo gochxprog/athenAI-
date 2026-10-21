@@ -179,7 +179,7 @@ export function computeOpenInterest(candles: readonly OpenInterestCandleInput[],
       : null;
     const deltaWindow = deltaValues.slice(-o.robustWindow + 1);
     const deltaPctWindow = deltaPctValues.slice(-o.robustWindow + 1);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- línea original de Urus, sin uso
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- ventana reservada, sin uso
     const oiWindow = oiValues.slice(-o.robustWindow + 1);
     const usdCutoff = candleCloseTime - o.percentileWindowDays * 86_400_000;
     const usdWindow = usdHistory.filter(x => x.time >= usdCutoff).map(x => x.value);

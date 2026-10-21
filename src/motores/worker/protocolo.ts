@@ -41,7 +41,6 @@ export interface ConfigCentro {
   /** Guardar las Features en la "carpeta" (base IndexedDB) de la fuente. */
   guardar: boolean;
   binance: { rest: string; ws: string };
-  urus: { baseUrl: string };
   rithmic: CredencialesRithmic & { puente: string };
 }
 

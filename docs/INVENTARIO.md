@@ -37,7 +37,6 @@ Barra lateral: números y estados reales. 🟢
 |---|---|---|
 | Fuente **Binance USD-M Futures** | Trades, libro de órdenes, Open Interest, liquidaciones y funding. Gratis, sin clave. Rutas /public y /market (abril de 2026); se reconecta sola y sigue funcionando aunque falle el REST | 🟢 |
 | Fuente **Rithmic** (puente) | Futuros CME (NQ, ES, GC…) a través de un puente | 🟢 código listo, pendiente de cuenta |
-| Fuente **Urus** (servidor) | Datos desde un servidor propio | 🟢 |
 | **Vigía** | Marca los cortes de conexión como «hueco»: no se aprende de datos rotos | 🟢 |
 | **Barras** | Dollar bars (canónicas), 1m / 5m / 15m y por volumen | 🟢 |
 | **Almacén** | Una «carpeta» por fuente (IndexedDB del navegador), con exportación a CSV y borrado | 🟢 |
@@ -45,7 +44,7 @@ Barra lateral: números y estados reales. 🟢
 
 ---
 
-## 3. Motores de Order Flow (de Urus)
+## 3. Motores de Order Flow
 
 | Motor | Qué detecta | Estado |
 |---|---|---|
@@ -64,20 +63,20 @@ Barra lateral: números y estados reales. 🟢
 
 ---
 
-## 4. Features (los 40 datos por barra que aprende la plataforma)
+## 4. Features (los 39 datos por barra que aprende la plataforma)
 
-Se calculan al cierre de cada dollar bar solo con información pasada (sin mirar el futuro).
+Se calculan al cierre de cada dollar bar solo con información pasada (sin mirar el futuro). Ninguna depende de la escala: son ratios, fracciones o z robustos (ver `AUDITORIA_FEATURES.md`).
 
 | Grupo | Features |
 |---|---|
 | Precio | Retorno, Rango / ATR, Distancia al VWAP |
-| Flujo | Delta, Delta / volumen, Trades relativos, Duración, CVD de sesión, Pendiente del CVD |
-| Footprint | Imbalances compradores y vendedores, Stacked compradores y vendedores, Posición del POC, Posición del delta-POC |
+| Flujo | Delta (z), Delta / volumen, Trades relativos, Duración (z), CVD de sesión / volumen, Flujo de 5 barras |
+| Footprint | Imbalances compradores y vendedores (fracción de niveles), Stacked compradores y vendedores, Posición del POC, Posición del delta-POC |
 | Absorción / Agotamiento | Absorción en el ask y en el bid; Agotamiento alcista y bajista (barra previa) |
-| Big trades | Big trades compradores y vendedores (USD) |
+| Big trades | Big trades compradores y vendedores (fracción del nocional de la barra) |
 | Icebergs / Stop runs | Icebergs en el bid y en el ask; Stop run de máximos y de mínimos |
-| Open Interest | Liquidaciones de largos y de cortos, Funding, ΔOI %, ΔOI z robusto, Cuadrante precio/OI, Flush de OI |
-| Libro (DOM) | OBI (10 niveles), MicroPrice − mid |
+| Open Interest | Liquidaciones de largos y de cortos (fracción del nocional), Funding, ΔOI %, ΔOI z robusto, Cuadrante precio/OI, Flush de OI |
+| Libro (DOM) | OBI (10 niveles), MicroPrice / spread |
 | Liquidez (LHM) | Pool ask y pool bid más cercanos, Pools barridos |
 | Contexto | Ventana de evento fuerte |
 | Calidad de datos | Hueco de datos |

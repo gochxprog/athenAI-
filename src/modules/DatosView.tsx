@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Database, FolderOpen, KeyRound, Play, Plus, Radio, RefreshCw, ScrollText, Server, Square, Trash2, Waves, X, Download } from 'lucide-react';
+import { ArrowRight, Database, FolderOpen, KeyRound, Play, Plus, Radio, RefreshCw, ScrollText, Square, Trash2, Waves, X, Download } from 'lucide-react';
 import { useNavegar } from '@/hooks/Navegacion';
 import { DEFINICIONES_FEATURES } from '@/motores/nucleo/features';
 import Encabezado from '@/components/ui/Encabezado';
@@ -32,13 +32,6 @@ const PROVEEDORES: { id: Proveedor; icono: typeof Radio; nota: string; descripci
     nota: 'CME · COMEX · NYMEX',
     descripcion: 'Futuros regulados (ES, NQ, CL, GC…) con tus credenciales de Rithmic, a través del puente R|Protocol de tu VPS.',
     sugeridos: ['ESZ6', 'NQZ6', 'GCZ6', 'MGCZ6', 'MNQZ6', 'CLZ6'],
-  },
-  {
-    id: 'urus',
-    icono: Server,
-    nota: 'SSE',
-    descripcion: 'Tu servidor de Urus: recibe trades y la vista del libro ya calculada por su OrderBookEngine.',
-    sugeridos: ['BTCUSDT', 'ETHUSDT'],
   },
 ];
 
@@ -152,11 +145,10 @@ export default function DatosView() {
                   Recordar la contraseña en este equipo
                 </label>
                 <p className="rounded-lg border border-borde-suave bg-white/[0.02] p-2.5 text-[10.5px] leading-relaxed text-plata-400">
-                  Rithmic no acepta conexiones directas desde un navegador: su API exige un cliente certificado. athenAI envía las credenciales una vez a tu puente (servicio en tu VPS) y el puente re-publica el mercado con el protocolo de Urus. Sin puente verás el error en el feed.
+                  Rithmic no acepta conexiones directas desde un navegador: su API exige un cliente certificado. athenAI envía las credenciales una vez a tu puente (servicio en tu VPS) y el puente re-publica el mercado con el protocolo del puente de athenAI. Sin puente verás el error en el feed.
                 </p>
               </div>
             )}
-            {fuente === 'urus' && <Campo etiqueta="URL del servidor de Urus" valor={borrador.urus.baseUrl} onChange={(v) => set('urus', { baseUrl: v })} />}
           </div>
         </Panel>
 
@@ -245,7 +237,7 @@ export default function DatosView() {
         </Panel>
       </div>
 
-      <Panel titulo="Pipeline de Features de los motores de Urus" icono={Waves} accion={<Insignia variante="contorno">{DEFINICIONES_FEATURES.length} Features</Insignia>}>
+      <Panel titulo="Pipeline de Features de los motores de athenAI" icono={Waves} accion={<Insignia variante="contorno">{DEFINICIONES_FEATURES.length} Features</Insignia>}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <p className="max-w-3xl text-xs leading-relaxed text-plata-300">
             Absorción, agotamiento, imbalances, big trades, CVD de sesión, Open Interest, pools de liquidez (LHM), icebergs y stop runs se calculan por cada dollar bar del activo (≈ 2.000 barras al día según su volumen), sin mirar al futuro. Es la tabla que aprenderán los modelos.

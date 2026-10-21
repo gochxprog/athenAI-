@@ -1,5 +1,5 @@
 /**
- * Deep Liquidity Scan (URUS): ranking de muros de liquidez pasiva cercanos al precio medio.
+ * Deep Liquidity Scan: ranking de muros de liquidez pasiva cercanos al precio medio.
  * Función pura (sin I/O) sobre el `OrderBookView` real: no inventa niveles ni tamaños.
  *
  * Un "muro" es un nivel cuyo tamaño es ≥ `minRatio` veces la mediana de los tamaños de su lado

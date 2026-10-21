@@ -35,7 +35,7 @@ function lineasVigia(feeds: EstadoFeed[]): string[] {
   });
 }
 
-/** Lo que Flujo lee en el Order Flow de cada mercado (resumen de los motores de Urus). */
+/** Lo que Flujo lee en el Order Flow de cada mercado (resumen de los motores de Order Flow). */
 function lineasFlujo(feeds: EstadoFeed[]): string[] {
   const out: string[] = [];
   for (const f of feeds) {

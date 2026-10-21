@@ -1,16 +1,16 @@
 // Motores que no dependen de la temporalidad: libro (DOM), LHM, icebergs, stop runs, big trades, CVD de sesión y OI.
 // Todo el estado está acotado; el reloj es SIEMPRE el del flujo de datos (nunca Date.now()), así que la
 // misma cinta produce exactamente los mismos eventos en vivo y en un backtest.
-import { pickAutoSession, SessionCVDEngine } from '../urus/order-flow/session-cvd';
-import { BigTradeDetector, type BigTradeEvent } from '../urus/big-trades/engine';
-import { IcebergTracker, type IcebergTrade } from '../urus/order-flow/iceberg-detector';
-import { StopRunSeries, type StopRunTrade } from '../urus/order-flow/stoprun-detector';
-import { LiquidityHistory } from '../urus/lhm/liquidity-history';
-import { DEFAULT_POOL_CONFIG, LiquidityPoolEngine, type Pool, type PoolCandle, type PoolConfig } from '../urus/lhm/liquidity-pools';
+import { pickAutoSession, SessionCVDEngine } from '../flujo/order-flow/session-cvd';
+import { BigTradeDetector, type BigTradeEvent } from '../flujo/big-trades/engine';
+import { IcebergTracker, type IcebergTrade } from '../flujo/order-flow/iceberg-detector';
+import { StopRunSeries, type StopRunTrade } from '../flujo/order-flow/stoprun-detector';
+import { LiquidityHistory } from '../flujo/lhm/liquidity-history';
+import { DEFAULT_POOL_CONFIG, LiquidityPoolEngine, type Pool, type PoolCandle, type PoolConfig } from '../flujo/lhm/liquidity-pools';
 import { Anillo } from './anillo';
 import type { AggTrade, EventoMotor, Liquidacion, OpenInterestSnapshot, OrderBookView } from './tipos';
 
-/** 30 min de libro a 1 foto/s. Urus guardaba 6 h (hasta ~345 MB por símbolo en el peor caso). */
+/** 30 min de libro a 1 foto/s (6 h serían hasta ~345 MB por símbolo en el peor caso). */
 const CAPACIDAD_LHM = 1_800;
 const CINTA_ICEBERG_MAX = 40_000;
 const MAX_EVENTOS = 600;
@@ -42,6 +42,8 @@ export class MotorMercado {
   /** Primer precio de la sesión UTC en curso. */
   aperturaSesion: number | null = null;
   cvdSesion = 0;
+  /** Volumen (compra + venta) negociado en la sesión del CVD: para el ratio CVD / volumen. */
+  cvdVolumenSesion = 0;
   /** VWAP de la sesión UTC en curso. */
   vwapSesion: number | null = null;
   /**
@@ -73,6 +75,8 @@ export class MotorMercado {
     this.ultimoPrecio = t.price;
     const r = this.cvd.processTick({ timestamp: t.timestamp, price: t.price, volume: t.quantity, isBuyerMaker: t.buyerIsMaker, id: t.aggTradeId });
     this.cvdSesion = r.cvd;
+    const sesion = this.cvd.getState(r.session);
+    this.cvdVolumenSesion = sesion.buyVolume + sesion.sellVolume;
     if (r.isReset) this.cvdCompleto = t.timestamp - pickAutoSession(t.timestamp).startMs <= MARGEN_INICIO_MS;
 
     const dia = Math.floor(t.timestamp / 86_400_000);
@@ -110,7 +114,7 @@ export class MotorMercado {
   finLote(): void {
     if (this.loteStopRun.length > 0) {
       const antes = this.stopRuns.version;
-      // «Tick» del detector = paso del libro (tick × agrupación, ≈ 1 USD en BTC), como en Urus: con el tick crudo
+      // «Tick» del detector = paso del libro (tick × agrupación, ≈ 1 USD en BTC): con el tick crudo
       // (0,1 USD) la ruptura mínima de 2 ticks era de 20 centavos y cualquier ruido contaba como ruptura.
       const paso = this.libro ? this.libro.tickSize * this.libro.group : this.tickSize;
       this.stopRuns.update(this.loteStopRun, paso);
@@ -138,7 +142,7 @@ export class MotorMercado {
     if (this.cintaIceberg.length > CINTA_ICEBERG_MAX) this.cintaIceberg = this.cintaIceberg.slice(-CINTA_ICEBERG_MAX / 2);
   }
 
-  /** Nueva foto del libro (vista agregada, igual que la que emite el servidor de Urus). */
+  /** Nueva foto del libro (vista agregada del libro). */
   libroNuevo(vista: OrderBookView, velas: readonly PoolCandle[]): void {
     this.libro = vista;
     const t = Math.max(this.ahora, vista.updatedAt);

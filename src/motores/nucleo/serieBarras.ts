@@ -1,19 +1,19 @@
 // Serie de barras analizadas: Footprint + señales microestructurales + absorción + agotamiento.
-// Todas las evaluaciones usan los motores de Urus SIN modificar su lógica.
-import { computeCandleSignals, computeVolumeBaseline, type FootprintCandleSignals } from '../urus/order-flow/microstructure';
-import { evaluateAbsorptionAt, DEFAULT_ABSORPTION_CONFIG, type AbsorptionCandleInput, type AbsorptionDetection } from '../urus/order-flow/absorption-engine';
-import { evaluateExhaustionAt, DEFAULT_EXHAUSTION_CONFIG, type ExhaustionDetection } from '../urus/order-flow/exhaustion-engine';
+// Todas las evaluaciones usan los motores de Order Flow (flujo/) sin duplicar su lógica.
+import { computeCandleSignals, computeVolumeBaseline, type FootprintCandleSignals } from '../flujo/order-flow/microstructure';
+import { evaluateAbsorptionAt, DEFAULT_ABSORPTION_CONFIG, type AbsorptionCandleInput, type AbsorptionDetection } from '../flujo/order-flow/absorption-engine';
+import { evaluateExhaustionAt, DEFAULT_EXHAUSTION_CONFIG, type ExhaustionDetection } from '../flujo/order-flow/exhaustion-engine';
 import { Anillo } from './anillo';
 import { ConstructorBarras, type BarraCerrada } from './barras';
 import type { AggTrade, Temporalidad } from './tipos';
 
 export interface BarraAnalizada extends BarraCerrada {
-  /** Imbalances diagonales, stacked imbalances, POC y delta-POC (microstructure de Urus). */
+  /** Imbalances diagonales, stacked imbalances, POC y delta-POC (motor de microestructura). */
   senales: FootprintCandleSignals;
   /** Absorciones de ESTA barra. Disponibles al cierre de la barra. */
   absorcion: AbsorptionDetection[];
   /**
-   * Agotamiento de ESTA barra. El motor de Urus usa la vela SIGUIENTE como evidencia de falta de continuación,
+   * Agotamiento de ESTA barra. El motor de agotamiento usa la vela SIGUIENTE como evidencia de falta de continuación,
    * así que solo se conoce al cerrar la barra siguiente: null hasta entonces (nunca se adelanta al ML).
    */
   agotamiento: ExhaustionDetection[] | null;

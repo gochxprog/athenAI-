@@ -7,7 +7,7 @@ const fmtQ = (v: number) => (v === 0 ? '' : v >= 100 ? v.toFixed(0) : v >= 10 ? 
 
 /**
  * DOM (Level 2): escalera de precios agrupada (≈ 1,2 pb por nivel; 1 USD en BTC) con liquidez pasiva (bid/ask), tendencia del nivel
- * (▲ stacking / ▼ pulling, del OrderBookEngine de Urus), volumen agresor ejecutado en los últimos 10 s
+ * (▲ stacking / ▼ pulling, del motor del libro), volumen agresor ejecutado en los últimos 10 s
  * y desequilibrio entre niveles contiguos (≥ 3:1).
  */
 export default function DomEscalera({ estado }: { estado: EstadoGrafico | null }) {

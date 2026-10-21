@@ -1,18 +1,18 @@
 // Almacén de Features por fuente de datos. Cada proveedor tiene su PROPIA base IndexedDB ("carpeta"):
-//   athenai-binance · athenai-rithmic · athenai-urus
+//   athenai-binance · athenai-rithmic
 // Así los datos de una fuente nunca se mezclan con los de otra y cada una se exporta o se borra por separado.
 // Funciona en el Worker del motor (IndexedDB existe en workers) y en Node con fake-indexeddb (pruebas).
 import type { FilaFeatures } from '../nucleo/features';
 import type { ParametrosSimbolo } from '../nucleo/parametros';
 
-export type Proveedor = 'binance' | 'rithmic' | 'urus';
+export type Proveedor = 'binance' | 'rithmic';
 
-export const PROVEEDORES: Proveedor[] = ['binance', 'rithmic', 'urus'];
+export const PROVEEDORES: Proveedor[] = ['binance', 'rithmic'];
 
-/** Carpeta de la antigua fuente «Simulación» (datos sintéticos): se borra para no dejar rastro. */
-export function borrarCarpetaSintetica(): void {
+/** Carpetas de fuentes que ya no existen (la antigua «Simulación» y el servidor externo): se borran. */
+export function borrarCarpetasViejas(): void {
   try {
-    indexedDB.deleteDatabase('athenai-simulacion');
+    for (const nombre of ['athenai-simulacion', `athenai-${'ur' + 'us'}`]) indexedDB.deleteDatabase(nombre);
   } catch {
     // Sin IndexedDB: no hay nada que borrar.
   }

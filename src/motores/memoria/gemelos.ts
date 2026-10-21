@@ -49,23 +49,25 @@ function huella(filas: readonly Fila[], fin: number): number[] {
     sumaAbs += Math.abs(r);
     sq += r * r;
     acc[0] += Math.log(Math.max(val(f, 'rango_atr'), 1e-3));
-    acc[1] += Math.log(Math.max(val(f, 'duracion_s'), 0.05));
+    acc[1] += val(f, 'duracion_z');
     acc[2] += val(f, 'delta_ratio');
     acc[3] += (val(f, 'absorcion_ask') + val(f, 'absorcion_bid')) / 100;
-    acc[4] += val(f, 'imb_compra') - val(f, 'imb_venta');
+    acc[4] += val(f, 'imb_compra_frac') - val(f, 'imb_venta_frac');
     acc[5] += val(f, 'oi_delta_pct');
-    acc[6] += Math.log1p((val(f, 'liq_largos_usd') + val(f, 'liq_cortos_usd')) / 1e5);
-    acc[7] += Math.log1p((val(f, 'bigtrades_compra_usd') + val(f, 'bigtrades_venta_usd')) / 1e5);
+    acc[6] += Math.log1p(100 * (val(f, 'liq_largos_frac') + val(f, 'liq_cortos_frac')));
+    acc[7] += Math.log1p(100 * (val(f, 'bigtrades_compra_frac') + val(f, 'bigtrades_venta_frac')));
   }
   const sd = Math.sqrt(sq / VENTANA) || 1e-9;
   return [suma / (sd * Math.sqrt(VENTANA)), sumaAbs > 0 ? Math.abs(suma) / sumaAbs : 0, ...acc.map((v) => v / VENTANA)];
 }
 
-/** Una ventana es válida si no cruza huecos ni cambios de sesión. */
+/** Una ventana es válida si no cruza huecos ni cambios de sesión, y sus filas son del catálogo actual. */
 function ventanaValida(filas: readonly Fila[], fin: number): boolean {
   if (fin - VENTANA + 1 < 0) return false;
   const s = filas[fin].sesion;
   for (let i = fin - VENTANA + 1; i <= fin; i += 1) {
+    // Filas grabadas con el catálogo anterior (montos en USD/BTC): no se mezclan con las de ahora.
+    if (!('duracion_z' in filas[i].valores)) return false;
     if (filas[i].valores.hueco === 1 && i > fin - VENTANA + 1) return false;
     if (filas[i].sesion !== s) return false;
   }

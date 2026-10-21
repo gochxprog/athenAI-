@@ -1,7 +1,7 @@
 /**
  * STOPRUNS (probables) — barrido de un máximo/mínimo previo con ráfaga agresiva y rechazo (lógica pura, sin I/O).
  *
- * Definición propia de URUS. Se trabaja sobre barras cortas (barMs, 5 s por defecto) construidas SOLO con trades
+ * Definición propia de athenAI. Se trabaja sobre barras cortas (barMs, 5 s por defecto) construidas SOLO con trades
  * reales (aggTrades). Para cada barra i:
  *   1. NIVEL: el máximo (o mínimo) más extremo de las barras en [i − lookbackMs, i − gapMs]. Es la referencia que
  *      el mercado "ve" y detrás de la cual hay stops.

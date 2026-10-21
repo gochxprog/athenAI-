@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateFootprintTrades } from '../urus/order-flow/footprint';
+import { aggregateFootprintTrades } from '../flujo/order-flow/footprint';
 import { ConstructorBarras, type BarraCerrada } from './barras';
 import { TEMPORALIDADES, type AggTrade } from './tipos';
 import { crearAleatorio, normal } from '@/lib/random';
@@ -18,7 +18,7 @@ function generarTrades(n: number, semilla = 7, inicio = 1_760_000_000_000): AggT
 }
 
 describe('ConstructorBarras', () => {
-  it('produce exactamente los mismos niveles de Footprint que Urus (aggregateFootprintTrades)', () => {
+  it('produce exactamente los mismos niveles de Footprint que aggregateFootprintTrades', () => {
     const trades = generarTrades(20_000);
     const c = new ConstructorBarras(TEMPORALIDADES['1m'], 5);
     const barras: BarraCerrada[] = [];
@@ -29,16 +29,16 @@ describe('ConstructorBarras', () => {
     expect(barras.length).toBeGreaterThan(5);
     for (const b of barras) {
       const delIntervalo = trades.filter((t) => t.timestamp >= b.inicio && t.timestamp < b.inicio + 60_000);
-      const urus = aggregateFootprintTrades(delIntervalo, { timeframeMs: 60_000, tickSize: 0.1, priceMultiplier: 50, candleStart: b.inicio, candleClose: b.ohlc.close, complete: true });
-      expect(b.footprint.levels.length).toBe(urus.levels.length);
+      const ref = aggregateFootprintTrades(delIntervalo, { timeframeMs: 60_000, tickSize: 0.1, priceMultiplier: 50, candleStart: b.inicio, candleClose: b.ohlc.close, complete: true });
+      expect(b.footprint.levels.length).toBe(ref.levels.length);
       b.footprint.levels.forEach((l, i) => {
-        expect(l.price).toBe(urus.levels[i].price);
-        expect(l.bidQty).toBeCloseTo(urus.levels[i].bidQty, 9);
-        expect(l.askQty).toBeCloseTo(urus.levels[i].askQty, 9);
-        expect(l.tradeCount).toBe(urus.levels[i].tradeCount);
+        expect(l.price).toBe(ref.levels[i].price);
+        expect(l.bidQty).toBeCloseTo(ref.levels[i].bidQty, 9);
+        expect(l.askQty).toBeCloseTo(ref.levels[i].askQty, 9);
+        expect(l.tradeCount).toBe(ref.levels[i].tradeCount);
       });
-      expect(b.footprint.pocPrice).toBe(urus.pocPrice);
-      expect(b.delta).toBeCloseTo(urus.delta, 9);
+      expect(b.footprint.pocPrice).toBe(ref.pocPrice);
+      expect(b.delta).toBeCloseTo(ref.delta, 9);
     }
   });
 

@@ -3,10 +3,10 @@
 // Rithmic no permite conectar desde un navegador: su API (R|Protocol) exige un cliente certificado con nombre de
 // aplicación aprobado por Rithmic y credenciales que no deben viajar por una página web. El puente es un servicio
 // propio (en el VPS) que inicia sesión en Rithmic y re-publica el mercado con el MISMO protocolo que el servidor
-// de Urus (SSE de trades + vista del libro). athenAI le pasa las credenciales una sola vez:
+// del puente de athenAI (SSE de trades + vista del libro, ver puenteSSE.ts). athenAI le pasa las credenciales una sola vez:
 //
 //   POST {puente}/api/rithmic/login  { usuario, contrasena, sistema, gateway }  → { ok: true } | { ok: false, mensaje }
-//   después: GET {puente}/api/realtime/stream … (igual que Urus)
+//   después: GET {puente}/api/realtime/stream … (protocolo del puente)
 
 export interface CredencialesRithmic {
   usuario: string;

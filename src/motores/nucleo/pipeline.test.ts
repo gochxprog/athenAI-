@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Pipeline } from './pipeline';
 import { DEFINICIONES_FEATURES, filasACsv, type FilaFeatures } from './features';
 import type { AggTrade, MensajeMercado } from './tipos';
-import { OrderBookEngine } from '../urus/order-flow/order-book';
+import { OrderBookEngine } from '../flujo/order-flow/order-book';
 import { crearAleatorio, normal } from '@/lib/random';
 
 // Cinta de prueba SOLO para los tests: números fijos (misma semilla → misma cinta) con la forma de los mensajes de
@@ -225,7 +225,7 @@ class CintaDePrueba {
       const pa = centro + d;
       const prevB = this.baseBids.get(pb);
       const prevA = this.baseAsks.get(pa);
-      // Inercia: el libro cambia de forma gradual (habilita stacking/pulling del motor de Urus).
+      // Inercia: el libro cambia de forma gradual (habilita stacking/pulling del motor del libro).
       nuevoBid.set(pb, Math.round((prevB !== undefined ? prevB * 0.85 + base * 0.15 : base) * 1000) / 1000);
       nuevoAsk.set(pa, Math.round((prevA !== undefined ? prevA * 0.85 + base * 0.15 : base) * 1000) / 1000);
     }
@@ -316,20 +316,30 @@ describe('Pipeline de Order Flow con una cinta de prueba', () => {
     expect(csv.split('\n')).toHaveLength(4);
   });
 
-  it('la pendiente del CVD es el delta sumado de las 5 últimas barras (no salta al cambiar de sesión)', () => {
-    for (let i = 4; i < filas.length; i += 1) {
-      const suma = filas.slice(i - 4, i + 1).reduce((s, f) => s + (f.valores.delta ?? 0), 0);
-      expect(filas[i].valores.cvd_pendiente_5).toBeCloseTo(suma, 9);
-    }
-    expect(filas[3].valores.cvd_pendiente_5).toBeNull();
+  it('flujo de 5 barras en [−1, 1], vacío en las 4 primeras (no salta al cambiar de sesión)', () => {
+    for (let i = 4; i < filas.length; i += 1) expect(Math.abs(filas[i].valores.flujo_5_ratio!)).toBeLessThanOrEqual(1);
+    expect(filas[3].valores.flujo_5_ratio).toBeNull();
   });
 
-  it('MicroPrice − mid nunca pasa de medio spread (antes, con niveles agrupados, se iba hasta un grupo entero)', () => {
+  it('ninguna Feature depende de la escala: todas finitas o vacías y las acotadas dentro de su rango', () => {
+    for (const f of filas) {
+      for (const [k, v] of Object.entries(f.valores)) {
+        if (v !== null) expect(Number.isFinite(v), k).toBe(true);
+      }
+      for (const k of ['delta_ratio', 'cvd_sesion_ratio', 'flujo_5_ratio', 'obi_10', 'microprice_spread']) if (f.valores[k] != null) expect(Math.abs(f.valores[k]!), k).toBeLessThanOrEqual(1 + 1e-9);
+      for (const k of ['imb_compra_frac', 'imb_venta_frac']) if (f.valores[k] != null) expect(f.valores[k]!).toBeGreaterThanOrEqual(0);
+      for (const k of ['delta_z', 'duracion_z']) if (f.valores[k] != null) expect(Math.abs(f.valores[k]!)).toBeLessThanOrEqual(10);
+    }
+    // Las 30 primeras barras no tienen historia para el z robusto.
+    expect(filas[10].valores.delta_z).toBeNull();
+    expect(filas[60].valores.delta_z).not.toBeNull();
+  });
+
+  it('MicroPrice − mid nunca pasa de medio spread: microprice_spread ∈ [−1, 1]', () => {
     const libro = pipeline.mercado.libro!;
     for (const f of filas.slice(-50)) {
       expect(Math.abs(f.valores.obi_10 ?? 0)).toBeLessThanOrEqual(1);
-      // |MicroPrice − mid| ≤ spread / 2: con spread de 1–2 ticks queda por debajo de un grupo (10 ticks).
-      expect(Math.abs(f.valores.microprice_ticks ?? 0)).toBeLessThan(libro.group);
+      expect(Math.abs(f.valores.microprice_spread ?? 0)).toBeLessThanOrEqual(1 + 1e-9);
     }
     // El MicroPrice siempre queda entre el mejor bid y el mejor ask.
     expect(libro.microPrice!).toBeGreaterThanOrEqual(libro.bestBid!);
@@ -340,7 +350,7 @@ describe('Pipeline de Order Flow con una cinta de prueba', () => {
     const tipos = new Set(pipeline.mercado.eventos.ultimos(1_000).map((e) => e.tipo));
     const memoria = pipeline.mercado.memoria();
     const conAbsorcion = filas.some((f) => (f.valores.absorcion_ask ?? 0) > 0 || (f.valores.absorcion_bid ?? 0) > 0);
-    const conImbalance = filas.some((f) => (f.valores.imb_compra ?? 0) > 0);
+    const conImbalance = filas.some((f) => (f.valores.imb_compra_frac ?? 0) > 0);
     const conOi = filas.some((f) => f.valores.oi_delta_pct !== null);
     expect(tipos.has('bigtrade')).toBe(true);
     expect(tipos.has('iceberg')).toBe(true);
@@ -449,8 +459,12 @@ describe('Pipeline · calidad de datos, liquidaciones y resumen', () => {
       }
     }
     expect(p.mercado.eventos.ultimos(600).some((e) => e.tipo === 'liquidacion' && e.magnitud === 168_000)).toBe(true);
-    expect(filas.filter((f) => (f.valores.liq_largos_usd ?? 0) > 0).map((f) => f.valores.liq_largos_usd)).toEqual([168_000]);
-    expect(filas.every((f) => (f.valores.liq_cortos_usd ?? 0) === 0)).toBe(true);
+    // 168.000 USD frente a una dollar bar de 10 M USD (algo más, por el trade que cruza el umbral) ≈ 0,0168.
+    const conLiq = filas.filter((f) => (f.valores.liq_largos_frac ?? 0) > 0);
+    expect(conLiq).toHaveLength(1);
+    expect(conLiq[0].valores.liq_largos_frac).toBeGreaterThan(0.0165);
+    expect(conLiq[0].valores.liq_largos_frac).toBeLessThanOrEqual(0.0168);
+    expect(filas.every((f) => (f.valores.liq_cortos_frac ?? 0) === 0)).toBe(true);
   });
 
   it('el resumen por mercado tiene precio, ATR, flujo de barras y pools', () => {

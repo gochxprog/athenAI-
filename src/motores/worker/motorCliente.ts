@@ -38,7 +38,6 @@ export const CONFIG_POR_DEFECTO: ConfigCentro = {
   activos: [{ simbolo: 'BTCUSDT', proveedor: 'binance' }],
   guardar: true,
   binance: { rest: BINANCE_REST, ws: BINANCE_WS },
-  urus: { baseUrl: 'http://localhost:3000' },
   rithmic: { puente: 'http://localhost:8787', usuario: '', contrasena: '', sistema: 'Rithmic Paper Trading', gateway: 'Chicago Area' },
 };
 
@@ -54,14 +53,14 @@ function leerConfig(): ConfigGuardada {
       // Configuraciones antiguas: una sola fuente para todos los activos.
       const viejo = x.config as unknown as { proveedor?: Proveedor; simbolos?: string[] };
       const activos = x.config.activos ?? (viejo.proveedor && viejo.simbolos ? viejo.simbolos.map((simbolo) => ({ simbolo, proveedor: viejo.proveedor! })) : CONFIG_POR_DEFECTO.activos);
-      // Los activos de la antigua fuente «Simulación» (sintética) se descartan.
-      const reales = activos.filter((a) => (a.proveedor as string) !== 'simulacion');
+      // Los activos de fuentes que ya no existen se descartan.
+      const reales = activos.filter((a) => (a.proveedor as string) === 'binance' || (a.proveedor as string) === 'rithmic');
       const c = { ...x.config, activos: reales.length ? reales : CONFIG_POR_DEFECTO.activos };
       delete (c as { proveedor?: unknown }).proveedor;
       delete (c as { simbolos?: unknown }).simbolos;
       return {
         recordarContrasena: !!x.recordarContrasena,
-        config: { ...CONFIG_POR_DEFECTO, ...c, binance: { ...CONFIG_POR_DEFECTO.binance, ...c.binance }, urus: { ...CONFIG_POR_DEFECTO.urus, ...c.urus }, rithmic: { ...CONFIG_POR_DEFECTO.rithmic, ...c.rithmic } },
+        config: { ...CONFIG_POR_DEFECTO, ...c, binance: { ...CONFIG_POR_DEFECTO.binance, ...c.binance }, rithmic: { ...CONFIG_POR_DEFECTO.rithmic, ...c.rithmic } },
       };
     }
   } catch {

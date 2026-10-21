@@ -1,4 +1,4 @@
-// Parámetros del pipeline por activo. Los motores de Urus vienen calibrados para BTCUSDT (tick 0,1 · ≈ 85.000 USD);
+// Parámetros del pipeline por activo. Los motores de Order Flow vienen calibrados para BTCUSDT (tick 0,1 · ≈ 85.000 USD);
 // para cualquier otro activo se escalan con su precio, su tick y su volumen de 24 h.
 import type { IdTemporalidad, Temporalidad } from './tipos';
 import { AGRUPACION_POR_TEMPORALIDAD, TEMPORALIDADES } from './tipos';
@@ -51,7 +51,7 @@ export function parametrosParaSimbolo(simbolo: string, tickSize: number, precio:
   };
 }
 
-/** Ticks de futuros habituales (CME/COMEX/NYMEX) para fuentes que no publican el tick (Rithmic por puente, Urus). */
+/** Ticks de futuros habituales (CME/COMEX/NYMEX) para fuentes que no publican el tick (Rithmic por puente). */
 const TICKS_CONOCIDOS: Record<string, number> = {
   ES: 0.25, MES: 0.25, NQ: 0.25, MNQ: 0.25, YM: 1, MYM: 1, RTY: 0.1, M2K: 0.1,
   CL: 0.01, MCL: 0.01, NG: 0.001, GC: 0.1, MGC: 0.1, SI: 0.005, HG: 0.0005,

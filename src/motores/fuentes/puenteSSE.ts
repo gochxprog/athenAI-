@@ -1,17 +1,17 @@
-// Fuente EN VIVO: servidor de Urus (protocolo de shared/realtime/protocol.ts).
+// Fuente EN VIVO por el puente de athenAI (Rithmic en el VPS). Protocolo: flujo/realtime/protocol.ts.
 //
 //   GET  {base}/api/realtime/stream          → SSE: `hello` (sessionId), `m` (Envelope {t,e,d}), `bye`
 //   POST {base}/api/realtime/subscriptions   → { sessionId, rev, topics } (conjunto COMPLETO, idempotente)
 //   GET  {base}/api/oi?symbol=…&from=…       → snapshots de Open Interest
 //
 // Topics usados: trades:SYM (aggTrades reales) y book:SYM:DEPTH:GROUP (vista del libro ya calculada por el
-// OrderBookEngine del servidor, la misma estructura que usa athenAI). El servidor de Urus debe permitir CORS
+// OrderBookEngine del servidor, la misma estructura que usa athenAI). El puente debe permitir CORS
 // para el origen de athenAI si se sirven desde dominios distintos.
-import { Backoff } from '../urus/realtime/backoff';
-import { bookTopic, tradesTopic, type Envelope, type HelloPayload } from '../urus/realtime/protocol';
+import { Backoff } from '../flujo/realtime/backoff';
+import { bookTopic, tradesTopic, type Envelope, type HelloPayload } from '../flujo/realtime/protocol';
 import type { AggTrade, MensajeMercado, OpenInterestSnapshot, OrderBookView } from '../nucleo/tipos';
 
-export interface OpcionesFuenteUrus {
+export interface OpcionesFuentePuente {
   baseUrl: string;
   simbolo: string;
   profundidad?: number;
@@ -22,7 +22,7 @@ export interface OpcionesFuenteUrus {
 const SIN_DATOS_MS = 15_000;
 const OI_CADA_MS = 10_000;
 
-/** Traduce un frame del servidor de Urus a un mensaje del pipeline (función pura, probada). */
+/** Traduce un frame del puente a un mensaje del pipeline (función pura, probada). */
 export function interpretarEnvelope(env: Envelope): MensajeMercado | null {
   if (!env || typeof env.t !== 'string' || typeof env.e !== 'string') return null;
   const tipo = env.t.split(':')[0];
@@ -45,7 +45,7 @@ export function interpretarEnvelope(env: Envelope): MensajeMercado | null {
   return null;
 }
 
-export class FuenteUrus {
+export class FuentePuente {
   private es: EventSource | null = null;
   private sesion: string | null = null;
   private rev = 0;
@@ -57,7 +57,7 @@ export class FuenteUrus {
   private ultimoOi = 0;
   private readonly backoff = new Backoff({ baseMs: 1_000, maxMs: 30_000, jitter: 'equal', floorMs: 500 });
 
-  constructor(private readonly o: OpcionesFuenteUrus) {}
+  constructor(private readonly o: OpcionesFuentePuente) {}
 
   private get base(): string {
     return this.o.baseUrl.replace(/\/+$/, '');
@@ -110,7 +110,7 @@ export class FuenteUrus {
       const m = interpretarEnvelope(env);
       if (!m) return;
       if (m.tipo === 'trades' || m.tipo === 'libro') {
-        if (!this.ultimoDato) this.o.onMensaje({ tipo: 'conexion', estado: 'en-vivo', detalle: `${this.o.simbolo} · servidor Urus` });
+        if (!this.ultimoDato) this.o.onMensaje({ tipo: 'conexion', estado: 'en-vivo', detalle: `${this.o.simbolo} · puente` });
         this.ultimoDato = Date.now();
         this.backoff.reset();
       }
