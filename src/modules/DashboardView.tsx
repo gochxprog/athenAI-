@@ -421,7 +421,7 @@ function TarjetaAlertas({ estrategias }: { estrategias: EstrategiaGuardada[] }) 
   const canales = canalesActivos(n.config);
   const lineas = [
     ...n.historial.filter((x) => x.aviso.tipo !== 'juez').slice(0, 6).map((x) => ({ t: x.t, texto: x.aviso.titulo, v: x.canal ? (x.ok ? '✓' : '✗') : '—' })),
-    ...estrategias.filter((e) => e.ultimoVeredicto).map((e) => ({ t: e.actualizada, texto: `Juez: «${e.nombre}»`, v: e.ultimoVeredicto === 'APROBADA' ? 'aprobada' : e.ultimoVeredicto === 'RECHAZADA' ? 'rechazada' : 'insuf.' })),
+    ...estrategias.filter((e) => e.ultimoVeredicto).map((e) => ({ t: e.actualizada, texto: `Juez: «${e.nombre}»`, v: e.ultimoVeredicto === 'APROBADA' ? 'aprobada' : e.ultimoVeredicto === 'APROBADA CON RESERVA' ? 'reserva' : e.ultimoVeredicto === 'RECHAZADA' ? 'rechazada' : 'insuf.' })),
   ]
     .sort((a, b) => b.t - a.t)
     .slice(0, 4);

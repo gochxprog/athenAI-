@@ -23,7 +23,7 @@ machine learning) pasan por el mismo Juez.
 
 Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el proceso · ⬜ por hacer.
 
-## Laboratorio · el Juez (en curso)
+## Laboratorio · el Juez ✅ (los 10 motores verificados)
 
 | # | Motor | Qué mide | Archivo | Estado |
 |---|---|---|---|---|
@@ -35,8 +35,8 @@ Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el p
 | 6 | Robustez | Costos ×2 (PF > 1,2 y retorno > 0), vecinos contiguos (≥ 70 % aceptables, alerta de isla), otro mercado (automático de la misma familia; no destruye capital), estabilidad en 10 sub-periodos por régimen (≥ 60 % y < 90 % de concentración); 0 fallos aprueba, 1 alerta, ≥ 2 rechaza | `robustez.ts` | ✅ |
 | 7 | Deflated Sharpe | SR* por valores extremos, σ_SR con asimetría y curtosis, DSR = Φ((SR − SR*)/σ_SR) ≥ 0,95 | `sobreajuste.ts` | ✅ |
 | 8 | PBO | CSCV con 16 bloques (12.870 combinaciones), mejor IS por rendimiento acumulado, ω y λ = logit(ω), PBO < 5 % | `sobreajuste.ts` | ✅ |
-| 9 | Anti-futuro | Si el código mira datos posteriores | `src/motores/laboratorio/python.ts` | 🔍 |
-| 10 | Veredicto | Reglas fijas sobre los motores 1–9 | `juez.ts` | 🔍 |
+| 9 | Anti-futuro | Análisis del código (filas[i + k], filas[-1]; aviso de normalización global) y causalidad en 8 cortes (datos recortados y alterados) | `laboratorio/antiFuturo.ts` + `python.ts` | ✅ |
+| 10 | Veredicto | Puertas de cero tolerancia (anti-futuro, ruina, PBO, DSR, Luck, robustez) y puntuación 0–100 (WFE 25 %, costos y vecinos 25 %, DSR/PBO 30 %, curva/Luck 20 %): ≥ 75 aprobada para Paper, < 75 con reserva | `veredicto.ts` | ✅ |
 
 ## La plataforma busca estrategias sola (Investigación / Conocimiento)
 

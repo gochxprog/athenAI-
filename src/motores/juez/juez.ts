@@ -10,6 +10,7 @@
 //   5. Deflated Sharpe (López de Prado): descuenta haber probado muchas variantes.
 //   6. PBO (CSCV): probabilidad de que la mejor variante dentro de muestra sea peor que la mediana fuera.
 import { crearAleatorio } from '@/lib/random';
+import { SCORE_PAPER, veredicto, type Puerta, type ScoreVeredicto, type Veredicto } from './veredicto';
 import { deflatedSharpe, DSR_MINIMO, pboCscv, PBO_MAXIMO, type DetalleDsr, type DetallePbo } from './sobreajuste';
 import { robustez, type ResultadoRobustez } from './robustez';
 import { ALFA_LUCK, luckTest, type ConfigLuck, type ResultadoLuck } from './luckTest';
@@ -35,7 +36,7 @@ export interface EntradaJuez {
   /** Misma estrategia (combo elegido) en otro mercado, si se pidió. */
   otroMercado?: { simbolo: string; cierres: number[]; tiempos: number[]; posiciones: number[] } | null;
   /** Resultado de la prueba anti-futuro (la estrategia no usa datos de barras posteriores). */
-  antiFuturo?: { ok: boolean; detalle: string } | null;
+  antiFuturo?: { ok: boolean; detalle: string; estatico?: { violaciones: string[]; alertas: string[] }; dinamico?: { cortes: number; recorte: boolean; alteracion: boolean; fila: number | null; prueba: string | null } } | null;
   semilla?: number;
   /** Ventanas y objetivo del Walk-Forward (por defecto: automáticos y Sharpe). */
   wfo?: ConfigWfo;
@@ -53,6 +54,8 @@ export interface TramoWF extends VentanaResultado {
 
 export interface Regla {
   nombre: string;
+  /** puerta = rechaza si falla (cero tolerancia); puntua = entra en la puntuación o es informativa. */
+  tipo: 'puerta' | 'puntua';
   ok: boolean | null;
   valor: string;
   umbral: string;
@@ -60,7 +63,14 @@ export interface Regla {
 }
 
 export interface ResultadoJuez {
-  veredicto: 'APROBADA' | 'RECHAZADA' | 'DATOS INSUFICIENTES';
+  /** APROBADA = lista para Paper Trading (puntuación ≥ 75). */
+  veredicto: Veredicto;
+  /** Puertas de cero tolerancia (motor 10). */
+  puertas: Puerta[];
+  /** Puntuación 0–100 (solo si pasa todas las puertas). */
+  score: ScoreVeredicto | null;
+  /** Detalle del Anti-futuro (motor 9). */
+  antiFuturo: EntradaJuez['antiFuturo'];
   resumen: string;
   reglas: Regla[];
   /** Métricas fuera de muestra (las que cuentan). */
@@ -143,35 +153,55 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
 
   // Reglas del Juez (fijas: los modelos no pueden cambiarlas).
   const reglas: Regla[] = [
-    { nombre: 'Datos suficientes', ok: largoOos >= MIN_BARRAS_OOS && opsOos.length >= MIN_OPERACIONES, valor: `${largoOos} barras · ${opsOos.length} operaciones fuera de muestra`, umbral: `≥ ${MIN_BARRAS_OOS} barras y ≥ ${MIN_OPERACIONES} operaciones`, explicacion: 'Con pocas operaciones cualquier resultado puede ser casualidad.' },
-    { nombre: 'No mira al futuro', ok: e.antiFuturo ? e.antiFuturo.ok : null, valor: e.antiFuturo?.detalle ?? 'no comprobado', umbral: 'posiciones idénticas con y sin datos posteriores', explicacion: 'Si la posición de hoy cambia al añadir datos de mañana, la estrategia hace trampa.' },
-    { nombre: 'Gana fuera de muestra (Walk-Forward)', ok: oos.retornoTotal > 0, valor: pctTxt(oos.retornoTotal), umbral: '> 0 %', explicacion: 'Solo cuentan los tramos que la estrategia no vio al elegir sus parámetros.' },
-    { nombre: 'Eficiencia Walk-Forward (WFE)', ok: wfo.wfe === null ? false : wfo.wfe >= 0.5, valor: wfo.wfe === null ? 'el entrenamiento no gana' : `${dec(wfo.wfe, 2)} (${wfo.clase})`, umbral: '≥ 0,50', explicacion: 'Cuánto de lo que gana entrenando conserva en datos que no vio. < 0,30 = sobreajuste.' },
-    { nombre: 'Luck test', ok: suerte ? suerte.p < ALFA_LUCK : null, valor: suerte ? `p = ${dec(suerte.p, 3)}` : '—', umbral: 'p < 0,05', explicacion: 'Mercados falsos o entradas al azar no deben igualarla más de 1 de cada 20 veces.' },
-    { nombre: 'Drawdown máximo', ok: oos.maxDrawdown <= 0.2, valor: pctTxt(oos.maxDrawdown), umbral: '≤ 20 %', explicacion: 'Peor caída desde un máximo, fuera de muestra.' },
-    { nombre: 'Monte Carlo: riesgo de ruina', ok: mc ? mc.probRuina <= RUINA_MAXIMA : null, valor: mc ? `${pctTxt(mc.probRuina)} de simulaciones caen ≥ ${pctTxt(mc.umbralRuina)}` : '—', umbral: '≤ 5 %', explicacion: 'Reordenando las operaciones miles de veces, la mala suerte no debe quemar la cuenta.' },
-    { nombre: 'Deflated Sharpe', ok: dsr === null ? null : dsr >= DSR_MINIMO, valor: dsr === null ? '—' : dec(dsr, 3), umbral: '≥ 0,95', explicacion: `Descuenta haber probado ${ensayos} ${ensayos === 1 ? 'variante' : 'variantes'}.` },
-    { nombre: 'PBO (sobreajuste)', ok: pbo === null ? null : pbo < PBO_MAXIMO, valor: pbo === null ? 'una sola variante' : pctTxt(pbo), umbral: '< 5 %', explicacion: 'Probabilidad de que la mejor variante en entrenamiento quede por debajo de la mediana fuera.' },
-    { nombre: 'Robustez (costos ×2, vecinos, estabilidad)', ok: rob.estado !== 'rechazado', valor: `${3 - rob.fallas - (rob.vecinos.ok === null ? 1 : 0)}/${rob.vecinos.ok === null ? 2 : 3} pruebas superadas`, umbral: 'falla como mucho 1', explicacion: 'Debe aguantar el doble de costos, cambios pequeños en sus parámetros y distintos regímenes del mercado.' },
-    { nombre: 'Otro mercado', ok: rob.otroMercado ? rob.otroMercado.ok : null, valor: rob.otroMercado ? `${rob.otroMercado.simbolo}: ${pctTxt(rob.otroMercado.retornoTotal)}, caída ${pctTxt(rob.otroMercado.maxDrawdown)}` : 'no probado', umbral: '> −10 % y caída ≤ 2× la original', explicacion: 'Con los mismos parámetros en otro activo no debe destruir capital.' },
+    { nombre: 'Datos suficientes', tipo: 'puerta', ok: largoOos >= MIN_BARRAS_OOS && opsOos.length >= MIN_OPERACIONES, valor: `${largoOos} barras · ${opsOos.length} operaciones fuera de muestra`, umbral: `≥ ${MIN_BARRAS_OOS} barras y ≥ ${MIN_OPERACIONES} operaciones`, explicacion: 'Con pocas operaciones cualquier resultado puede ser casualidad.' },
+    { nombre: 'No mira al futuro', tipo: 'puerta', ok: e.antiFuturo ? e.antiFuturo.ok : null, valor: e.antiFuturo?.detalle ?? 'no comprobado', umbral: 'posiciones idénticas con y sin datos posteriores', explicacion: 'Si la posición de hoy cambia al añadir datos de mañana, la estrategia hace trampa.' },
+    { nombre: 'Gana fuera de muestra (Walk-Forward)', tipo: 'puntua', ok: oos.retornoTotal > 0, valor: pctTxt(oos.retornoTotal), umbral: '> 0 %', explicacion: 'Solo cuentan los tramos que la estrategia no vio al elegir sus parámetros.' },
+    { nombre: 'Eficiencia Walk-Forward (WFE)', tipo: 'puntua', ok: wfo.wfe === null ? false : wfo.wfe >= 0.5, valor: wfo.wfe === null ? 'el entrenamiento no gana' : `${dec(wfo.wfe, 2)} (${wfo.clase})`, umbral: '≥ 0,50', explicacion: 'Cuánto de lo que gana entrenando conserva en datos que no vio. < 0,30 = sobreajuste.' },
+    { nombre: 'Luck test', tipo: 'puerta', ok: suerte ? suerte.p < ALFA_LUCK : null, valor: suerte ? `p = ${dec(suerte.p, 3)}` : '—', umbral: 'p < 0,05', explicacion: 'Mercados falsos o entradas al azar no deben igualarla más de 1 de cada 20 veces.' },
+    { nombre: 'Drawdown máximo', tipo: 'puntua', ok: oos.maxDrawdown <= 0.2, valor: pctTxt(oos.maxDrawdown), umbral: '≤ 20 %', explicacion: 'Peor caída desde un máximo, fuera de muestra.' },
+    { nombre: 'Monte Carlo: riesgo de ruina', tipo: 'puerta', ok: mc ? mc.probRuina <= RUINA_MAXIMA : null, valor: mc ? `${pctTxt(mc.probRuina)} de simulaciones caen ≥ ${pctTxt(mc.umbralRuina)}` : '—', umbral: '≤ 5 %', explicacion: 'Reordenando las operaciones miles de veces, la mala suerte no debe quemar la cuenta.' },
+    { nombre: 'Deflated Sharpe', tipo: 'puerta', ok: dsr === null ? null : dsr >= DSR_MINIMO, valor: dsr === null ? '—' : dec(dsr, 3), umbral: '≥ 0,95', explicacion: `Descuenta haber probado ${ensayos} ${ensayos === 1 ? 'variante' : 'variantes'}.` },
+    { nombre: 'PBO (sobreajuste)', tipo: 'puerta', ok: pbo === null ? null : pbo < PBO_MAXIMO, valor: pbo === null ? 'una sola variante' : pctTxt(pbo), umbral: '< 5 %', explicacion: 'Probabilidad de que la mejor variante en entrenamiento quede por debajo de la mediana fuera.' },
+    { nombre: 'Robustez (costos ×2, vecinos, estabilidad)', tipo: 'puerta', ok: rob.estado !== 'rechazado', valor: `${3 - rob.fallas - (rob.vecinos.ok === null ? 1 : 0)}/${rob.vecinos.ok === null ? 2 : 3} pruebas superadas`, umbral: 'falla como mucho 1', explicacion: 'Debe aguantar el doble de costos, cambios pequeños en sus parámetros y distintos regímenes del mercado.' },
+    { nombre: 'Otro mercado', tipo: 'puntua', ok: rob.otroMercado ? rob.otroMercado.ok : null, valor: rob.otroMercado ? `${rob.otroMercado.simbolo}: ${pctTxt(rob.otroMercado.retornoTotal)}, caída ${pctTxt(rob.otroMercado.maxDrawdown)}` : 'no probado', umbral: '> −10 % y caída ≤ 2× la original', explicacion: 'Con los mismos parámetros en otro activo no debe destruir capital.' },
   ];
   const alertas: string[] = [];
   if (mc?.alertaOrden) alertas.push(`Monte Carlo: la peor caída probable (P95 ${pctTxt(mc.ddP95)}) es más del doble que la del backtest (${pctTxt(mc.ddOriginal)}). Si las pérdidas llegan seguidas, dolerá mucho más de lo que muestra el backtest.`);
   if (rob.estado === 'alerta') alertas.push(`Robustez: falla 1 de las pruebas críticas (${[!rob.costos2x.ok && 'costos ×2', rob.vecinos.ok === false && 'parámetros vecinos', !rob.estabilidad.ok && 'estabilidad'].filter(Boolean).join(', ')}). No rechaza, pero revísalo.`);
   if (rob.vecinos.isla) alertas.push(`Isla de optimización: al mover un paso los parámetros, el Sharpe cae de media un ${pctTxt(rob.vecinos.caidaMedia ?? 0)}.`);
   if (rob.costos2x.factorBeneficio !== null && rob.costos2x.factorBeneficio < 1.2) alertas.push('Frágil ante fricciones: con el doble de costos el Profit Factor baja de 1,2.');
-  const insuficiente = reglas[0].ok === false;
-  const falladas = reglas.filter((x) => x.ok === false);
-  const veredicto = insuficiente ? 'DATOS INSUFICIENTES' : falladas.length ? 'RECHAZADA' : 'APROBADA';
+  if (wfo.clase === 'sobreajuste') alertas.push(`Walk-Forward: la eficiencia (WFE ${dec(wfo.wfe ?? 0, 2)}) está por debajo de 0,30: alerta roja de sobreajuste.`);
+  if (e.antiFuturo?.estatico?.alertas.length) alertas.push(`Anti-futuro: ${e.antiFuturo.estatico.alertas[0]}`);
+
+  // Motor 10 · Veredicto: puertas de cero tolerancia y puntuación.
+  const v = veredicto({
+    datosSuficientes: reglas[0].ok === true,
+    antiFuturoOk: e.antiFuturo ? e.antiFuturo.ok : null,
+    probRuina: mc?.probRuina ?? null,
+    pbo,
+    dsr,
+    luckP: suerte?.p ?? null,
+    robustezRechazada: rob.estado === 'rechazado',
+    wfe: wfo.wfe,
+    costos2x: rob.costos2x,
+    vecinosProporcion: rob.vecinos.proporcion,
+    sharpeOos: oos.sharpe,
+    ddOos: oos.maxDrawdown,
+  });
   const resumen =
-    veredicto === 'APROBADA'
-      ? `Pasa todas las reglas aplicables. Fuera de muestra: ${pctTxt(oos.retornoTotal)} con ${oos.operaciones} operaciones.`
-      : veredicto === 'DATOS INSUFICIENTES'
-        ? `Hacen falta más datos: ${reglas[0].valor}. Deja grabando el mercado y vuelve a probar.`
-        : `No pasa: ${falladas.map((x) => x.nombre.toLowerCase()).join(', ')}.`;
+    v.veredicto === 'DATOS INSUFICIENTES'
+      ? `Hacen falta más datos: ${reglas[0].valor}. Deja grabando el mercado y vuelve a probar.`
+      : v.veredicto === 'RECHAZADA'
+        ? `Rechazada por: ${v.falladas.map((x) => `${x.nombre.toLowerCase()} (${x.valor}; se exige ${x.umbral})`).join(', ')}.`
+        : v.veredicto === 'APROBADA'
+          ? `Pasa todas las puertas con ${dec(v.score!.total, 0)} puntos de 100: lista para Paper Trading. Fuera de muestra: ${pctTxt(oos.retornoTotal)} con ${oos.operaciones} operaciones.`
+          : `Pasa todas las puertas, pero con ${dec(v.score!.total, 0)} puntos (se piden ${SCORE_PAPER}): queda en cuarentena; conviene reajustar o grabar más datos.`;
 
   return {
-    veredicto,
+    veredicto: v.veredicto,
+    puertas: v.puertas,
+    score: v.score,
+    antiFuturo: e.antiFuturo ?? null,
     resumen,
     reglas,
     oos,

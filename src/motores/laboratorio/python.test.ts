@@ -43,7 +43,44 @@ def estrategia(filas, p):
 `;
     const r = ejecutarEstrategia(py, tramposa, filas);
     expect(r.antiFuturo.ok).toBe(false);
-    expect(r.antiFuturo.detalle).toMatch(/cambia al añadir filas posteriores/);
+    expect(r.antiFuturo.estatico.violaciones[0]).toMatch(/filas\[i \+ 1\]/);
+    // Escondido en otra variable: el análisis del código no lo ve, la prueba de causalidad sí.
+    const escondida = `
+def estrategia(filas, p):
+    pos = []
+    for i, f in enumerate(filas):
+        j = min(i + 1, len(filas) - 1)
+        pos.append(1 if filas[j]["close"] > f["close"] else -1)
+    return pos
+`;
+    const e = ejecutarEstrategia(py, escondida, filas);
+    expect(e.antiFuturo.estatico.violaciones).toEqual([]);
+    expect(e.antiFuturo.ok).toBe(false);
+    expect(e.antiFuturo.dinamico.prueba).not.toBeNull();
+  });
+
+  it('detecta la normalización con todos los datos (incluye el futuro)', () => {
+    const global = `
+def estrategia(filas, p):
+    tope = max([f["delta"] for f in filas])
+    return [1 if f["delta"] > 0.8 * tope else 0 for f in filas]
+`;
+    const r = ejecutarEstrategia(py, global, filas);
+    expect(r.antiFuturo.estatico.alertas[0]).toMatch(/max/);
+    expect(r.antiFuturo.ok).toBe(false);
+    expect(r.antiFuturo.dinamico.alteracion).toBe(false);
+    // La versión causal (ventana rodante con el pasado) pasa.
+    const rodante = `
+def estrategia(filas, p):
+    pos = []
+    for i, f in enumerate(filas):
+        ventana = [x["delta"] for x in filas[max(0, i - 20): i + 1]]
+        pos.append(1 if f["delta"] >= max(ventana) else 0)
+    return pos
+`;
+    const b = ejecutarEstrategia(py, rodante, filas);
+    expect(b.antiFuturo.ok).toBe(true);
+    expect(b.antiFuturo.estatico.violaciones).toEqual([]);
   });
 
   it('explica los errores del código', () => {

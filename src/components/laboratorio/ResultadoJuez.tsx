@@ -587,6 +587,115 @@ function SeccionSobreajuste({ r }: { r: RespuestaLaboratorio }) {
   );
 }
 
+const TEXTO_VEREDICTO: Record<string, string> = { APROBADA: 'APROBADA para Paper Trading', 'APROBADA CON RESERVA': 'APROBADA CON RESERVA (cuarentena)', RECHAZADA: 'RECHAZADA', 'DATOS INSUFICIENTES': 'DATOS INSUFICIENTES' };
+
+/** Motor 9 · Anti-futuro: análisis del código y prueba de causalidad. */
+function SeccionAntiFuturo({ r }: { r: RespuestaLaboratorio }) {
+  const a = r.resultado.antiFuturo;
+  return (
+    <Panel titulo="Motor 9 · Anti-futuro" accion={<span className="text-[10px] text-plata-500">{a ? (a.ok ? 'causal: aprobado' : 'fuga de datos: rechazado') : 'no comprobado'}</span>} cuerpo="space-y-4 p-4">
+      <Explicacion
+        que="revisa que tu estrategia decida solo con lo que ya pasó. Lee tu código buscando accesos a filas futuras y luego la ejecuta quitando y cambiando los datos posteriores."
+        sirve="cazar el error más peligroso: un backtest que gana porque, sin querer, «ve» el futuro. En vivo eso es imposible y la estrategia se hunde."
+        mirar="que diga «causal». Cualquier fuga rechaza la estrategia, sin importar lo que gane."
+      />
+      {a ? (
+        <div className="grid gap-3 sm:grid-cols-3" data-antifuturo={a.ok ? 'ok' : 'falla'}>
+          <Prueba titulo="Análisis del código" ok={!(a.estatico?.violaciones.length ?? 0)} valor={a.estatico ? (a.estatico.violaciones.length ? `${a.estatico.violaciones.length} fuga(s)` : 'sin fugas') : '—'} detalle={a.estatico?.violaciones[0] ?? (a.estatico?.alertas[0] ? `Aviso: ${a.estatico.alertas[0]}` : 'no lee filas posteriores ni la última fila de todos los datos')} />
+          <Prueba titulo="Datos recortados" ok={a.dinamico ? a.dinamico.recorte : a.ok} valor={a.dinamico ? (a.dinamico.recorte ? 'idénticas' : 'cambian') : '—'} detalle={`posiciones pasadas al quitar las filas posteriores en ${a.dinamico?.cortes ?? 8} puntos`} />
+          <Prueba titulo="Datos alterados" ok={a.dinamico ? a.dinamico.alteracion : null} valor={a.dinamico ? (a.dinamico.alteracion ? 'idénticas' : 'cambian') : '—'} detalle={a.dinamico?.prueba ? `la fila ${a.dinamico.fila} cambia: usa el futuro` : 'posiciones pasadas al cambiar al azar las filas posteriores'} />
+        </div>
+      ) : (
+        <p className="text-xs text-plata-500">No se comprobó.</p>
+      )}
+      <details className="rounded-lg border border-borde-suave px-3 py-2 text-[11px] text-plata-300">
+        <summary className="cursor-pointer text-plata-100">Cómo se calcula</summary>
+        <ul className="mt-2 list-disc space-y-1 pl-4">
+          <li>Regla: Señal(t) = f(Datos[0 : t − 1]). En la plataforma, la posición que decides con la fila i (barra ya cerrada) rige desde la barra i + 1: la orden solo conoce el pasado.</li>
+          <li>Código: se buscan filas[i + k], filas[-1] o filas[len(filas) − 1] (fuga directa: rechaza) y estadísticas sobre todas las filas, como max(… for f in filas) (posible normalización con el futuro: aviso).</li>
+          <li>Ejecución: en 8 cortes t se quitan las filas ≥ t y, aparte, se cambian al azar. Las posiciones de las filas &lt; t deben ser idénticas; si cambian, la estrategia usaba el futuro.</li>
+          <li>Normaliza siempre con una ventana del pasado (rolling), nunca con todas las filas.</li>
+        </ul>
+      </details>
+    </Panel>
+  );
+}
+
+/** Motor 10 · Veredicto: puertas de cero tolerancia, puntuación y todas las reglas. */
+function SeccionVeredicto({ r }: { r: RespuestaLaboratorio }) {
+  const j = r.resultado;
+  const s = j.score;
+  const partes: [string, number, number][] = s
+    ? [
+        ['Walk-Forward (WFE)', 25, s.partes.wfo],
+        ['Costos ×2 y vecinos', 25, s.partes.costosVecinos],
+        ['Deflated Sharpe y PBO', 30, s.partes.sobreajuste],
+        ['Curva y Luck test', 20, s.partes.curva],
+      ]
+    : [];
+  return (
+    <Panel titulo="Motor 10 · Veredicto" accion={<span className="text-[10px] text-plata-500">{TEXTO_VEREDICTO[j.veredicto] ?? j.veredicto}</span>} cuerpo="space-y-4 p-4">
+      <Explicacion
+        que="el juez central. Primero mira las puertas de cero tolerancia: si falla una, se rechaza aunque gane mucho. Si las pasa todas, le pone una nota de 0 a 100."
+        sirve="tener una sola decisión clara y el motivo exacto: rechazada (por qué), aprobada con reserva (cuarentena) o lista para Paper Trading."
+        mirar="todas las puertas en ✓ y la nota: 75 o más = lista para Paper Trading; menos de 75 = con reserva."
+      />
+      {j.puertas && (
+        <div>
+          <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-plata-500">Puertas de cero tolerancia</p>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3" data-puertas>
+            {j.puertas.map((p) => (
+              <Prueba key={p.nombre} titulo={p.nombre} ok={p.ok} valor={p.valor} detalle={`se exige ${p.umbral}`} />
+            ))}
+          </div>
+        </div>
+      )}
+      {s && (
+        <div data-score={s.total}>
+          <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-plata-500">Puntuación · {num(s.total, 0)} de 100 (se piden 75)</p>
+          <div className="space-y-1.5">
+            {partes.map(([k, peso, v]) => (
+              <div key={k} className="flex items-center gap-3 text-[11px]">
+                <span className="w-44 shrink-0 text-plata-300">{k} · {peso} %</span>
+                <span className="relative h-2 flex-1 rounded-full bg-white/10">
+                  <span className="absolute inset-y-0 left-0 rounded-full bg-white" style={{ width: `${v * 100}%` }} />
+                </span>
+                <span className="cifra w-16 text-right text-white">{num(v * peso, 1)} pts</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="overflow-x-auto">
+        <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-plata-500">Todas las reglas</p>
+        <table className="w-full min-w-[720px] text-left text-xs">
+          <tbody>
+            {j.reglas.map((g) => (
+              <tr key={g.nombre} className="border-b border-borde-suave last:border-0" data-regla={g.ok === null ? 'na' : g.ok ? 'ok' : 'falla'}>
+                <td className="w-6 py-2">{g.ok === null ? <Minus size={13} className="text-plata-600" /> : g.ok ? <Check size={13} className="text-white" /> : <X size={13} className="text-plata-400" />}</td>
+                <td className="py-2 text-plata-100">{g.nombre}</td>
+                <td className="py-2 text-[10px] uppercase tracking-[0.1em] text-plata-500">{g.tipo === 'puerta' ? 'puerta' : 'puntúa'}</td>
+                <td className="cifra py-2 text-white">{g.valor}</td>
+                <td className="py-2 text-plata-500">{g.umbral}</td>
+                <td className="py-2 text-[10.5px] text-plata-500">{g.explicacion}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <details className="rounded-lg border border-borde-suave px-3 py-2 text-[11px] text-plata-300">
+        <summary className="cursor-pointer text-plata-100">Cómo se calcula</summary>
+        <ul className="mt-2 list-disc space-y-1 pl-4">
+          <li>Antes de nada: ≥ 500 barras y ≥ 30 operaciones fuera de muestra; si no, «datos insuficientes».</li>
+          <li>Puertas (si falla una: rechazada): anti-futuro sin fugas · ruina ≤ 5 % · PBO &lt; 5 % · DSR ≥ 0,95 · Luck test p &lt; 0,05 · módulo de robustez (menos de 2 fallos críticos). Una puerta que no aplica (p. ej. PBO con una sola variante) no rechaza.</li>
+          <li>Nota (cada parte de 0 a 1): WFE ÷ 0,7 (25 %); media de (PF con costos ×2 − 1) ÷ 0,5 y vecinos aceptables (25 %); media de (DSR − 0,5) ÷ 0,5 y 1 − PBO ÷ 0,5 (30 %); media de 1 − p ÷ 0,05, Sharpe anual ÷ 2 y 1 − drawdown ÷ 30 % (20 %).</li>
+          <li>75 o más: aprobada para Paper Trading. Menos de 75: aprobada con reserva (cuarentena).</li>
+        </ul>
+      </details>
+    </Panel>
+  );
+}
+
 /** Motor 2 · Métricas: fuera de muestra (lo que cuenta) frente a dentro (optimista). */
 function SeccionMetricas({ r }: { r: RespuestaLaboratorio }) {
   const j = r.resultado;
@@ -643,7 +752,10 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
     <div className="space-y-4" data-resultado-juez={j.veredicto}>
       <div className={`rounded-xl border p-4 ${aprobada ? 'border-white bg-white text-black' : 'border-borde'}`}>
         <p className={`text-[10px] uppercase tracking-[0.16em] ${aprobada ? 'text-black/60' : 'text-plata-500'}`}>Veredicto del Juez</p>
-        <p className={`mt-1 text-2xl font-light ${aprobada ? '' : 'text-white'}`}>{j.veredicto}</p>
+        <p className={`mt-1 text-2xl font-light ${aprobada ? '' : 'text-white'}`}>
+          {TEXTO_VEREDICTO[j.veredicto] ?? j.veredicto}
+          {j.score && <span className="cifra ml-3 text-base">{num(j.score.total, 0)}/100</span>}
+        </p>
         <p className={`mt-1 text-sm ${aprobada ? '' : 'text-plata-200'}`}>{j.resumen}</p>
         {(j.alertas ?? []).map((a) => (
           <p key={a} className={`mt-1 text-[11.5px] ${aprobada ? 'text-black/80' : 'text-plata-100'}`} data-alerta>
@@ -661,25 +773,12 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
       <SeccionMonteCarlo r={r} />
       <SeccionLuck r={r} />
 
-      <Panel titulo="Reglas del Juez" cuerpo="overflow-x-auto px-4 py-2">
-        <table className="w-full min-w-[720px] text-left text-xs">
-          <tbody>
-            {j.reglas.map((g) => (
-              <tr key={g.nombre} className="border-b border-borde-suave last:border-0" data-regla={g.ok === null ? 'na' : g.ok ? 'ok' : 'falla'}>
-                <td className="w-6 py-2">{g.ok === null ? <Minus size={13} className="text-plata-600" /> : g.ok ? <Check size={13} className="text-white" /> : <X size={13} className="text-plata-400" />}</td>
-                <td className="py-2 text-plata-100">{g.nombre}</td>
-                <td className="cifra py-2 text-white">{g.valor}</td>
-                <td className="py-2 text-plata-500">{g.umbral}</td>
-                <td className="py-2 text-[10.5px] text-plata-500">{g.explicacion}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Panel>
 
       <SeccionRobustez r={r} />
 
       <SeccionSobreajuste r={r} />
+      <SeccionAntiFuturo r={r} />
+      <SeccionVeredicto r={r} />
     </div>
   );
 }

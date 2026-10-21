@@ -160,10 +160,12 @@ export function paperHtml(p: Paper): string {
   const wfe = j.wfo ? `<p>Eficiencia Walk-Forward (WFE): <b>${j.wfo.wfe === null ? '— (el entrenamiento no gana)' : `${num(j.wfo.wfe, 2)} · ${esc(j.wfo.clase ?? '')}`}</b> · IS ${j.wfo.lIs} barras, OOS ${j.wfo.lOos}, embargo ${j.wfo.embargo}.</p>` : '';
   const conclusion =
     j.veredicto === 'APROBADA'
-      ? 'La estrategia supera todas las reglas aplicables del Juez con datos que no vio al elegir sus parámetros. Es candidata a operar en Paper; los resultados pasados no garantizan resultados futuros y debe vigilarse frente a lo que el Juez esperaba.'
+      ? `La estrategia pasa todas las puertas del Juez${j.score ? ` con ${num(j.score.total, 0)} puntos de 100` : ''}, con datos que no vio al elegir sus parámetros. Está lista para operar en Paper; los resultados pasados no garantizan resultados futuros y debe vigilarse frente a lo que el Juez esperaba.`
+      : j.veredicto === 'APROBADA CON RESERVA'
+        ? `Pasa todas las puertas, pero con ${j.score ? num(j.score.total, 0) : '—'} puntos (se piden 75): queda en cuarentena. Conviene reajustar los parámetros o grabar más datos antes de pasarla a Paper.`
       : j.veredicto === 'DATOS INSUFICIENTES'
         ? 'Todavía no hay datos suficientes para juzgarla. Hay que seguir grabando el mercado y repetir la prueba.'
-        : `La estrategia no supera el Juez: ${j.reglas.filter((g) => g.ok === false).map((g) => g.nombre.toLowerCase()).join(', ')}. No debe operarse.`;
+        : `La estrategia no supera el Juez: ${(j.puertas ?? j.reglas).filter((g) => g.ok === false).map((g) => g.nombre.toLowerCase()).join(', ')}. No debe operarse.`;
 
   return `<!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">

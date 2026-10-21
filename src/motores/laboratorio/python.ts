@@ -15,6 +15,7 @@
 import type { FilaFeatures } from '../nucleo/features';
 import { normalizarPosiciones } from '../juez/backtest';
 import type { Combo } from '../juez/juez';
+import { alterarDesde, analizarCodigo, CORTES_ANTIFUTURO, primeraDiferencia, type ResultadoAntiFuturo } from './antiFuturo';
 
 /** Interfaz mínima de Pyodide que se usa (permite probar con Pyodide en Node). */
 export interface PyodideMinimo {
@@ -42,6 +43,13 @@ def _athenai_cargar(codigo, filas_json):
     combos = [dict(zip(claves, c)) for c in itertools.product(*valores)] if claves else [{}]
     return json.dumps(combos)
 
+def _athenai_correr_filas(p_json, filas_json):
+    filas = json.loads(filas_json)
+    pos = list(_ns["estrategia"]([dict(f) for f in filas], dict(json.loads(p_json))))
+    if len(pos) != len(filas):
+        raise ValueError(f"estrategia() devolvió {len(pos)} posiciones para {len(filas)} filas")
+    return json.dumps([float(x) if isinstance(x, (int, float, bool)) else 0 for x in pos])
+
 def _athenai_correr(p_json, hasta):
     p = json.loads(p_json)
     filas = _filas if hasta < 0 else _filas[:hasta]
@@ -57,7 +65,7 @@ def _athenai_correr(p_json, hasta):
 export interface ResultadoEjecucion {
   combos: Combo[];
   posiciones: number[][];
-  antiFuturo: { ok: boolean; detalle: string };
+  antiFuturo: ResultadoAntiFuturo;
 }
 
 /** Filas en el formato que ve la estrategia: cierre, close y cada Feature como clave. */
@@ -88,21 +96,34 @@ export function ejecutarEstrategia(py: PyodideMinimo, codigo: string, filas: rea
     return normalizarPosiciones(correr(c), filas.length);
   });
 
-  // Prueba anti-futuro: con los datos recortados en 8 puntos, las posiciones pasadas deben ser idénticas.
-  // (Una estrategia que mira una sola fila adelante solo se delata en la última fila de cada recorte: con 8
-  // recortes la probabilidad de que se escape por casualidad es < 1 %.)
-  aviso?.('Prueba anti-futuro: ejecutando con los datos recortados…');
-  const CORTES = [0.3, 0.38, 0.46, 0.54, 0.62, 0.7, 0.78, 0.86];
-  let antiFuturo = { ok: true, detalle: `posiciones idénticas con los datos recortados en ${CORTES.length} puntos` };
-  for (const frac of CORTES) {
+  // Motor 9 · Anti-futuro: análisis del código y prueba de causalidad (recorte y alteración en 8 cortes).
+  aviso?.('Anti-futuro: revisando el código y probando con datos recortados y alterados…');
+  const estatico = analizarCodigo(codigo);
+  let dinamico: ResultadoAntiFuturo['dinamico'] = { cortes: CORTES_ANTIFUTURO.length, recorte: true, alteracion: true, fila: null, prueba: null };
+  for (const frac of CORTES_ANTIFUTURO) {
     const hasta = Math.floor(filas.length * frac);
     if (hasta < 10) continue;
-    const parcial = normalizarPosiciones(correr(combos[0], hasta), hasta);
-    const distinta = parcial.findIndex((p, i) => p !== posiciones[0][i]);
-    if (distinta >= 0) {
-      antiFuturo = { ok: false, detalle: `la posición de la fila ${distinta} cambia al añadir filas posteriores (recorte al ${Math.round(frac * 100)} %)` };
+    const recortada = normalizarPosiciones(correr(combos[0], hasta), hasta);
+    let d = primeraDiferencia(recortada, posiciones[0], hasta);
+    if (d >= 0) {
+      dinamico = { ...dinamico, recorte: false, fila: d, prueba: 'recorte' };
+      break;
+    }
+    py.globals.set('_athenai_p', JSON.stringify(combos[0]));
+    py.globals.set('_athenai_alt', JSON.stringify(filasParaPython(alterarDesde(filas, hasta, 1_000 + hasta))));
+    const alterada = normalizarPosiciones(JSON.parse(String(py.runPython('_athenai_correr_filas(_athenai_p, _athenai_alt)'))) as unknown[], filas.length);
+    d = primeraDiferencia(alterada, posiciones[0], hasta);
+    if (d >= 0) {
+      dinamico = { ...dinamico, alteracion: false, fila: d, prueba: 'alteración' };
       break;
     }
   }
+  const ok = !estatico.violaciones.length && dinamico.recorte && dinamico.alteracion;
+  const detalle = estatico.violaciones.length
+    ? `el código lee datos del futuro: ${estatico.violaciones[0]}`
+    : dinamico.prueba
+      ? `la posición de la fila ${dinamico.fila} cambia al ${dinamico.prueba === 'recorte' ? 'quitar' : 'alterar'} filas posteriores`
+      : `posiciones idénticas con los datos recortados y alterados en ${CORTES_ANTIFUTURO.length} puntos`;
+  const antiFuturo: ResultadoAntiFuturo = { ok, detalle, estatico, dinamico };
   return { combos, posiciones, antiFuturo };
 }
