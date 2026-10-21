@@ -60,6 +60,7 @@ export function useFeeds() {
 export const NOMBRE_PROVEEDOR: Record<Proveedor, string> = {
   binance: 'Binance Futures',
   rithmic: 'Rithmic',
+  grabadora: 'Grabadora 24/7 (VPS)',
 };
 
 /**

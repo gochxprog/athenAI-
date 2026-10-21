@@ -5,3 +5,4 @@ dist
 .env*
 # Copiado de node_modules/pyodide al arrancar Vite
 public/pyodide
+grabadora/dist/

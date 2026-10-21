@@ -188,7 +188,7 @@ function detenerTodo(): void {
 
 const vaciarAlmacenes = () => Promise.all([...almacenes.values()].map((al) => al.vaciar().catch(() => 0)));
 
-const NOMBRE: Record<Proveedor, string> = { binance: 'Binance USD-M Futures', rithmic: 'Rithmic (puente)' };
+const NOMBRE: Record<Proveedor, string> = { binance: 'Binance USD-M Futures', rithmic: 'Rithmic (puente)', grabadora: 'Grabadora 24/7 (VPS)' };
 
 async function aplicar(c: ConfigCentro): Promise<void> {
   detenerTodo();

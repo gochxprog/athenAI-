@@ -1,13 +1,13 @@
 // Almacén de Features por fuente de datos. Cada proveedor tiene su PROPIA base IndexedDB ("carpeta"):
-//   athenai-binance · athenai-rithmic
+//   athenai-binance · athenai-rithmic · athenai-grabadora (lo grabado 24/7 en tu VPS, descargado aquí)
 // Así los datos de una fuente nunca se mezclan con los de otra y cada una se exporta o se borra por separado.
 // Funciona en el Worker del motor (IndexedDB existe en workers) y en Node con fake-indexeddb (pruebas).
 import type { FilaFeatures } from '../nucleo/features';
 import type { ParametrosSimbolo } from '../nucleo/parametros';
 
-export type Proveedor = 'binance' | 'rithmic';
+export type Proveedor = 'binance' | 'rithmic' | 'grabadora';
 
-export const PROVEEDORES: Proveedor[] = ['binance', 'rithmic'];
+export const PROVEEDORES: Proveedor[] = ['binance', 'rithmic', 'grabadora'];
 
 /** Carpetas de fuentes que ya no existen (la antigua «Simulación» y el servidor externo): se borran. */
 export function borrarCarpetasViejas(): void {
@@ -90,6 +90,14 @@ export class AlmacenFeatures {
     const id = await promesa(tx.objectStore('sesiones').add({ simbolo, inicio, parametros } satisfies SesionGuardada));
     await fin(tx);
     return id as number;
+  }
+
+  /** Registra una sesión con su número ya asignado (las que vienen de la grabadora del VPS). */
+  async registrarSesion(s: Required<SesionGuardada>): Promise<void> {
+    const db = await this.abrir();
+    const tx = db.transaction('sesiones', 'readwrite');
+    tx.objectStore('sesiones').put(s);
+    await fin(tx);
   }
 
   /** Encola filas; se escriben en una sola transacción con `vaciar()`. */

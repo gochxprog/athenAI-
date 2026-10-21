@@ -97,6 +97,12 @@ Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el p
 Las 39 Features quedaron sin escala (ratios, fracciones y z robustos con ventana móvil) y protegidas contra división
 por cero, NaN e infinitos; un fallo de cálculo ya no detiene el motor. Detalle en `AUDITORIA_FEATURES.md`. ✅ falta tu visto bueno.
 
+## Grabadora 24/7 (VPS) · octubre 2026
+Programa en `grabadora/` que corre en el VPS con Node 22 y los MISMOS motores (Binance → Vigía → dollar bars → 39
+Features). Guarda en disco (`/var/lib/athenai-grabadora`, un archivo por símbolo y día), protege los datos con una
+clave y la plataforma los descarga a la carpeta «athenai-grabadora» (Datos → Grabadora 24/7), al abrirla y cada 5 min.
+Instalación con `instalar.sh` (servicio de systemd que arranca solo). Paquete: `npm run grabadora:paquete`. ✅ falta tu visto bueno.
+
 ## Por conectar o por hacer
 
 | Pantalla | Motor | Estado |

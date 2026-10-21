@@ -1,0 +1,161 @@
+// Grabadora 24/7 de athenAI (corre en el VPS con Node 22).
+// Usa los MISMOS motores que la plataforma: fuente Binance → Vigía → dollar bars → 39 Features, y guarda cada fila
+// en disco. La plataforma descarga lo grabado (Datos → Grabadora 24/7) aunque el computador haya estado apagado.
+//
+// Variables (todas opcionales):
+//   SIMBOLOS=BTCUSDT,ETHUSDT   PUERTO=8080   DATOS=/var/lib/athenai-grabadora   WEB=<carpeta de la plataforma>
+//   BINANCE_REST / BINANCE_WS  (solo para pruebas con un servidor propio)
+import fs from 'node:fs';
+import path from 'node:path';
+import { randomBytes } from 'node:crypto';
+import { FuenteBinance } from '../src/motores/fuentes/binance';
+import { Pipeline } from '../src/motores/nucleo/pipeline';
+import { inferirTick, parametrosParaSimbolo, parametrosPorDefecto, type ParametrosSimbolo } from '../src/motores/nucleo/parametros';
+import { EVENTOS_PREDEFINIDOS } from '../src/motores/nucleo/calendario';
+import type { MensajeMercado } from '../src/motores/nucleo/tipos';
+import { AlmacenDisco } from './almacenDisco';
+import { crearServidor, type EstadoSimbolo } from './servidor';
+
+export const VERSION = '1.0.0';
+
+interface Activo {
+  pipeline: Pipeline;
+  calibrado: boolean;
+  sesion: number;
+  filas: number;
+  ultimoCierre: number | null;
+  cortes: number;
+}
+
+export interface OpcionesGrabadora {
+  simbolos: string[];
+  puerto: number;
+  datos: string;
+  web: string | null;
+  rest?: string;
+  ws?: string;
+  /** Mensajes al registro (journald en el VPS). */
+  log?: (texto: string) => void;
+}
+
+/** Clave de acceso: se crea una vez (aleatoria) y se guarda en la carpeta de datos. */
+export function leerOCrearClave(datos: string): string {
+  const f = path.join(datos, 'clave.txt');
+  if (fs.existsSync(f)) return fs.readFileSync(f, 'utf8').trim();
+  const clave = randomBytes(18).toString('base64url');
+  fs.mkdirSync(datos, { recursive: true });
+  fs.writeFileSync(f, `${clave}\n`, { mode: 0o600 });
+  return clave;
+}
+
+export function iniciarGrabadora(o: OpcionesGrabadora) {
+  const log = o.log ?? ((t: string) => console.log(`[${new Date().toISOString()}] ${t}`));
+  const almacen = new AlmacenDisco(path.join(o.datos));
+  const clave = leerOCrearClave(o.datos);
+  const inicio = Date.now();
+  const activos = new Map<string, Activo>();
+  let siguienteSesion = inicio;
+
+  const crear = (simbolo: string, p: ParametrosSimbolo, calibrado: boolean, previo?: Activo): Activo => {
+    const pipeline = new Pipeline(p);
+    pipeline.calendario = EVENTOS_PREDEFINIDOS;
+    if (previo) {
+      pipeline.conexion = previo.pipeline.conexion;
+      pipeline.detalleConexion = previo.pipeline.detalleConexion;
+    }
+    const sesion = siguienteSesion++;
+    if (calibrado) almacen.nuevaSesion(simbolo, p, Date.now(), sesion);
+    const a: Activo = { pipeline, calibrado, sesion, filas: previo?.filas ?? 0, ultimoCierre: previo?.ultimoCierre ?? null, cortes: previo?.cortes ?? 0 };
+    activos.set(simbolo, a);
+    return a;
+  };
+  for (const s of o.simbolos) crear(s, parametrosPorDefecto(s), false);
+
+  const procesar = (simbolo: string, m: MensajeMercado) => {
+    let a = activos.get(simbolo);
+    if (!a) return;
+    if (m.tipo === 'trades' && m.trades.length && !a.calibrado) {
+      const precios = m.trades.map((t) => t.price);
+      a = crear(simbolo, parametrosParaSimbolo(simbolo, inferirTick(simbolo, precios), precios[precios.length - 1], 0), true, a);
+    }
+    if (m.tipo === 'conexion' && m.estado !== a.pipeline.conexion) {
+      log(`${simbolo}: ${m.estado}${m.detalle ? ` · ${m.detalle}` : ''}`);
+      if ((m.estado === 'reconectando' || m.estado === 'error') && a.pipeline.conexion === 'en-vivo') a.cortes += 1;
+    }
+    const nuevas = a.pipeline.procesar(m);
+    if (nuevas.length && a.calibrado) {
+      almacen.guardar(simbolo, a.sesion, nuevas);
+      a.filas += nuevas.length;
+      a.ultimoCierre = nuevas[nuevas.length - 1].cierre;
+    }
+  };
+
+  const fuente = new FuenteBinance({
+    simbolos: o.simbolos,
+    rest: o.rest,
+    ws: o.ws,
+    onMensaje: (s, m) => procesar(s, m),
+    onInfo: (i) => {
+      const a = activos.get(i.simbolo);
+      if (a) crear(i.simbolo, parametrosParaSimbolo(i.simbolo, i.tickSize, i.precio, i.volumen24hUsd), true, a);
+      const p = activos.get(i.simbolo)!.pipeline.parametros;
+      log(`${i.simbolo}: tick ${p.tickSize} · dollar bar ${p.temporalidades.dollar.tipo === 'dolar' ? p.temporalidades.dollar.usd : 0} USD`);
+    },
+  });
+
+  const escritura = setInterval(() => {
+    try {
+      almacen.vaciar();
+    } catch (e) {
+      log(`Error al escribir en disco: ${e instanceof Error ? e.message : e}`);
+    }
+  }, 2_000);
+  const resumen = setInterval(() => {
+    log([...activos].map(([s, a]) => `${s} ${a.pipeline.conexion} · ${a.filas} filas`).join(' | '));
+  }, 600_000);
+
+  const estado = () => ({
+    inicio,
+    version: VERSION,
+    simbolos: [...activos].map(([simbolo, a]): EstadoSimbolo => ({
+      simbolo,
+      conexion: a.pipeline.conexion,
+      detalle: a.pipeline.detalleConexion,
+      filasSesion: a.filas,
+      ultimoCierre: a.ultimoCierre,
+      cortes: a.cortes,
+      tradesPerdidos: a.pipeline.tradesPerdidos,
+    })),
+  });
+  const servidor = crearServidor({ almacen, clave, estado, web: o.web });
+  servidor.listen(o.puerto, () => log(`Grabadora ${VERSION} escuchando en el puerto ${o.puerto} · símbolos: ${o.simbolos.join(', ')} · datos en ${o.datos}`));
+  void fuente.iniciar();
+
+  const detener = () => {
+    clearInterval(escritura);
+    clearInterval(resumen);
+    fuente.detener();
+    almacen.vaciar();
+    servidor.close();
+  };
+  return { clave, almacen, servidor, detener, estado };
+}
+
+// Arranque como programa (no al importarlo desde las pruebas).
+if (process.argv[1] && /grabadora\.(m?js|ts)$/.test(process.argv[1])) {
+  const simbolos = (process.env.SIMBOLOS ?? 'BTCUSDT').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+  const g = iniciarGrabadora({
+    simbolos,
+    puerto: Number(process.env.PUERTO ?? 8080),
+    datos: process.env.DATOS ?? path.resolve('datos'),
+    web: process.env.WEB && fs.existsSync(process.env.WEB) ? process.env.WEB : null,
+    rest: process.env.BINANCE_REST || undefined,
+    ws: process.env.BINANCE_WS || undefined,
+  });
+  for (const sig of ['SIGINT', 'SIGTERM'] as const) {
+    process.on(sig, () => {
+      g.detener();
+      process.exit(0);
+    });
+  }
+}

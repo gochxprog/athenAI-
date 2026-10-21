@@ -1,0 +1,31 @@
+GRABADORA 24/7 DE ATHENAI
+=========================
+
+Graba el mercado de Binance las 24 horas en tu VPS, con los mismos motores de la plataforma
+(barras, 39 Features, Vigía de huecos). La plataforma descarga lo grabado sola.
+
+INSTALAR (Ubuntu 22.04 o 24.04)
+1. Sube este zip al VPS. Desde Windows (PowerShell):
+      scp athenai-grabadora.zip root@IP-DE-TU-VPS:/root/
+2. Entra al VPS y ejecuta:
+      cd /root
+      apt-get install -y unzip
+      unzip -o athenai-grabadora.zip -d athenai-grabadora
+      sudo bash athenai-grabadora/instalar.sh BTCUSDT
+   (para grabar varios: sudo bash athenai-grabadora/instalar.sh BTCUSDT,ETHUSDT)
+3. Al terminar verás la DIRECCIÓN y la CLAVE. En la plataforma:
+      Datos → Grabadora 24/7 → pega la dirección y la clave → Conectar.
+
+TAMBIÉN PUEDES ABRIR LA PLATAFORMA DESDE EL VPS
+      http://IP-DE-TU-VPS:8080   (si el zip trae la carpeta web/)
+
+ÚTIL
+- Ver qué hace:        journalctl -u athenai-grabadora -f
+- Reiniciar:           sudo systemctl restart athenai-grabadora
+- Actualizar:          sube el zip nuevo y vuelve a ejecutar el paso 2 (los datos se conservan)
+- Datos grabados en:   /var/lib/athenai-grabadora
+- La clave está en:    /var/lib/athenai-grabadora/clave.txt
+
+IMPORTANTE
+- Binance bloquea los VPS de Estados Unidos: el instalador avisa si no llega a Binance.
+- Si tu proveedor tiene cortafuegos en su panel web, abre el puerto 8080 (TCP).

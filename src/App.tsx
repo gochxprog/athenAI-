@@ -7,11 +7,14 @@ import { META_MODULO } from '@/data/metaModulo';
 import type { Modulo } from '@/types/nav';
 import { iniciarNotificaciones } from '@/motores/notificaciones/iniciar';
 import { iniciarPaper } from '@/motores/paper/iniciar';
+import { iniciarGrabadora } from '@/motores/grabadora/cliente';
 
 // Avisos a Discord / Telegram / ntfy desde que se abre la app (no solo al entrar en un módulo).
 iniciarNotificaciones();
 // Los bots de Paper siguen operando aunque cambies de pantalla.
 iniciarPaper();
+// Descarga lo grabado por la grabadora 24/7 del VPS (si está configurada).
+iniciarGrabadora();
 
 // Cada módulo se carga bajo demanda: Three.js y R3F solo se descargan cuando hacen falta.
 const DashboardView = lazy(() => import('@/modules/DashboardView'));
