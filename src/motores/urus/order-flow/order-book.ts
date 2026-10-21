@@ -59,7 +59,7 @@ export interface OrderBookView {
   /** (ΣL_bid − ΣL_ask) / (ΣL_bid + ΣL_ask) sobre los niveles visibles; null si la suma es 0. */
   imbalance: number | null;
   /**
-   * MicroPrice del mejor nivel visible: (Q_bid·P_ask + Q_ask·P_bid) / (Q_bid + Q_ask).
+   * MicroPrice del mejor nivel REAL (precio y cantidad sin agrupar): (Q_bid·P_ask + Q_ask·P_bid) / (Q_bid + Q_ask).
    * null si el libro está vacío o cruzado. Campo opcional: solo informativo.
    */
   microPrice?: number | null;
@@ -277,8 +277,9 @@ export class OrderBookEngine {
 
     // MicroPrice y OBI_N: métricas informativas sobre los niveles visibles.
     // No alteran `imbalance` ni ningún otro campo existente.
-    const bestBidQty = bids.levels.length > 0 ? bids.levels[0][1] : null;
-    const bestAskQty = asks.levels.length > 0 ? asks.levels[0][1] : null;
+    // Cantidades del mejor nivel REAL (no del grupo): el MicroPrice es una medida del primer nivel del libro.
+    const bestBidQty = this.bidIdx.length > 0 ? (this.bids.get(this.bidIdx[0]) ?? null) : null;
+    const bestAskQty = this.askIdx.length > 0 ? (this.asks.get(this.askIdx[0]) ?? null) : null;
     const microPrice =
       bestBid !== null && bestAsk !== null && bestBidQty !== null && bestAskQty !== null
         ? computeMicroPrice({ bidPrice: bestBid, bidQty: bestBidQty, askPrice: bestAsk, askQty: bestAskQty })

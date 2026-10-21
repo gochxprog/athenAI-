@@ -31,6 +31,16 @@ describe("fillsByLevel", () => {
     expect(m.get("BID:100")).toBe(2);
     expect(m.size).toBe(2);
   });
+
+  it("con el libro agrupado (cubos de 1 USD) un trade entre cubos cae en el cubo del libro: ask hacia arriba, bid hacia abajo", () => {
+    const a = col(0, { 101: 10, 100: 10 });
+    const b = col(1000, { 101: 10, 100: 10 });
+    // Compra a 100,3: el libro la muestra en el ask 101 (antes se redondeaba a 100 = bid y se descartaba).
+    // Venta a 100,7: el libro la muestra en el bid 100 (antes iba a 101 = ask y se descartaba).
+    const m = fillsByLevel(a, b, [buy(200, 100.3, 4), sell(300, 100.7, 6)], STEP, 60);
+    expect(m.get("ASK:101")).toBe(4);
+    expect(m.get("BID:100")).toBe(6);
+  });
 });
 
 describe("stepIcebergs", () => {

@@ -1,19 +1,20 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Brain, Cpu, Download, ListTree, Table2 } from 'lucide-react';
+import { Activity, BookOpen, Brain, Cpu, Download, ListTree, Table2 } from 'lucide-react';
 import Encabezado from '@/components/ui/Encabezado';
 import Panel from '@/components/ui/Panel';
 import Insignia from '@/components/ui/Insignia';
 import OrderFlowChart, { NOMBRE_PROVEEDOR, useEstadoMotor, useFeeds } from '@/components/orderflow/OrderFlowChart';
 import ResumenMercados from '@/components/orderflow/ResumenMercados';
 import MemoriaMercado from '@/components/orderflow/MemoriaMercado';
+import MotoresOrderFlow from '@/components/orderflow/MotoresOrderFlow';
 import { descargarCsv, motorOrderFlow } from '@/motores/worker/motorCliente';
 import { DEFINICIONES_FEATURES } from '@/motores/nucleo/features';
 import type { EstadoGrafico } from '@/motores/nucleo/pipeline';
 import type { TipoEvento } from '@/motores/nucleo/tipos';
 import { decimalesDe, hora, num } from '@/lib/format';
 
-type Pestana = 'eventos' | 'memoria' | 'features' | 'salud';
+type Pestana = 'eventos' | 'motores' | 'memoria' | 'features' | 'salud';
 
 const NOMBRE_EVENTO: Record<TipoEvento, string> = {
   absorcion: 'Absorción',
@@ -54,6 +55,7 @@ export default function OrderFlowView() {
         {(
           [
             ['eventos', 'Eventos detectados', ListTree],
+            ['motores', 'Cómo funciona cada motor', BookOpen],
             ['memoria', 'Memoria del mercado', Brain],
             ['features', 'Features para el ML', Table2],
             ['salud', 'Salud del motor', Cpu],
@@ -68,6 +70,7 @@ export default function OrderFlowView() {
       </div>
 
       {pestana === 'eventos' && <Eventos estado={estado} />}
+      {pestana === 'motores' && <MotoresOrderFlow feed={visibleFeed} estado={estado} />}
       {pestana === 'memoria' && <MemoriaMercado />}
       {pestana === 'features' && <Features estado={estado} />}
       {pestana === 'salud' && <Salud estado={estado} msProceso={msProceso} />}

@@ -16,9 +16,23 @@ import { num } from '@/lib/format';
 import { guardarEstrategias, leerEstrategias, PLANTILLAS, type EstrategiaGuardada } from './plantillas';
 import ResultadoJuezVista from './ResultadoJuez';
 import BibliotecaPapers, { AccionesPaper, VisorPaper } from './BibliotecaPapers';
-import { crearPaper, guardarPaper, type Paper } from '@/motores/papers/paper';
+import { crearPaper, guardarPaper, leerPapers, type Paper } from '@/motores/papers/paper';
 
 const clave = claveFuente;
+
+/** Lo que hace el Juez, en una línea por motor (se muestra antes de la primera prueba). */
+const MOTORES_JUEZ = [
+  ['Backtest', 'repite tu estrategia sobre lo grabado, pagando comisión, deslizamiento y funding.'],
+  ['Métricas', 'retorno, Sharpe, caída máxima, aciertos y más, fuera de muestra.'],
+  ['Walk-Forward', 'elige los parámetros con un tramo y los prueba en el siguiente que no vio, una y otra vez.'],
+  ['Monte Carlo', 'baraja tus operaciones miles de veces para ver la peor racha probable y el riesgo de ruina.'],
+  ['Luck test', 'compara con miles de estrategias al azar: ¿habilidad o suerte?'],
+  ['Robustez', 'costos al doble, parámetros vecinos, otro mercado y estabilidad en el tiempo.'],
+  ['Deflated Sharpe', 'descuenta el haber probado muchas variantes.'],
+  ['PBO', 'probabilidad de que la mejor variante sea solo sobreajuste.'],
+  ['Anti-futuro', 'comprueba que el código no mira datos del futuro.'],
+  ['Veredicto', 'aprobada para Paper, con reserva o rechazada, con una nota de 0 a 100.'],
+];
 
 /** Laboratorio real: estrategias en Python sobre tus Features guardadas, juzgadas por el Juez. */
 export default function EstrategiasPython() {
@@ -109,6 +123,13 @@ export default function EstrategiasPython() {
   };
 
   const lineas = useMemo(() => sel.codigo.split('\n').length, [sel.codigo]);
+  // Si no hay una prueba recién hecha, se muestra la última guardada (paper) de esta estrategia.
+  const ultimo = useMemo(() => {
+    void versionPapers;
+    return leerPapers().filter((x) => x.estrategia === sel.nombre).sort((a, b) => b.creado - a.creado)[0] ?? null;
+  }, [sel.nombre, versionPapers]);
+  const mostrado = resultado ?? (corriendo ? null : ultimo?.respuesta ?? null);
+  const fuenteSel = fuentes.find((x) => clave(x) === datos);
 
   return (
     <div className="space-y-4" data-laboratorio-python>
@@ -192,6 +213,7 @@ export default function EstrategiasPython() {
 
       <Panel titulo="Probar con el Juez" icono={Gavel} accion={<Insignia variante="contorno">{sel.ensayos} {sel.ensayos === 1 ? 'variante probada' : 'variantes probadas'} con esta idea</Insignia>} cuerpo="space-y-3 p-4">
         {!fuentes.length && <p className="text-xs text-plata-400">No hay datos guardados todavía. Activa una fuente en el Centro de datos con «Guardar las Features» y deja grabando el mercado.</p>}
+        {fuenteSel && fuenteSel.filas < 100 && <p className="text-xs text-plata-200" data-pocas-filas>⚠ Solo hay {num(fuenteSel.filas)} barras grabadas de {fuenteSel.simbolo}. El Juez necesita al menos 100 (y para un resultado fiable, días de datos). Déjalo grabando.</p>}
         <div className="grid gap-3 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_auto_auto]">
           <label className="block">
             <span className="etiqueta">Datos</span>
@@ -322,7 +344,25 @@ export default function EstrategiasPython() {
           <AccionesPaper p={paper} alVer={setViendo} />
         </div>
       )}
-      {resultado && <ResultadoJuezVista r={resultado} />}
+      {!resultado && mostrado && ultimo && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-borde p-3" data-ultima-prueba>
+          <span className="text-xs text-white">Última prueba del Juez · {new Date(ultimo.creado).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })} · {ultimo.simbolo}</span>
+          <AccionesPaper p={ultimo} alVer={setViendo} />
+        </div>
+      )}
+      {mostrado && <ResultadoJuezVista r={mostrado} />}
+      {!mostrado && !corriendo && (
+        <Panel titulo="Lo que hará el Juez" icono={Gavel} cuerpo="p-4" data-sin-prueba>
+          <p className="mb-2 text-xs text-plata-300">Esta estrategia todavía no se ha probado. Al pulsar «Probar con el Juez» pasa por estos 10 motores, y aquí aparece cada uno con sus gráficos:</p>
+          <ol className="grid gap-1.5 text-[11.5px] text-plata-300 md:grid-cols-2">
+            {MOTORES_JUEZ.map(([n, t], i) => (
+              <li key={n}>
+                <span className="text-white">{i + 1}. {n}:</span> {t}
+              </li>
+            ))}
+          </ol>
+        </Panel>
+      )}
       <BibliotecaPapers version={versionPapers} />
       <VisorPaper p={viendo} alCerrar={() => setViendo(null)} />
     </div>

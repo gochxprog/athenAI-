@@ -53,9 +53,25 @@ Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el p
 | Módulo | Motores | Estado |
 |---|---|---|
 | Datos | Fuentes (Binance, Rithmic, Urus), Vigía de huecos, Barras, Almacén | 🔍 |
-| Order Flow | Footprint, imbalances, absorción, agotamiento, big trades, icebergs, stop runs, OI, libro, pools, CVD, liquidaciones, Features | 🔍 |
+| Order Flow | Los 11 motores revisados uno por uno (tabla de abajo), con pruebas a mano y la pestaña «Cómo funciona cada motor» | ✅ revisado, falta tu visto bueno |
 | Memoria | Régimen (HMM), día gemelo / «hoy es distinto», cruce entre mercados | 🔍 |
 | Panel General | Lectura del momento, Features extremas | 🔍 |
+
+## Order Flow · revisión (octubre 2026)
+
+| # | Motor | Resultado de la revisión |
+|---|---|---|
+| 1 | Libro (DOM) | **Corregido:** el MicroPrice usaba la cantidad del nivel agrupado; ahora usa el mejor bid y ask reales. Las Features usan el OBI y el MicroPrice del motor (antes se recalculaban con los niveles agrupados y se desviaban hasta 1 USD). |
+| 2 | Footprint e imbalances | Correcto (diagonal tipo ATAS, stacked ≥ 3, POC con desempate único). |
+| 3 | CVD y VWAP | **Corregido:** la pendiente del CVD saltaba al cambiar de sesión (ahora = delta de las 5 últimas barras). El CVD y el VWAP quedan vacíos en las Features si no se vio la sesión desde el inicio o hubo un corte. |
+| 4 | Big trades | Correcto (el z es sobre el volumen; se corrigió el comentario que decía nocional). |
+| 5 | Absorción | Correcto. |
+| 6 | Agotamiento | Correcto y sin mirar al futuro (se conoce al cerrar la barra siguiente). |
+| 7 | Icebergs | **Corregido:** con el libro agrupado, los trades se asignaban al nivel equivocado ~50 % de las veces (redondeo en vez de ask hacia arriba / bid hacia abajo). |
+| 8 | Stop runs | **Corregido:** la ruptura mínima usaba el tick crudo (0,2 USD en BTC); ahora usa el paso del libro (≈ 2 USD). |
+| 9 | Open Interest | Correcto. |
+| 10 | Heatmap y pools | **Mejorado:** el umbral automático de los pools se recalcula cada 10 s mientras hay pocas fotos (antes salía de 1–2 fotos y no cambiaba en 5 min). DOM: compras y ventas de 10 s en el nivel correcto. |
+| 11 | Liquidaciones y funding | Correcto (precio medio ejecutado × cantidad ejecutada). |
 
 ## Por conectar o por hacer
 

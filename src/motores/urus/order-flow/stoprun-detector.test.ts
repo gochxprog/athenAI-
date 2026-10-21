@@ -139,3 +139,26 @@ describe("aggregateTradesIntoBars / StopRunSeries", () => {
     expect(p.barMs).toBe(1000);
   });
 });
+
+describe("ruptura mínima en pasos del libro (valores a mano)", () => {
+  // 20 barras de 5 s con máximo 100 y volumen 1; luego una barra que sube a 100,5 con 5 de compra agresiva
+  // (5 ≥ 2 × mediana 1, 100 % del volumen) y la siguiente cierra en 99,5 (rechazo).
+  const barras = (): StopRunBar[] => {
+    const xs: StopRunBar[] = [];
+    for (let k = 0; k < 20; k += 1) xs.push({ idx: k, t: k * 5_000, high: 100, low: 99, open: 99.5, close: 99.5, buyQty: 0.5, sellQty: 0.5 });
+    xs.push({ idx: 20, t: 100_000, high: 100.5, low: 99.5, open: 99.6, close: 100.4, buyQty: 5, sellQty: 0 });
+    xs.push({ idx: 21, t: 105_000, high: 100.4, low: 99.4, open: 100.4, close: 99.5, buyQty: 0, sellQty: 3 });
+    return xs;
+  };
+  it("con paso 0,1 una ruptura de 0,5 (5 pasos ≥ 2) cuenta como barrido del máximo 100", () => {
+    const ev = detectStopRuns(barras(), 0.1, STOPRUN_DEFAULTS);
+    expect(ev).toHaveLength(1);
+    expect(ev[0].direction).toBe("HIGH");
+    expect(ev[0].level).toBe(100);
+    expect(ev[0].burstMultiple).toBeCloseTo(5, 12);
+    expect(ev[0].reversal).toBeCloseTo(100.5 - 99.5, 12);
+  });
+  it("con paso 1 (el del libro agrupado) 0,5 no llega a 2 pasos: no es un barrido", () => {
+    expect(detectStopRuns(barras(), 1, STOPRUN_DEFAULTS)).toHaveLength(0);
+  });
+});

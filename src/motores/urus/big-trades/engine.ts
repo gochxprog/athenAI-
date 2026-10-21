@@ -16,8 +16,9 @@
  * │ V_B = Σ v_i        N_B = Σ (v_i · p_i)        P_B = N_B / V_B  (VWAP)      │
  * │                                                                            │
  * │ Filtro 1 (USD):      N_B ≥ Umbral_USD                                      │
- * │ Filtro 2 (Z-Score):  Z_B = (N_B − μ) / σ ≥ Z_corte                         │
- * │   μ, σ sobre la ventana deslizante de los últimos M bloques cerrados.      │
+ * │ Filtro 2 (Z-Score):  Z_B = (V_B − μ_V) / σ_V ≥ Z_corte                     │
+ * │   sobre el VOLUMEN (no el nocional: un salto de precio no es un bloque).   │
+ * │   μ_V, σ_V (poblacional) de los últimos M bloques cerrados, SIN el actual. │
  * │ Pasa si cumple TODOS los filtros activos (AND); un filtro desactivado se   │
  * │ ignora y el otro decide solo (ver `closeBlock`).                           │
  * └────────────────────────────────────────────────────────────────────────────┘

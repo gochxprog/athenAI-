@@ -157,7 +157,6 @@ export class Pipeline {
   private canonica: SerieBarras;
   private vista: SerieBarras;
   private idVista: IdTemporalidad = '1m';
-  private cvdCanonico: number[] = [];
   private totalFilas = 0;
   /** CVD de la vista (suma de deltas desde 00:00 UTC) y OI por barra de la vista. */
   private cvdVista = new Map<number, number>();
@@ -219,7 +218,10 @@ export class Pipeline {
         this.mercado.funding(m.tasa);
         break;
       case 'conexion':
-        if (this.conexion === 'en-vivo' && m.estado !== 'en-vivo') this.huecoPendiente = true;
+        if (this.conexion === 'en-vivo' && m.estado !== 'en-vivo') {
+          this.huecoPendiente = true;
+          this.mercado.marcarHueco();
+        }
         this.conexion = m.estado;
         this.detalleConexion = m.detalle ?? '';
         break;
@@ -265,12 +267,10 @@ export class Pipeline {
 
   private filaCanonica(b: BarraAnalizada): FilaFeatures {
     const previas = this.canonica.barras.ultimos(121).slice(0, -1);
-    const { fila } = construirFila(b, previas, this.mercado, this.cvdCanonico);
+    const { fila } = construirFila(b, previas, this.mercado);
     fila.valores.hueco = this.huecoPendiente ? 1 : 0;
     fila.valores.ventana_evento = eventoEnVentana(this.calendario.filter((e) => e.impacto === 'alto'), b.cierre) ? 1 : 0;
     this.huecoPendiente = false;
-    this.cvdCanonico.push(this.mercado.cvdSesion);
-    if (this.cvdCanonico.length > 64) this.cvdCanonico = this.cvdCanonico.slice(-32);
     this.features.push(fila);
     this.totalFilas += 1;
     return fila;
@@ -369,7 +369,10 @@ export class Pipeline {
       for (let i = this.golpes.tamaño - 1; i >= 0; i -= 1) {
         const g = this.golpes.get(i)!;
         if (g.t < ahora - 10_000) break;
-        const p = Math.round(g.p / (v.tickSize * v.group)) * v.tickSize * v.group;
+        // Mismo cubo que el libro: una compra agresiva golpea un ask (cubos hacia arriba), una venta un bid (hacia abajo).
+        const paso = v.tickSize * v.group;
+        const q = g.p / paso;
+        const p = Number(((g.compra ? Math.ceil(q - 1e-9) : Math.floor(q + 1e-9)) * paso).toPrecision(15));
         const x = porNivel.get(p) ?? { compra: 0, venta: 0 };
         if (g.compra) x.compra += g.q;
         else x.venta += g.q;

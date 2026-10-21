@@ -79,6 +79,7 @@ export const DEFAULT_POOL_CONFIG: PoolConfig = { auto: true, threshold: 50, auto
 const REBUILD_MAX_COLUMNS = 12_000;
 const AUTO_SAMPLE_COLUMNS = 120;
 const AUTO_REFRESH_MS = 5 * 60_000;
+const AUTO_WARMUP_REFRESH_MS = 10_000;
 
 const floorDiv = (a: number, b: number) => Math.floor(a / b);
 
@@ -329,7 +330,10 @@ export class LiquidityPoolEngine {
     // (borrar todo y reprocesar hasta 12.000 columnas de golpe): un congelamiento periódico del hilo y, además,
     // pools que cambiaban retroactivamente. Ahora solo se recalcula el umbral en el sitio; los pools vivos
     // se reevalúan con él en las columnas siguientes.
-    const refreshThreshold = cfg.auto && now - this.lastRebuildAt > AUTO_REFRESH_MS;
+    // athenAI: con pocas fotos (recién abierta la app) el umbral salía de 1–2 columnas; mientras no haya
+    // AUTO_SAMPLE_COLUMNS se recalcula cada 10 s, y después cada 5 min.
+    const calentando = history.size < AUTO_SAMPLE_COLUMNS;
+    const refreshThreshold = cfg.auto && now - this.lastRebuildAt > (calentando ? AUTO_WARMUP_REFRESH_MS : AUTO_REFRESH_MS);
     let changed = false;
     if (refreshThreshold && this.signatureMatches(history.epoch, step, cfg)) {
       this.lastRebuildAt = now;

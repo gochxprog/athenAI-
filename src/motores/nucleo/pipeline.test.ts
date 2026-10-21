@@ -315,6 +315,26 @@ describe('Pipeline de Order Flow con una cinta de prueba', () => {
     expect(csv.split('\n')).toHaveLength(4);
   });
 
+  it('la pendiente del CVD es el delta sumado de las 5 últimas barras (no salta al cambiar de sesión)', () => {
+    for (let i = 4; i < filas.length; i += 1) {
+      const suma = filas.slice(i - 4, i + 1).reduce((s, f) => s + (f.valores.delta ?? 0), 0);
+      expect(filas[i].valores.cvd_pendiente_5).toBeCloseTo(suma, 9);
+    }
+    expect(filas[3].valores.cvd_pendiente_5).toBeNull();
+  });
+
+  it('MicroPrice − mid nunca pasa de medio spread (antes, con niveles agrupados, se iba hasta un grupo entero)', () => {
+    const libro = pipeline.mercado.libro!;
+    for (const f of filas.slice(-50)) {
+      expect(Math.abs(f.valores.obi_10 ?? 0)).toBeLessThanOrEqual(1);
+      // |MicroPrice − mid| ≤ spread / 2: con spread de 1–2 ticks queda por debajo de un grupo (10 ticks).
+      expect(Math.abs(f.valores.microprice_ticks ?? 0)).toBeLessThan(libro.group);
+    }
+    // El MicroPrice siempre queda entre el mejor bid y el mejor ask.
+    expect(libro.microPrice!).toBeGreaterThanOrEqual(libro.bestBid!);
+    expect(libro.microPrice!).toBeLessThanOrEqual(libro.bestAsk!);
+  });
+
   it('cada motor detecta algo en la cinta de prueba', () => {
     const tipos = new Set(pipeline.mercado.eventos.ultimos(1_000).map((e) => e.tipo));
     const memoria = pipeline.mercado.memoria();

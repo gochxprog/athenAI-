@@ -3,7 +3,6 @@
 // ese instante. Nada calculado después (p. ej. el agotamiento de esta misma barra) entra en su fila.
 import { computeOpenInterest } from '../urus/open-interest/engine';
 import type { OpenInterestCandlePoint } from '../urus/open-interest/types';
-import { computeObi, computeMicroPrice } from '../urus/order-flow/formulas';
 import type { BarraAnalizada } from './serieBarras';
 import type { MotorMercado } from './motorMercado';
 import type { EventoMotor } from './tipos';
@@ -19,13 +18,13 @@ export interface DefinicionFeature {
 export const DEFINICIONES_FEATURES: DefinicionFeature[] = [
   { clave: 'retorno', nombre: 'Retorno de la barra', grupo: 'Precio', motor: 'Barras', descripcion: 'close / open − 1' },
   { clave: 'rango_atr', nombre: 'Rango / ATR', grupo: 'Precio', motor: 'Barras', descripcion: '(high − low) / ATR(14) de barras previas' },
-  { clave: 'dist_vwap_atr', nombre: 'Distancia al VWAP', grupo: 'Precio', motor: 'Flujo', descripcion: '(close − VWAP de sesión UTC) / ATR(14)' },
+  { clave: 'dist_vwap_atr', nombre: 'Distancia al VWAP', grupo: 'Precio', motor: 'Flujo', descripcion: '(close − VWAP del día UTC) / ATR(14). Vacío si no se grabó el día desde las 00:00 UTC o hubo un corte' },
   { clave: 'delta', nombre: 'Delta', grupo: 'Flujo', motor: 'Footprint', descripcion: 'Volumen agresor comprador − vendedor (BTC)' },
   { clave: 'delta_ratio', nombre: 'Delta / volumen', grupo: 'Flujo', motor: 'Footprint', descripcion: 'Delta normalizado en [−1, 1]' },
   { clave: 'trades_rel', nombre: 'Trades relativos', grupo: 'Flujo', motor: 'Barras', descripcion: 'Número de trades / media de las 20 barras previas (en dollar bars el volumen es casi constante por construcción)' },
   { clave: 'duracion_s', nombre: 'Duración', grupo: 'Flujo', motor: 'Barras', descripcion: 'Segundos que tardó en completarse la dollar bar (actividad)' },
-  { clave: 'cvd_sesion', nombre: 'CVD de sesión', grupo: 'Flujo', motor: 'SessionCVD (Urus)', descripcion: 'Delta acumulado de la sesión automática (SYD/TOK/LON/NY)' },
-  { clave: 'cvd_pendiente_5', nombre: 'Pendiente del CVD', grupo: 'Flujo', motor: 'SessionCVD (Urus)', descripcion: 'Cambio del CVD en las últimas 5 barras' },
+  { clave: 'cvd_sesion', nombre: 'CVD de sesión', grupo: 'Flujo', motor: 'SessionCVD (Urus)', descripcion: 'Delta acumulado de la sesión automática (SYD/TOK/LON/NY). Vacío si no se vio la sesión desde su inicio o hubo un corte (sería un número a medias)' },
+  { clave: 'cvd_pendiente_5', nombre: 'Pendiente del CVD', grupo: 'Flujo', motor: 'SessionCVD (Urus)', descripcion: 'Delta sumado de las últimas 5 barras (esta y las 4 anteriores): no salta cuando cambia la sesión' },
   { clave: 'imb_compra', nombre: 'Imbalances compradores', grupo: 'Footprint', motor: 'Microstructure (Urus)', descripcion: 'Niveles con imbalance diagonal comprador ≥ 3:1' },
   { clave: 'imb_venta', nombre: 'Imbalances vendedores', grupo: 'Footprint', motor: 'Microstructure (Urus)', descripcion: 'Niveles con imbalance diagonal vendedor ≥ 3:1' },
   { clave: 'stacked_compra', nombre: 'Stacked compradores', grupo: 'Footprint', motor: 'Microstructure (Urus)', descripcion: 'Rachas de ≥ 3 imbalances compradores consecutivos' },
@@ -49,8 +48,8 @@ export const DEFINICIONES_FEATURES: DefinicionFeature[] = [
   { clave: 'oi_delta_z', nombre: 'ΔOI z robusto', grupo: 'Open Interest', motor: 'OpenInterest (Urus)', descripcion: 'z-score robusto (mediana/MAD) del ΔOI' },
   { clave: 'oi_cuadrante', nombre: 'Cuadrante precio/OI', grupo: 'Open Interest', motor: 'OpenInterest (Urus)', descripcion: '1 longs nuevos · 2 cobertura shorts · 3 shorts nuevos · 4 liquidación longs · 0 neutral' },
   { clave: 'oi_flush', nombre: 'Flush de OI', grupo: 'Open Interest', motor: 'OpenInterest (Urus)', descripcion: '1 si hubo cierre masivo de posiciones con movimiento y volumen' },
-  { clave: 'obi_10', nombre: 'OBI (10 niveles)', grupo: 'Libro (DOM)', motor: 'Formulas (Urus)', descripcion: 'Desequilibrio bid/ask de los 10 primeros niveles en [−1, 1]' },
-  { clave: 'microprice_ticks', nombre: 'MicroPrice − mid', grupo: 'Libro (DOM)', motor: 'Formulas (Urus)', descripcion: 'Desviación del MicroPrice respecto al mid, en ticks' },
+  { clave: 'obi_10', nombre: 'OBI (10 niveles)', grupo: 'Libro (DOM)', motor: 'Formulas (Urus)', descripcion: '(Σ bid − Σ ask) / (Σ bid + Σ ask) de los 10 primeros niveles del libro (agrupado, ≈ 1 USD en BTC), en [−1, 1]' },
+  { clave: 'microprice_ticks', nombre: 'MicroPrice − mid', grupo: 'Libro (DOM)', motor: 'Formulas (Urus)', descripcion: '(MicroPrice − precio medio) / tick, con el mejor bid y ask reales: > 0 = presión compradora en el primer nivel' },
   { clave: 'pool_ask_dist_atr', nombre: 'Pool ask más cercano', grupo: 'Liquidez (LHM)', motor: 'LiquidityPoolEngine (Urus)', descripcion: 'Distancia al pool vendedor más cercano / ATR' },
   { clave: 'pool_bid_dist_atr', nombre: 'Pool bid más cercano', grupo: 'Liquidez (LHM)', motor: 'LiquidityPoolEngine (Urus)', descripcion: 'Distancia al pool comprador más cercano / ATR' },
   { clave: 'pools_barridos', nombre: 'Pools barridos', grupo: 'Liquidez (LHM)', motor: 'LiquidityPoolEngine (Urus)', descripcion: 'Pools de liquidez absorbidos por el precio durante la barra' },
@@ -90,25 +89,25 @@ function atr(barras: readonly BarraAnalizada[], periodo = 14): number | null {
 const posicion = (precio: number | null, low: number, high: number) => (precio === null || high <= low ? null : (precio - low) / (high - low));
 
 /**
- * Construye la fila de la barra `b` (recién cerrada). `previas` son las barras canónicas anteriores,
- * `cvdHistorial` el CVD al cierre de cada barra previa (para la pendiente).
+ * Construye la fila de la barra `b` (recién cerrada). `previas` son las barras canónicas anteriores.
  */
-export function construirFila(b: BarraAnalizada, previas: readonly BarraAnalizada[], mercado: MotorMercado, cvdHistorial: readonly number[]): { fila: FilaFeatures; oi: OpenInterestCandlePoint | null } {
+export function construirFila(b: BarraAnalizada, previas: readonly BarraAnalizada[], mercado: MotorMercado): { fila: FilaFeatures; oi: OpenInterestCandlePoint | null } {
   const v: Record<string, number | null> = {};
   const a = atr(previas);
   const { open, high, low, close } = b.ohlc;
 
   v.retorno = open > 0 ? close / open - 1 : null;
   v.rango_atr = a ? (high - low) / a : null;
-  v.dist_vwap_atr = a && mercado.vwapSesion !== null ? (close - mercado.vwapSesion) / a : null;
+  v.dist_vwap_atr = a && mercado.vwapSesion !== null && mercado.vwapCompleto ? (close - mercado.vwapSesion) / a : null;
   v.delta = b.delta;
   v.delta_ratio = b.volumen > 0 ? b.delta / b.volumen : null;
   const ult20 = previas.slice(-20);
   const mediaTrades = ult20.length ? ult20.reduce((s, x) => s + x.trades, 0) / ult20.length : 0;
   v.trades_rel = mediaTrades > 0 ? b.trades / mediaTrades : null;
   v.duracion_s = (b.cierre - b.inicio) / 1000;
-  v.cvd_sesion = mercado.cvdSesion;
-  v.cvd_pendiente_5 = cvdHistorial.length >= 5 ? mercado.cvdSesion - cvdHistorial[cvdHistorial.length - 5] : null;
+  v.cvd_sesion = mercado.cvdCompleto ? mercado.cvdSesion : null;
+  // Pendiente del CVD = Σ delta de las 5 últimas barras. Restar CVD de sesión saltaba al reiniciarse la sesión.
+  v.cvd_pendiente_5 = previas.length >= 4 ? previas.slice(-4).reduce((s, x) => s + x.delta, b.delta) : null;
 
   const sen = b.senales;
   v.imb_compra = sen.levels.filter((l) => l.buyingImbalance).length;
@@ -169,9 +168,10 @@ export function construirFila(b: BarraAnalizada, previas: readonly BarraAnalizad
 
   const libro = mercado.libro;
   if (libro && libro.bids.length && libro.asks.length) {
-    v.obi_10 = computeObi(libro.bids, libro.asks, 10);
-    const mp = computeMicroPrice({ bidPrice: libro.bids[0][0], bidQty: libro.bids[0][1], askPrice: libro.asks[0][0], askQty: libro.asks[0][1] });
-    v.microprice_ticks = mp !== null && libro.mid !== null ? (mp - libro.mid) / libro.tickSize : null;
+    // Los calcula el motor del libro (un solo cálculo): OBI sobre los niveles de la vista, MicroPrice con el
+    // mejor bid y ask reales (no con los niveles agrupados, que lo desplazaban hasta un grupo entero).
+    v.obi_10 = libro.obi?.n10 ?? null;
+    v.microprice_ticks = libro.microPrice != null && libro.mid !== null ? (libro.microPrice - libro.mid) / libro.tickSize : null;
   } else {
     v.obi_10 = null;
     v.microprice_ticks = null;

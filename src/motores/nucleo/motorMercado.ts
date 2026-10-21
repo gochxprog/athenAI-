@@ -1,7 +1,7 @@
 // Motores que no dependen de la temporalidad: libro (DOM), LHM, icebergs, stop runs, big trades, CVD de sesión y OI.
 // Todo el estado está acotado; el reloj es SIEMPRE el del flujo de datos (nunca Date.now()), así que la
 // misma cinta produce exactamente los mismos eventos en vivo y en un backtest.
-import { SessionCVDEngine } from '../urus/order-flow/session-cvd';
+import { pickAutoSession, SessionCVDEngine } from '../urus/order-flow/session-cvd';
 import { BigTradeDetector, type BigTradeEvent } from '../urus/big-trades/engine';
 import { IcebergTracker, type IcebergTrade } from '../urus/order-flow/iceberg-detector';
 import { StopRunSeries, type StopRunTrade } from '../urus/order-flow/stoprun-detector';
@@ -15,6 +15,7 @@ const CAPACIDAD_LHM = 1_800;
 const CINTA_ICEBERG_MAX = 40_000;
 const MAX_EVENTOS = 600;
 const MAX_IDS_VISTOS = 4_000;
+const MARGEN_INICIO_MS = 60_000;
 
 export interface MetricasFlujo {
   tradesPorSeg: number;
@@ -43,6 +44,12 @@ export class MotorMercado {
   cvdSesion = 0;
   /** VWAP de la sesión UTC en curso. */
   vwapSesion: number | null = null;
+  /**
+   * El CVD y el VWAP «de sesión» solo son completos si se vio la sesión desde su inicio (con 1 min de margen) y sin
+   * cortes. Si la app se abrió a mitad de sesión o se cortó la conexión, empiezan a medias: las Features lo marcan.
+   */
+  cvdCompleto = false;
+  vwapCompleto = false;
   /** Última tasa de funding conocida (perpetuos; null si la fuente no la da). */
   fundingTasa: number | null = null;
 
@@ -66,6 +73,7 @@ export class MotorMercado {
     this.ultimoPrecio = t.price;
     const r = this.cvd.processTick({ timestamp: t.timestamp, price: t.price, volume: t.quantity, isBuyerMaker: t.buyerIsMaker, id: t.aggTradeId });
     this.cvdSesion = r.cvd;
+    if (r.isReset) this.cvdCompleto = t.timestamp - pickAutoSession(t.timestamp).startMs <= MARGEN_INICIO_MS;
 
     const dia = Math.floor(t.timestamp / 86_400_000);
     if (dia !== this.sesionUtc) {
@@ -73,6 +81,7 @@ export class MotorMercado {
       this.aperturaSesion = t.price;
       this.nocionalSesion = 0;
       this.volumenSesion = 0;
+      this.vwapCompleto = t.timestamp - dia * 86_400_000 <= MARGEN_INICIO_MS;
     }
     this.nocionalSesion += t.price * t.quantity;
     this.volumenSesion += t.quantity;
@@ -101,7 +110,10 @@ export class MotorMercado {
   finLote(): void {
     if (this.loteStopRun.length > 0) {
       const antes = this.stopRuns.version;
-      this.stopRuns.update(this.loteStopRun, this.tickSize);
+      // «Tick» del detector = paso del libro (tick × agrupación, ≈ 1 USD en BTC), como en Urus: con el tick crudo
+      // (0,1 USD) la ruptura mínima de 2 ticks era de 20 centavos y cualquier ruido contaba como ruptura.
+      const paso = this.libro ? this.libro.tickSize * this.libro.group : this.tickSize;
+      this.stopRuns.update(this.loteStopRun, paso);
       this.loteStopRun = [];
       if (this.stopRuns.version !== antes) {
         for (const e of this.stopRuns.events) {
@@ -213,6 +225,12 @@ export class MotorMercado {
       if (e.disponibleEn <= hasta) out.push(e);
     }
     return out;
+  }
+
+  /** Hubo un corte de datos: el CVD y el VWAP de la sesión en curso ya no están completos. */
+  marcarHueco(): void {
+    this.cvdCompleto = false;
+    this.vwapCompleto = false;
   }
 
   /** Tasa de funding vigente publicada por el exchange (Binance markPrice). */

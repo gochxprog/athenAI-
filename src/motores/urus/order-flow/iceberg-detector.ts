@@ -149,10 +149,14 @@ export function fillsByLevel(
     if (tr.ts <= prev.t) break; // la cinta viene ordenada: más antiguo → más reciente
     if (tr.ts > cur.t) continue;
     if (!(tr.qty > 0) || !Number.isFinite(tr.price)) continue;
-    const idx = Math.round(tr.price / step);
-    if (idx < lo || idx > hi) continue;
     // BUY agresor consume ASK; SELL agresor consume BID. El lado debe cuadrar con el libro de ese instante.
     const side: IcebergSide = tr.side === "BUY" ? "ASK" : "BID";
+    // Mismo cubo que el libro agrupado: los asks se agrupan hacia ARRIBA y los bids hacia ABAJO (order-book.ts).
+    // Con Math.round, un trade a 85.000,3 contra el ask caía en el cubo 85.000 (un bid) y se descartaba o se
+    // atribuía al nivel equivocado. Con step = tick (sin agrupar) ceil/floor/round dan lo mismo.
+    const q = tr.price / step;
+    const idx = side === "ASK" ? Math.ceil(q - 1e-9) : Math.floor(q + 1e-9);
+    if (idx < lo || idx > hi) continue;
     if (side === "ASK" && idx <= prev.bestBidIdx) continue;
     if (side === "BID" && idx > prev.bestBidIdx) continue;
     const k = iceKey(side, idx);

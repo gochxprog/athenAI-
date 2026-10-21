@@ -319,3 +319,19 @@ describe("MicroPrice y OBI en la vista", () => {
     expect(view.imbalance).toBeNull();
   });
 });
+
+describe("MicroPrice con el libro agrupado", () => {
+  it("usa el mejor bid y ask REALES aunque la vista agrupe 10 ticks (valores a mano)", () => {
+    const book = engine();
+    book.applySnapshot({ lastUpdateId: 1, timestamp: 1, bids: [[100.9, 2], [100.0, 5]], asks: [[101.0, 6], [101.9, 1]] });
+    const v = book.getView(10, 10);
+    // Vista agrupada: bid 100,0 con 7 (100,9 + 100,0) y ask 101,0 con 6.
+    expect(v.bids[0]).toEqual([100, 7, 0]);
+    expect(v.asks[0]).toEqual([101, 6, 0]);
+    // MicroPrice = (2 × 101,0 + 6 × 100,9) / (2 + 6) = 100,925 ; mid = (100,9 + 101,0) / 2 = 100,95
+    expect(v.microPrice).toBeCloseTo(100.925, 9);
+    expect(v.mid).toBeCloseTo(100.95, 9);
+    // OBI de 5 niveles de la vista: bid 7, ask 6 + 1 = 7 → (7 − 7) / 14 = 0
+    expect(v.obi?.n5).toBe(0);
+  });
+});
