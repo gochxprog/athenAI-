@@ -140,6 +140,19 @@ export class AlmacenDisco {
     return { filas: salida, mas: false };
   }
 
+  /** Las últimas `n` filas (en orden), leyendo los días desde el final. Para la señal en vivo de los bots. */
+  leerUltimas(simbolo: string, n: number): FilaDisco[] {
+    const dir = this.dirMercado(simbolo);
+    if (!dir) return [];
+    const mercado = mercadoId(PROVEEDOR, simbolo);
+    let salida: FilaDisco[] = [];
+    for (const d of [...this.dias(simbolo)].reverse()) {
+      salida = [...leerLineas<FilaDisco>(path.join(dir, 'filas', `${d}.jsonl`)), ...salida];
+      if (salida.length >= n) break;
+    }
+    return salida.slice(-n).map((f) => ({ ...f, mercado, simbolo }));
+  }
+
   /** Resumen por mercado: filas, primera y última, y bytes. Se calcula una vez y luego se lleva al día al escribir. */
   resumen(): ResumenDisco[] {
     if (!this.cache) {

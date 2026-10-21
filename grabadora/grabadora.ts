@@ -5,6 +5,7 @@
 // Variables (todas opcionales):
 //   SIMBOLOS=BTCUSDT,ETHUSDT   PUERTO=8080   HOST=127.0.0.1 (solo detrás de Caddy, ver asegurar.sh; por defecto todas)
 //   DATOS=/var/lib/athenai-grabadora   WEB=<carpeta de la plataforma>
+//   PYODIDE=<carpeta de Pyodide para los bots> (por defecto pyodide/ junto a grabadora.mjs)   BOTS=0 (los apaga)
 //   BINANCE_REST / BINANCE_WS  (solo para pruebas con un servidor propio)
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,6 +17,8 @@ import { EVENTOS_PREDEFINIDOS } from '../src/motores/nucleo/calendario';
 import type { MensajeMercado } from '../src/motores/nucleo/tipos';
 import { AlmacenDisco } from './almacenDisco';
 import { crearServidor, type EstadoSimbolo } from './servidor';
+import { almacenLocalDisco, cargadorPython, crearApiPaper, feedDe, LibroPaperDisco, senalesDisco } from './botsVps';
+import { MotorPaper } from '../src/motores/paper/motorPaper';
 
 export const VERSION = '1.0.0';
 
@@ -35,6 +38,10 @@ export interface OpcionesGrabadora {
   host?: string;
   datos: string;
   web: string | null;
+  /** Bots de Paper 24/7 (por defecto sí). */
+  bots?: boolean;
+  /** Carpeta de Pyodide para las señales de los bots. */
+  pyodide?: string | null;
   rest?: string;
   ws?: string;
   /** Mensajes al registro (journald en el VPS). */
@@ -131,20 +138,51 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
       tradesPerdidos: a.pipeline.tradesPerdidos,
     })),
   });
-  const servidor = crearServidor({ almacen, clave, estado, web: o.web });
+  // Bots de Paper 24/7: el mismo motor que la plataforma, con su libro en {datos}/paper.
+  let motorBots: MotorPaper | null = null;
+  let latido: ReturnType<typeof setInterval> | null = null;
+  if (o.bots !== false) {
+    const dirPaper = path.join(o.datos, 'paper');
+    const libro = new LibroPaperDisco(dirPaper);
+    const motor = new MotorPaper({
+      senales: senalesDisco(almacen, cargadorPython(o.pyodide ?? null)),
+      avisar: (a) => log(`Bots · ${a.titulo}: ${a.texto}`),
+      reloj: () => Date.now(),
+      almacen: libro,
+      local: almacenLocalDisco(path.join(dirPaper, 'estado.json')),
+    });
+    motorBots = motor;
+    let ocupado = false;
+    void motor.cargar().then(() => {
+      log(`Bots de Paper: ${motor.bots.length} cargados.`);
+      latido = setInterval(() => {
+        if (ocupado) return;
+        ocupado = true;
+        const feeds = [...activos].map(([s, a]) => feedDe(s, a.pipeline, a.filas, a.calibrado, a.cortes));
+        motor
+          .alFeeds(feeds)
+          .catch((e) => log(`Bots: ${e instanceof Error ? e.message : e}`))
+          .finally(() => {
+            ocupado = false;
+          });
+      }, 1_000);
+    });
+  }
+  const servidor = crearServidor({ almacen, clave, estado, web: o.web, paper: motorBots ? crearApiPaper(motorBots) : null });
   const alEscuchar = () => log(`Grabadora ${VERSION} escuchando en ${o.host ?? 'todas las interfaces'}, puerto ${o.puerto} · símbolos: ${o.simbolos.join(', ')} · datos en ${o.datos}`);
   if (o.host) servidor.listen(o.puerto, o.host, alEscuchar);
   else servidor.listen(o.puerto, alEscuchar);
   void fuente.iniciar();
 
   const detener = () => {
+    if (latido) clearInterval(latido);
     clearInterval(escritura);
     clearInterval(resumen);
     fuente.detener();
     almacen.vaciar();
     servidor.close();
   };
-  return { clave, almacen, servidor, detener, estado };
+  return { clave, almacen, servidor, detener, estado, motorBots };
 }
 
 // Arranque como programa (no al importarlo desde las pruebas).
@@ -156,6 +194,8 @@ if (process.argv[1] && /grabadora\.(m?js|ts)$/.test(process.argv[1])) {
     host: process.env.HOST || undefined,
     datos: process.env.DATOS ?? path.resolve('datos'),
     web: process.env.WEB && fs.existsSync(process.env.WEB) ? process.env.WEB : null,
+    bots: process.env.BOTS !== '0',
+    pyodide: process.env.PYODIDE || path.join(path.dirname(process.argv[1]), 'pyodide'),
     rest: process.env.BINANCE_REST || undefined,
     ws: process.env.BINANCE_WS || undefined,
   });

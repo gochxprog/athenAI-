@@ -12,6 +12,9 @@ function promesa<T>(r: IDBRequest<T>): Promise<T> {
   });
 }
 
+/** Lo que el motor de Paper necesita de su libro (IndexedDB en el navegador, disco en el VPS). */
+export type LibroPaper = Pick<AlmacenPaper, 'leerBots' | 'guardarBot' | 'borrarBot' | 'agregarOperacion' | 'leerOperaciones'>;
+
 export class AlmacenPaper {
   private db: Promise<IDBDatabase> | null = null;
 

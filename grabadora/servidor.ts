@@ -4,6 +4,9 @@
 //   GET /api/sesiones?mercado=binance:BTCUSDT  → sesiones de grabación de ESE mercado   (con clave)
 //   GET /api/filas?mercado=binance:BTCUSDT&desde=<ms>&limite=<n>  → filas con cierre > desde (máx. 5.000)
 //   (también acepta `simbolo=BTCUSDT`, que equivale a binance:BTCUSDT)
+//   GET  /api/paper                    → bots, bitácora, apagado y reglas del Guardián          (con clave)
+//   GET  /api/paper/operaciones?bot=   → operaciones cerradas (de un bot o de todos)          (con clave)
+//   POST /api/paper/{crear|pausar|reanudar|borrar|apagar|rearmar|reglas}  cuerpo JSON      (con clave)
 // La clave va en la cabecera «Authorization: Bearer <clave>». CORS abierto: la clave es la que protege los datos.
 // La PLATAFORMA (web) pide contraseña antes de mostrar nada: /entrar (la clave de la grabadora) crea una sesión
 // con cookie HttpOnly + SameSite=Strict (+ Secure detrás de HTTPS), válida 30 días; /salir la cierra. Con
@@ -14,6 +17,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { AlmacenDisco } from './almacenDisco';
+import type { ApiPaper } from './botsVps';
 import { esMercadoId, partesMercado } from '../src/motores/mercado/mercadoId';
 
 export interface EstadoSimbolo {
@@ -32,6 +36,8 @@ export interface OpcionesServidor {
   estado: () => { inicio: number; version: string; simbolos: EstadoSimbolo[] };
   /** Carpeta con la plataforma compilada (dist/) para servirla en «/». Opcional. */
   web?: string | null;
+  /** Bots de Paper 24/7 (botsVps.ts). */
+  paper?: ApiPaper | null;
   /** Reloj (pruebas). */
   reloj?: () => number;
 }
@@ -41,6 +47,8 @@ export const COOKIE = 'athenai_sesion';
 export const DURACION_SESION_MS = 30 * 86_400_000;
 export const MAX_FALLOS = 5;
 export const BLOQUEO_MS = 15 * 60_000;
+/** Tamaño máximo del cuerpo de una acción de Paper (el bot lleva su código y los retornos del Juez). */
+export const MAX_CUERPO = 2_000_000;
 
 /** Página de entrada (sin recursos externos: no revela nada de la plataforma). */
 function paginaEntrar(mensaje = '', volver = ''): string {
@@ -86,7 +94,7 @@ export function crearServidor(o: OpcionesServidor): http.Server {
       res.end(JSON.stringify(cuerpo));
     };
     if (req.method === 'OPTIONS') {
-      res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Max-Age': '86400' });
+      res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Max-Age': '86400' });
       res.end();
       return;
     }
@@ -122,6 +130,32 @@ export function crearServidor(o: OpcionesServidor): http.Server {
       return html(303, '', { Location: '/entrar', 'Set-Cookie': cookie('', 0) });
     }
     if (url.pathname === '/entrar') return conSesion ? html(303, '', { Location: '/' }) : html(200, paginaEntrar());
+    if (url.pathname.startsWith('/api/paper/') && req.method === 'POST') {
+      const bearer = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+      if (!conSesion && !claveCorrecta(bearer, o.clave)) return json(401, { error: 'Clave incorrecta' });
+      if (!o.paper) return json(503, { error: 'Los bots no están activos en esta grabadora' });
+      // Solo JSON: un formulario de otra página no puede disparar acciones con la cookie.
+      if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return json(415, { error: 'Solo JSON' });
+      const accion = url.pathname.slice('/api/paper/'.length);
+      let cuerpo = '';
+      req.on('data', (c: Buffer) => {
+        cuerpo += c.toString();
+        if (cuerpo.length > MAX_CUERPO) req.destroy();
+      });
+      req.on('end', () => {
+        let datos: Record<string, unknown>;
+        try {
+          datos = cuerpo ? (JSON.parse(cuerpo) as Record<string, unknown>) : {};
+        } catch {
+          return json(400, { error: 'JSON no válido' });
+        }
+        o.paper!
+          .accion(accion, datos)
+          .then((r) => json(200, r))
+          .catch((e) => json(400, { error: e instanceof Error ? e.message : String(e) }));
+      });
+      return;
+    }
     if (req.method !== 'GET') return json(405, { error: 'Solo GET' });
     if (url.pathname === '/api/salud') return json(200, { ok: true, grabadora: 'athenAI', sesion: conSesion });
     if (url.pathname.startsWith('/api/')) {
@@ -135,6 +169,15 @@ export function crearServidor(o: OpcionesServidor): http.Server {
         if (url.pathname === '/api/sesiones') {
           const simbolo = simboloPedido(url);
           return json(200, { sesiones: o.almacen.sesiones(simbolo === null ? undefined : simbolo) });
+        }
+        if (url.pathname === '/api/paper') {
+          if (!o.paper) return json(503, { error: 'Los bots no están activos en esta grabadora' });
+          return json(200, o.paper.estado());
+        }
+        if (url.pathname === '/api/paper/operaciones') {
+          if (!o.paper) return json(503, { error: 'Los bots no están activos en esta grabadora' });
+          void o.paper.operaciones(url.searchParams.get('bot') || undefined).then((ops) => json(200, { operaciones: ops }), (e) => json(500, { error: e instanceof Error ? e.message : String(e) }));
+          return;
         }
         if (url.pathname === '/api/filas') {
           const simbolo = simboloPedido(url) ?? '';

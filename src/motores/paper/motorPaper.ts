@@ -14,13 +14,13 @@ import type { Costos } from '../juez/costos';
 import type { Proveedor } from '../almacen/almacen';
 import { anotarCurva, anotarOperacion, aplicarFunding, cerrar, equity, precioMedio, rebalancear, type Bot, type MercadoVivo, type MotivoCierre, type OperacionPaper } from './ejecutor';
 import { exposicionMaxima, fechaUtc, REGLAS_POR_DEFECTO, revisar, revisarOperacion, type ReglasGuardian } from './guardian';
-import type { AlmacenPaper } from './almacenPaper';
+import type { LibroPaper } from './almacenPaper';
 
 export interface DepsPaper {
   senales: (xs: EstrategiaEnVivo[]) => Promise<SenalEstrategia[]>;
   avisar: (a: Aviso) => void;
   reloj: () => number;
-  almacen: AlmacenPaper;
+  almacen: LibroPaper;
   local?: Pick<Storage, 'getItem' | 'setItem'> | null;
 }
 
