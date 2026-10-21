@@ -412,6 +412,93 @@ function SeccionLuck({ r }: { r: RespuestaLaboratorio }) {
   );
 }
 
+const ESTADO_ROB: Record<string, string> = { aprobado: 'Aprobado en robustez', alerta: 'Alerta: falla 1 prueba crítica', rechazado: 'Rechazado por robustez' };
+
+function Prueba({ titulo, ok, valor, detalle }: { titulo: string; ok: boolean | null; valor: string; detalle: string }) {
+  return (
+    <div className="rounded-lg border border-borde-suave p-3" data-prueba-robustez={ok === null ? 'na' : ok ? 'ok' : 'falla'}>
+      <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-plata-500">
+        {ok === null ? <Minus size={11} /> : ok ? <Check size={11} className="text-white" /> : <X size={11} />} {titulo}
+      </p>
+      <p className="cifra mt-1 text-lg font-light text-white">{valor}</p>
+      <p className="text-[10.5px] text-plata-400">{detalle}</p>
+    </div>
+  );
+}
+
+/** Motor 6 · Robustez: costos ×2, parámetros vecinos, otro mercado y estabilidad por regímenes. */
+function SeccionRobustez({ r }: { r: RespuestaLaboratorio }) {
+  const rb = r.resultado.robustez;
+  if (!rb?.costos2x) return null;
+  const { costos2x: c2, vecinos: v, otroMercado: o, estabilidad: e } = rb;
+  return (
+    <Panel titulo="Motor 6 · Robustez" accion={<span className="text-[10px] text-plata-500">{ESTADO_ROB[rb.estado]}</span>} cuerpo="space-y-4 p-4">
+      <Explicacion
+        que="pruebas de estrés: el doble de comisiones, cambiar un poco los parámetros, otro mercado y distintos momentos del mercado (sube, baja, calmado, nervioso)."
+        sirve="descartar estrategias que solo funcionan en condiciones perfectas o con una configuración exacta (una «isla»)."
+        mirar="que pase las 3 pruebas críticas (costos ×2, vecinos y estabilidad). Con 1 fallo sale una alerta; con 2 o más se rechaza."
+      />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-robustez={rb.estado}>
+        <Prueba titulo="Costos ×2" ok={c2.ok} valor={pct(c2.retorno)} detalle={`Profit Factor ${n2(c2.factorBeneficio)} (mín. 1,2) · retorno > 0`} />
+        <Prueba titulo="Parámetros vecinos" ok={v.ok} valor={v.proporcion === null ? '—' : pctSin(v.proporcion, 0)} detalle={v.proporcion === null ? 'Pon 3 o más valores por parámetro en PARAMETROS para medirlo' : `aceptables (mín. 70 %)${v.isla ? ' · ⚠ isla de optimización' : ''}`} />
+        <Prueba titulo="Estabilidad por regímenes" ok={e.ok} valor={pctSin(e.consistencia, 0)} detalle={`sub-periodos que ganan (mín. 60 %) · el mejor aporta ${e.concentracion === null ? '—' : pctSin(e.concentracion, 0)} (máx. 90 %)`} />
+        <Prueba titulo={`Otro mercado${o ? ` · ${o.simbolo}` : ''}`} ok={o ? o.ok : null} valor={o ? pct(o.retornoTotal) : 'no probado'} detalle={o ? `caída ${pct(-o.maxDrawdown)} · ${o.operaciones} operaciones` : 'No hay otro mercado grabado en la carpeta (se elige solo)'} />
+      </div>
+      {v.lista.length > 0 && (
+        <div className="overflow-x-auto">
+          <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-plata-500">Vecinos de los parámetros elegidos {JSON.stringify(r.combos[r.resultado.dentroMuestra.combo])}</p>
+          <table className="w-full min-w-[520px] text-left text-[11px]">
+            <thead>
+              <tr className="text-[9.5px] uppercase tracking-[0.12em] text-plata-500">
+                <th className="py-1 font-normal">Cambio</th>
+                <th className="py-1 text-right font-normal">Retorno</th>
+                <th className="py-1 text-right font-normal">Sharpe</th>
+                <th className="py-1 text-right font-normal">Caída del Sharpe</th>
+                <th className="py-1 text-right font-normal">¿Aceptable?</th>
+              </tr>
+            </thead>
+            <tbody>
+              {v.lista.map((x) => (
+                <tr key={x.cambio} className="border-t border-borde-suave">
+                  <td className="py-1 font-mono text-[10.5px] text-plata-300">{x.cambio}</td>
+                  <td className="cifra py-1 text-right text-white">{pct(x.retorno)}</td>
+                  <td className="cifra py-1 text-right text-plata-300">{n2(x.sharpe)}</td>
+                  <td className="cifra py-1 text-right text-plata-300">{x.caida === null ? '—' : pctSin(x.caida, 0)}</td>
+                  <td className="py-1 text-right text-plata-200">{x.aceptable ? 'Sí' : 'No'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {e.subperiodos.length > 0 && (
+        <div>
+          <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-plata-500">Resultado en cada sub-periodo y su régimen</p>
+          <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-10" data-subperiodos>
+            {e.subperiodos.map((s, i) => (
+              <div key={i} className={`rounded-md border px-1.5 py-1 text-center ${s.retorno > 0 ? 'border-white/50' : 'border-borde-suave'}`}>
+                <p className="cifra text-[11px] text-white">{pct(s.retorno)}</p>
+                <p className="text-[9px] text-plata-500">{s.direccion === 'sube' ? '↑ sube' : '↓ baja'}</p>
+                <p className="text-[9px] text-plata-500">vol. {s.volatilidad}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <details className="rounded-lg border border-borde-suave px-3 py-2 text-[11px] text-plata-300">
+        <summary className="cursor-pointer text-plata-100">Cómo se calcula</summary>
+        <ul className="mt-2 list-disc space-y-1 pl-4">
+          <li>Costos ×2: los mismos parámetros elegidos en cada ventana del Walk-Forward, con comisión × 2 y deslizamiento × 2. Pasa con Profit Factor &gt; 1,2 y retorno &gt; 0.</li>
+          <li>Vecinos: desde los mejores parámetros, cada uno se mueve un paso de tu rejilla (arriba y abajo) dejando los demás igual. Aceptable = gana. Pasa si ≥ 70 % son aceptables. Si el Sharpe cae de media más de un 50 %: «isla de optimización».</li>
+          <li>Otro mercado: los mismos parámetros, sin reoptimizar. No debe destruir capital: retorno &gt; −10 % y caída ≤ 2 × la del original (mínimo 10 %).</li>
+          <li>Estabilidad: el tramo fuera de muestra se corta en 10 sub-periodos; cada uno se clasifica por dirección (sube o baja) y volatilidad (alta o baja frente a la mediana). Pasa si gana en ≥ 60 % y ningún sub-periodo aporta ≥ 90 % de las ganancias.</li>
+          <li>Pruebas críticas: costos ×2, vecinos y estabilidad. 0 fallos: aprobado; 1: alerta; 2 o más: rechazado.</li>
+        </ul>
+      </details>
+    </Panel>
+  );
+}
+
 /** Motor 2 · Métricas: fuera de muestra (lo que cuenta) frente a dentro (optimista). */
 function SeccionMetricas({ r }: { r: RespuestaLaboratorio }) {
   const j = r.resultado;
@@ -502,11 +589,10 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
         </table>
       </Panel>
 
-      <Panel titulo="Robustez" cuerpo="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-5">
+      <SeccionRobustez r={r} />
+
+      <Panel titulo="Pendientes de revisar · Deflated Sharpe y PBO" cuerpo="grid gap-3 p-4 sm:grid-cols-2">
         {[
-          ['Costos ×2', pct(j.robustez.costosDobles)],
-          ['Tramos positivos', `${num(j.robustez.tramosPositivos * 100, 0)} %`],
-          ['Parámetros vecinos que ganan', j.robustez.vecinosPositivos === null ? '—' : `${num(j.robustez.vecinosPositivos * 100, 0)} %`],
           ['Deflated Sharpe', j.deflatedSharpe === null ? '—' : num(j.deflatedSharpe, 3)],
           ['PBO (sobreajuste)', j.pbo === null ? '—' : `${num(j.pbo * 100, 0)} %`],
         ].map(([k, v]) => (
@@ -515,14 +601,6 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
             <p className="cifra mt-1 text-lg font-light text-white">{v}</p>
           </div>
         ))}
-        {j.robustez.otroMercado && (
-          <div className="rounded-lg border border-borde-suave p-3 sm:col-span-2 xl:col-span-5">
-            <p className="etiqueta">Otro mercado · {j.robustez.otroMercado.simbolo}</p>
-            <p className="mt-1 text-xs text-plata-200">
-              Retorno {pct(j.robustez.otroMercado.retornoTotal)} · Sharpe {j.robustez.otroMercado.sharpe === null ? '—' : num(j.robustez.otroMercado.sharpe, 2)} · {j.robustez.otroMercado.operaciones} operaciones · drawdown {pct(-j.robustez.otroMercado.maxDrawdown)}
-            </p>
-          </div>
-        )}
       </Panel>
     </div>
   );

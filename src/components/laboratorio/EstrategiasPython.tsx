@@ -215,7 +215,7 @@ export default function EstrategiasPython() {
           <label className="block">
             <span className="etiqueta">Otro mercado (robustez)</span>
             <select value={otro} onChange={(e) => setOtro(e.target.value)} aria-label="Otro mercado" className="mt-1 w-full rounded-md border border-borde bg-black px-2 py-1.5 text-[11px] text-plata-100">
-              <option value="">No probar en otro mercado</option>
+              <option value="">Automático (otro de la misma familia, si hay datos)</option>
               {fuentes
                 .filter((f) => clave(f) !== datos)
                 .map((f) => (

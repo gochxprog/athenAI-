@@ -218,12 +218,13 @@ ${wfe}
 
 <h2>8. Robustez</h2>
 <table>
-<tr><td>Costos ×2</td><td class="n">${pct(j.robustez.costosDobles)}</td></tr>
-<tr><td>Tramos positivos</td><td class="n">${num(j.robustez.tramosPositivos * 100, 0)} %</td></tr>
-<tr><td>Parámetros vecinos que ganan</td><td class="n">${j.robustez.vecinosPositivos === null ? '—' : `${num(j.robustez.vecinosPositivos * 100, 0)} %`}</td></tr>
+${j.robustez?.costos2x ? `<tr><td>Estado del módulo</td><td class="n">${esc(j.robustez.estado)}</td></tr>
+<tr><td>Costos ×2 (retorno · Profit Factor)</td><td class="n">${pct(j.robustez.costos2x.retorno)} · ${j.robustez.costos2x.factorBeneficio === null ? '—' : num(j.robustez.costos2x.factorBeneficio, 2)}</td></tr>
+<tr><td>Parámetros vecinos aceptables</td><td class="n">${j.robustez.vecinos.proporcion === null ? '—' : `${num(j.robustez.vecinos.proporcion * 100, 0)} %`}${j.robustez.vecinos.isla ? ' · isla de optimización' : ''}</td></tr>
+<tr><td>Estabilidad (sub-periodos que ganan)</td><td class="n">${num(j.robustez.estabilidad.consistencia * 100, 0)} %</td></tr>
+<tr><td>Otro mercado</td><td class="n">${j.robustez.otroMercado ? `${esc(j.robustez.otroMercado.simbolo)}: ${pct(j.robustez.otroMercado.retornoTotal)}` : 'no probado'}</td></tr>` : ''}
 <tr><td>Deflated Sharpe</td><td class="n">${num(j.deflatedSharpe, 3)}</td></tr>
 <tr><td>PBO (probabilidad de sobreajuste)</td><td class="n">${j.pbo === null ? '—' : `${num(j.pbo * 100, 0)} %`}</td></tr>
-<tr><td>Otro mercado</td><td class="n">${j.robustez.otroMercado ? `${esc(j.robustez.otroMercado.simbolo)}: ${pct(j.robustez.otroMercado.retornoTotal)}` : 'no probado'}</td></tr>
 </table>
 
 <h2>9. Conclusión</h2>

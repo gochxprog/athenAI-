@@ -28,6 +28,22 @@ async function leer(proveedor: PeticionLaboratorio['proveedor'], simbolo: string
   }
 }
 
+/** Preferencia de «otro mercado» de la misma familia (cripto perpetuos de Binance). */
+const FAMILIA = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'XAUUSDT', 'PAXGUSDT'];
+
+async function mercadoAlternativo(proveedor: PeticionLaboratorio['proveedor'], simbolo: string): Promise<{ proveedor: PeticionLaboratorio['proveedor']; simbolo: string } | null> {
+  const al = new AlmacenFeatures(proveedor);
+  try {
+    const hay = (await al.resumen()).filter((x) => x.simbolo !== simbolo && x.filas >= 100);
+    hay.sort((a, b) => (FAMILIA.indexOf(a.simbolo) + 1 || 99) - (FAMILIA.indexOf(b.simbolo) + 1 || 99) || b.filas - a.filas);
+    return hay[0] ? { proveedor, simbolo: hay[0].simbolo } : null;
+  } catch {
+    return null;
+  } finally {
+    al.cerrar();
+  }
+}
+
 /** Huecos: barras marcadas por el Vigía o primer barra de una nueva sesión de captura. */
 const huecosDe = (filas: FilaGuardada[]) => filas.map((f, i) => f.valores.hueco === 1 || (i > 0 && f.sesion !== filas[i - 1].sesion));
 
@@ -100,7 +116,10 @@ ctx.onmessage = async (e) => {
       antiFuturo: ejec.antiFuturo,
     };
     let resultado = juzgar(entrada);
-    if (p.otro) {
+    // Otro mercado: el que elegiste o, si no, uno de la misma familia grabado en la misma carpeta.
+    const otroMercado = p.otro ?? (await mercadoAlternativo(p.proveedor, p.simbolo));
+    if (otroMercado) {
+      p.otro = otroMercado;
       progreso(`Robustez: misma estrategia en ${p.otro.simbolo}…`);
       const otras = await leer(p.otro.proveedor, p.otro.simbolo);
       if (otras.length >= 100) {

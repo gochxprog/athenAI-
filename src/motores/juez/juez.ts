@@ -6,11 +6,12 @@
 //   2. Monte Carlo: remuestrea las operaciones fuera de muestra 2.000 veces → peor escenario razonable.
 //   3. Luck test: 1.000 versiones de la misma estrategia desplazada al azar en el tiempo (misma exposición,
 //      mismas operaciones). Si el azar consigue lo mismo a menudo, no hay ventaja.
-//   4. Robustez: costos ×2, parámetros vecinos, estabilidad entre tramos y otro mercado.
+//   4. Robustez: costos ×2, parámetros vecinos, estabilidad por regímenes y otro mercado (robustez.ts).
 //   5. Deflated Sharpe (López de Prado): descuenta haber probado muchas variantes.
 //   6. PBO (CSCV): probabilidad de que la mejor variante dentro de muestra sea peor que la mediana fuera.
 import { crearAleatorio } from '@/lib/random';
 import { normalInversa } from '@/lib/backtest';
+import { robustez, type ResultadoRobustez } from './robustez';
 import { ALFA_LUCK, luckTest, type ConfigLuck, type ResultadoLuck } from './luckTest';
 import { monteCarlo, RUINA_MAXIMA, type ConfigMc, type ResultadoMc } from './monteCarlo';
 import { walkForward, type ClaseWfe, type ConfigWfo, type ObjetivoWfo, type VentanaResultado } from './walkForward';
@@ -79,7 +80,7 @@ export interface ResultadoJuez {
   /** Avisos que no rechazan pero hay que mirar (p. ej. el orden de las operaciones pesa mucho). */
   alertas: string[];
   suerte: ResultadoLuck | null;
-  robustez: { costosDobles: number; vecinosPositivos: number | null; tramosPositivos: number; otroMercado: (Metricas & { simbolo: string }) | null };
+  robustez: ResultadoRobustez;
   deflatedSharpe: number | null;
   pbo: number | null;
   ensayos: number;
@@ -174,19 +175,10 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
   const posOos = wfo.posiciones;
   const opsOos = wfo.operaciones;
   const tramos: TramoWF[] = wfo.ventanas.map((v) => ({ ...v, desde: v.oosDesde, hasta: v.oosHasta }));
-  // Robustez: el mismo θ* de cada ventana con el doble de costos.
-  const dobles = { comisionPb: costos.comisionPb * 2, deslizamientoPb: costos.deslizamientoPb * 2 };
-  const retDobles = new Array(n).fill(0);
-  for (const v of wfo.ventanas) {
-    const b = backtest(e.cierres, posiciones[v.combo], dobles, v.oosDesde, v.oosHasta, fx);
-    for (let i = v.oosDesde; i < v.oosHasta; i += 1) retDobles[i] = b.retornos[i];
-  }
   const resOos = { retornos: retOos, equity: [], operaciones: opsOos };
   const oos = metricas(resOos, e.tiempos, inicioOos, n);
   let eq = 1;
   const equityOos = retOos.slice(inicioOos).map((x) => (eq *= 1 + x));
-  const costosDobles = retDobles.slice(inicioOos).reduce((a, x) => a * (1 + x), 1) - 1;
-  const tramosPositivos = tramos.length ? tramos.filter((t) => t.retorno > 0).length / tramos.length : 0;
 
   // Motor 4 · Monte Carlo de las operaciones fuera de muestra.
   const mc = opsOos.length >= 5 ? monteCarlo(opsOos.map((o) => o.retorno), r, e.monteCarlo) : null;
@@ -195,19 +187,9 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
   const largoOos = n - inicioOos;
   const suerte = opsOos.length >= 5 && largoOos > 50 ? luckTest({ cierres: e.cierres, posiciones: posOos, operaciones: opsOos, desde: inicioOos, hasta: n, costos, opciones: { ...fx, huecos: e.huecos }, azar: r, config: e.luck }) : null;
 
-  // Parámetros vecinos: variantes que difieren en un solo parámetro de la mejor.
-  let vecinosPositivos: number | null = null;
-  if (e.combos.length > 1) {
-    const base = e.combos[mejor];
-    const vecinos = e.combos.map((c, i) => ({ c, i })).filter(({ c, i }) => i !== mejor && Object.keys(base).filter((k) => c[k] !== base[k]).length === 1);
-    if (vecinos.length) vecinosPositivos = vecinos.filter(({ i }) => metCompletas[i].retornoTotal > 0).length / vecinos.length;
-  }
-
-  let otroMercado: ResultadoJuez['robustez']['otroMercado'] = null;
-  if (e.otroMercado) {
-    const o = e.otroMercado;
-    otroMercado = { simbolo: o.simbolo, ...metricas(backtest(o.cierres, o.posiciones, costos), o.tiempos) };
-  }
+  // Motor 6 · Robustez (costos ×2, vecinos, otro mercado, estabilidad por regímenes).
+  const otro = e.otroMercado ? { simbolo: e.otroMercado.simbolo, ...metricas(backtest(e.otroMercado.cierres, e.otroMercado.posiciones, costos), e.otroMercado.tiempos) } : null;
+  const rob = robustez({ cierres: e.cierres, tiempos: e.tiempos, posiciones, combos: e.combos, mejor, metCompletas, ventanas: wfo.ventanas, inicioOos, retornosOos: retOos, ddOos: oos.maxDrawdown, costos, opciones: fx, otroMercado: otro });
 
   // Deflated Sharpe sobre los retornos fuera de muestra.
   const ensayos = Math.max(e.ensayos ?? 1, e.combos.length);
@@ -229,18 +211,19 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
     { nombre: 'No mira al futuro', ok: e.antiFuturo ? e.antiFuturo.ok : null, valor: e.antiFuturo?.detalle ?? 'no comprobado', umbral: 'posiciones idénticas con y sin datos posteriores', explicacion: 'Si la posición de hoy cambia al añadir datos de mañana, la estrategia hace trampa.' },
     { nombre: 'Gana fuera de muestra (Walk-Forward)', ok: oos.retornoTotal > 0, valor: pctTxt(oos.retornoTotal), umbral: '> 0 %', explicacion: 'Solo cuentan los tramos que la estrategia no vio al elegir sus parámetros.' },
     { nombre: 'Eficiencia Walk-Forward (WFE)', ok: wfo.wfe === null ? false : wfo.wfe >= 0.5, valor: wfo.wfe === null ? 'el entrenamiento no gana' : `${dec(wfo.wfe, 2)} (${wfo.clase})`, umbral: '≥ 0,50', explicacion: 'Cuánto de lo que gana entrenando conserva en datos que no vio. < 0,30 = sobreajuste.' },
-    { nombre: 'Estable entre tramos', ok: tramosPositivos >= 0.6, valor: `${Math.round(tramosPositivos * tramos.length)}/${tramos.length} tramos positivos`, umbral: '≥ 60 %', explicacion: 'Una ventaja real no depende de un solo periodo.' },
     { nombre: 'Luck test', ok: suerte ? suerte.p < ALFA_LUCK : null, valor: suerte ? `p = ${dec(suerte.p, 3)}` : '—', umbral: 'p < 0,05', explicacion: 'Mercados falsos o entradas al azar no deben igualarla más de 1 de cada 20 veces.' },
     { nombre: 'Drawdown máximo', ok: oos.maxDrawdown <= 0.2, valor: pctTxt(oos.maxDrawdown), umbral: '≤ 20 %', explicacion: 'Peor caída desde un máximo, fuera de muestra.' },
     { nombre: 'Monte Carlo: riesgo de ruina', ok: mc ? mc.probRuina <= RUINA_MAXIMA : null, valor: mc ? `${pctTxt(mc.probRuina)} de simulaciones caen ≥ ${pctTxt(mc.umbralRuina)}` : '—', umbral: '≤ 5 %', explicacion: 'Reordenando las operaciones miles de veces, la mala suerte no debe quemar la cuenta.' },
-    { nombre: 'Aguanta costos ×2', ok: costosDobles > 0, valor: pctTxt(costosDobles), umbral: '> 0 %', explicacion: 'Con el doble de comisión y deslizamiento debe seguir ganando.' },
     { nombre: 'Deflated Sharpe', ok: dsr === null ? null : dsr >= 0.95, valor: dsr === null ? '—' : dec(dsr, 3), umbral: '≥ 0,95', explicacion: `Descuenta haber probado ${ensayos} ${ensayos === 1 ? 'variante' : 'variantes'}.` },
     { nombre: 'PBO (sobreajuste)', ok: pbo === null ? null : pbo <= 0.25, valor: pbo === null ? 'una sola variante' : pctTxt(pbo), umbral: '≤ 25 %', explicacion: 'Probabilidad de que la mejor variante dentro de muestra sea mediocre fuera.' },
-    { nombre: 'Parámetros vecinos', ok: vecinosPositivos === null ? null : vecinosPositivos >= 0.6, valor: vecinosPositivos === null ? '—' : pctTxt(vecinosPositivos), umbral: '≥ 60 % ganan', explicacion: 'Si cambiar un poco un parámetro la rompe, es sobreajuste.' },
-    { nombre: 'Otro mercado', ok: otroMercado ? otroMercado.retornoTotal > 0 : null, valor: otroMercado ? `${otroMercado.simbolo}: ${pctTxt(otroMercado.retornoTotal)}` : 'no probado', umbral: '> 0 %', explicacion: 'Un patrón que también funciona en otro mercado (BTC y XAU) es más fiable.' },
+    { nombre: 'Robustez (costos ×2, vecinos, estabilidad)', ok: rob.estado !== 'rechazado', valor: `${3 - rob.fallas - (rob.vecinos.ok === null ? 1 : 0)}/${rob.vecinos.ok === null ? 2 : 3} pruebas superadas`, umbral: 'falla como mucho 1', explicacion: 'Debe aguantar el doble de costos, cambios pequeños en sus parámetros y distintos regímenes del mercado.' },
+    { nombre: 'Otro mercado', ok: rob.otroMercado ? rob.otroMercado.ok : null, valor: rob.otroMercado ? `${rob.otroMercado.simbolo}: ${pctTxt(rob.otroMercado.retornoTotal)}, caída ${pctTxt(rob.otroMercado.maxDrawdown)}` : 'no probado', umbral: '> −10 % y caída ≤ 2× la original', explicacion: 'Con los mismos parámetros en otro activo no debe destruir capital.' },
   ];
   const alertas: string[] = [];
   if (mc?.alertaOrden) alertas.push(`Monte Carlo: la peor caída probable (P95 ${pctTxt(mc.ddP95)}) es más del doble que la del backtest (${pctTxt(mc.ddOriginal)}). Si las pérdidas llegan seguidas, dolerá mucho más de lo que muestra el backtest.`);
+  if (rob.estado === 'alerta') alertas.push(`Robustez: falla 1 de las pruebas críticas (${[!rob.costos2x.ok && 'costos ×2', rob.vecinos.ok === false && 'parámetros vecinos', !rob.estabilidad.ok && 'estabilidad'].filter(Boolean).join(', ')}). No rechaza, pero revísalo.`);
+  if (rob.vecinos.isla) alertas.push(`Isla de optimización: al mover un paso los parámetros, el Sharpe cae de media un ${pctTxt(rob.vecinos.caidaMedia ?? 0)}.`);
+  if (rob.costos2x.factorBeneficio !== null && rob.costos2x.factorBeneficio < 1.2) alertas.push('Frágil ante fricciones: con el doble de costos el Profit Factor baja de 1,2.');
   const insuficiente = reglas[0].ok === false;
   const falladas = reglas.filter((x) => x.ok === false);
   const veredicto = insuficiente ? 'DATOS INSUFICIENTES' : falladas.length ? 'RECHAZADA' : 'APROBADA';
@@ -265,7 +248,7 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
     monteCarlo: mc,
     alertas,
     suerte,
-    robustez: { costosDobles, vecinosPositivos, tramosPositivos, otroMercado },
+    robustez: rob,
     deflatedSharpe: dsr,
     pbo,
     ensayos,
