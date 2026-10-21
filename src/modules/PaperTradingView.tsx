@@ -223,6 +223,10 @@ export default function PaperTradingView() {
         )}
       </Encabezado>
 
+      <p className={`rounded-lg border px-3 py-2 text-[11px] ${motor.enVps ? 'border-white/40 text-white' : 'border-borde text-plata-400'}`} data-donde-bots={motor.enVps ? 'vps' : 'navegador'}>
+        {motor.enVps ? 'Bots en tu VPS · 24/7: siguen operando aunque cierres la plataforma.' : 'Bots en este navegador: se detienen si lo cierras. Conecta la grabadora del VPS (Datos → Grabadora 24/7) para que corran 24/7.'}
+      </p>
+
       <Explicacion
         que="cada bot es una estrategia que el Juez aprobó, operando sola sobre el precio real (compra al precio de venta del libro, vende al de compra) sin dinero real. Paga comisión, deslizamiento y funding como en la realidad."
         sirve="ver si la estrategia hace en vivo lo que prometió en la prueba. Si se sale de lo esperado, el Guardián la frena antes de pensar en dinero real."

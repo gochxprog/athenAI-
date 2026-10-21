@@ -75,6 +75,19 @@ export class ClienteGrabadora {
     return (await r.json()) as T;
   }
 
+  /** Petición a la API de la grabadora configurada (bots de Paper). Null si no hay grabadora. */
+  async api<T>(ruta: string, cuerpo?: unknown): Promise<T | null> {
+    const c = this.estado.config;
+    if (!c) return null;
+    const cabeceras: Record<string, string> = c.sesion ? {} : { Authorization: `Bearer ${c.clave.trim()}` };
+    const init: RequestInit = cuerpo === undefined ? { headers: cabeceras } : { method: 'POST', headers: { ...cabeceras, 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) };
+    if (c.sesion) init.credentials = 'same-origin';
+    const r = await this.fetchImpl(`${limpiarUrl(c.url)}${ruta}`, init);
+    const j = (await r.json().catch(() => ({}))) as T & { error?: string };
+    if (!r.ok) throw new Error(j.error ?? `La grabadora respondió HTTP ${r.status}.`);
+    return j;
+  }
+
   /** Comprueba la conexión y la clave (no guarda nada). */
   probar(c: ConfigGrabadora): Promise<EstadoRemoto> {
     return this.pedir<EstadoRemoto>(c, '/api/estado');
