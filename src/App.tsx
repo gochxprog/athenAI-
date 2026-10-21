@@ -2,7 +2,6 @@ import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react';
 import { motion } from 'framer-motion';
 import Sidebar from '@/components/layout/Sidebar';
 import Topbar from '@/components/layout/Topbar';
-import { SistemaDemoProvider } from '@/hooks/SistemaDemo';
 import { NavegacionContexto } from '@/hooks/Navegacion';
 import { META_MODULO } from '@/data/metaModulo';
 import type { Modulo } from '@/types/nav';
@@ -73,7 +72,7 @@ export default function App() {
   }, [meta.titulo]);
 
   return (
-    <SistemaDemoProvider>
+    <>
       <NavegacionContexto.Provider value={navegar}>
       <div className="flex h-screen overflow-hidden bg-black text-plata-200">
         <Sidebar activo={modulo} onSeleccion={navegar} />
@@ -90,7 +89,7 @@ export default function App() {
         </div>
       </div>
       </NavegacionContexto.Provider>
-    </SistemaDemoProvider>
+    </>
   );
 }
 

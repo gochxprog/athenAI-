@@ -5,12 +5,12 @@ interface Props {
   modulo: string;
   titulo: string;
   descripcion: string;
-  /** Origen de los datos que muestra el módulo (por defecto DEMO). */
+  /** Origen de los datos que muestra el módulo. */
   fuente?: string;
   children?: ReactNode;
 }
 
-export default function Encabezado({ modulo, titulo, descripcion, fuente = 'DEMO', children }: Props) {
+export default function Encabezado({ modulo, titulo, descripcion, fuente = 'DATOS REALES', children }: Props) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}

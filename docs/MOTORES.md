@@ -52,7 +52,7 @@ Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el p
 
 | Módulo | Motores | Estado |
 |---|---|---|
-| Datos | Fuentes (Binance, Rithmic, Urus, Simulación), Vigía de huecos, Barras, Almacén | 🔍 |
+| Datos | Fuentes (Binance, Rithmic, Urus), Vigía de huecos, Barras, Almacén | 🔍 |
 | Order Flow | Footprint, imbalances, absorción, agotamiento, big trades, icebergs, stop runs, OI, libro, pools, CVD, liquidaciones, Features | 🔍 |
 | Memoria | Régimen (HMM), día gemelo / «hoy es distinto», cruce entre mercados | 🔍 |
 | Panel General | Lectura del momento, Features extremas | 🔍 |
@@ -61,10 +61,10 @@ Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el p
 
 | Pantalla | Motor | Estado |
 |---|---|---|
-| Estrategias | Catálogo con veredicto y curva (usa el Juez) | ⬜ |
-| Decisiones | Bitácora real | ⬜ |
-| Paper Trading | Ejecución en Paper, P&L, Guardián | ⬜ |
-| Máquinas | Telemetría | ⬜ |
+| Estrategias | Catálogo con veredicto y curva (usa el Juez) | 🔍 conectado a datos reales |
+| Decisiones | Bitácora real (Juez, avisos, registro del motor) | 🔍 conectado a datos reales |
+| Paper Trading | Ejecución en Paper, P&L, Guardián | ⬜ siguiente |
+| Máquinas | Telemetría del navegador | 🔍 conectado a datos reales |
 
 ## Pendientes conocidos
 - **Backtest:** el funding solo se descuenta en datos grabados desde que se guarda (Feature `funding_tasa`).

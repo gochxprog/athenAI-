@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Lock, Menu, X } from 'lucide-react';
 import { MENU } from '@/data/menu';
-import { AGENTES } from '@/data/mock';
+import { AGENTES } from '@/data/agentes';
 import { useFeeds } from '@/components/orderflow/OrderFlowChart';
 import { leerEstrategias } from '@/components/laboratorio/plantillas';
 import Punto, { type EstadoPunto } from '@/components/ui/Punto';
@@ -20,7 +20,7 @@ export default function Sidebar({ activo, onSeleccion }: Props) {
   const grabando = feeds.feeds.some((f) => f.guardando && f.conexion === 'en-vivo');
   const estrategias = leerEstrategias();
 
-  // Números y puntos reales; las pantallas que aún son DEMO quedan en espera y sin número.
+  // Números y puntos reales; las pantallas sin motor todavía quedan en espera y sin número.
   const info: Partial<Record<Modulo, { n?: number; e: EstadoPunto }>> = {
     panel: { e: vivos ? 'activo' : 'detenido' },
     orderflow: { e: vivos ? 'activo' : 'detenido' },
@@ -93,7 +93,7 @@ export default function Sidebar({ activo, onSeleccion }: Props) {
         <div className="flex items-center gap-2 rounded-lg border border-borde-suave px-3 py-2.5">
           <Lock size={12} className="text-plata-400" />
           <span className="text-[10px] leading-tight text-plata-400">
-            Modo DEMO · dinero real <span className="text-plata-200">bloqueado</span>
+            Solo Paper · dinero real <span className="text-plata-200">bloqueado</span>
           </span>
         </div>
       </div>

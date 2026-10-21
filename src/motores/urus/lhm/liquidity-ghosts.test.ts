@@ -7,7 +7,7 @@ import {
 } from "./liquidity-pools";
 
 /**
- * Tests de la huella de absorción (marca fantasma) con datos sintéticos.
+ * Tests de la huella de absorción (marca fantasma) con valores fijos de prueba.
  * Verifica: el barrido registra huella con precio/lado/tiempos, el retiro NO deja
  * huella, la huella expira tras el TTL, clear() la borra y el barrido por vela
  * también la genera.

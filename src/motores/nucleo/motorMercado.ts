@@ -1,6 +1,6 @@
 // Motores que no dependen de la temporalidad: libro (DOM), LHM, icebergs, stop runs, big trades, CVD de sesión y OI.
 // Todo el estado está acotado; el reloj es SIEMPRE el del flujo de datos (nunca Date.now()), así que la
-// misma cinta produce exactamente los mismos eventos en vivo, en DEMO y en un backtest.
+// misma cinta produce exactamente los mismos eventos en vivo y en un backtest.
 import { SessionCVDEngine } from '../urus/order-flow/session-cvd';
 import { BigTradeDetector, type BigTradeEvent } from '../urus/big-trades/engine';
 import { IcebergTracker, type IcebergTrade } from '../urus/order-flow/iceberg-detector';

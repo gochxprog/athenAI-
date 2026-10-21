@@ -121,7 +121,7 @@ describe("stepIcebergs", () => {
 });
 
 describe("IcebergTracker", () => {
-  it("arranca vacío, ignora columnas sintéticas y saltos largos, y no produce NaN", () => {
+  it("arranca vacío y no produce NaN", () => {
     const cols: IcebergColumn[] = [col(0, { 101: 10 })];
     const tr: IcebergTrade[] = [];
     const tracker = new IcebergTracker();
@@ -136,16 +136,6 @@ describe("IcebergTracker", () => {
     expect(ev).toHaveLength(1);
     for (const v of [ev[0].ratio, ev[0].filled, ev[0].price]) expect(Number.isFinite(v)).toBe(true);
 
-    const t2 = new IcebergTracker();
-    const c2: IcebergColumn[] = [col(0, { 101: 10 })];
-    const tr2: IcebergTrade[] = [];
-    t2.update(mkHistory(c2), tr2);
-    for (let k = 1; k <= 6; k += 1) {
-      c2.push(col(k * 1000, { 101: 10 }, { synthetic: true }));
-      tr2.push(buy(k * 1000 - 500, 101, 10));
-      t2.update(mkHistory(c2), tr2);
-    }
-    expect(t2.events).toHaveLength(0);
   });
 
   it("snapshot → restore conserva los eventos (como inactivos) y descarta filas corruptas", () => {

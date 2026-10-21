@@ -1,4 +1,4 @@
-/** PRNG determinista (mulberry32) para que los datos DEMO sean estables entre renders. */
+/** Generador pseudoaleatorio determinista (mulberry32): misma semilla → mismos números (Monte Carlo, Luck test). */
 export function crearAleatorio(semilla: number) {
   let a = semilla >>> 0;
   return () => {

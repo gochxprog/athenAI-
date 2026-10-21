@@ -6,7 +6,7 @@ import type { OpenInterestSnapshot } from '../urus/open-interest/types';
 
 export type { AggTrade, OrderBookView, OpenInterestSnapshot };
 
-/** Mensajes normalizados que cualquier fuente (DEMO, servidor Urus, Binance directo) entrega al pipeline. */
+/** Mensajes normalizados que cualquier fuente (Binance directo, servidor Urus, Rithmic) entrega al pipeline. */
 export type MensajeMercado =
   | { tipo: 'trades'; trades: AggTrade[] }
   | { tipo: 'libro'; vista: OrderBookView }

@@ -193,7 +193,7 @@ function Salud({ estado, msProceso }: { estado: EstadoGrafico | null; msProceso:
   return (
     <Panel titulo="Salud del motor · todo acotado" icono={Cpu} accion={<span className="cifra text-[10px] text-plata-500">{num(msProceso, 1)} ms de cálculo cada 200 ms</span>}>
       <p className="mb-3 text-[11px] text-plata-400">
-        El motor corre en un Web Worker y cada estructura tiene un límite fijo: la memoria no crece con las horas. En la prueba de resistencia de 8 h simuladas el uso se mantuvo plano (≈ 50–60 MB) y el cálculo en ≈ 100 ms por minuto de mercado.
+        El motor corre en un Web Worker y cada estructura tiene un límite fijo: la memoria no crece con las horas. Así el uso de memoria se mantiene plano aunque quede horas abierto.
       </p>
       <div className="grid gap-x-8 gap-y-2.5 md:grid-cols-2">
         {Object.entries(limites).map(([k, [nombre, limite]]) => {

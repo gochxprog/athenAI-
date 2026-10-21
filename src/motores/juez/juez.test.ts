@@ -3,7 +3,7 @@ import { backtest, metricas, normalizarPosiciones } from './backtest';
 import { juzgar, type Combo } from './juez';
 import { crearAleatorio, normal } from '@/lib/random';
 
-/** Mercado sintético. `persistencia` > 0 crea momentum explotable; 0 = paseo aleatorio. */
+/** Mercado de prueba con valores fijos (solo para el test). `persistencia` > 0 crea momentum explotable; 0 = paseo aleatorio. */
 function mercado(n: number, persistencia: number, semilla: number) {
   const r = crearAleatorio(semilla);
   const cierres = [100];

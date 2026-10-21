@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { ContactShadows, Grid, Html, OrbitControls, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
-import { AGENTES, CAPAS, type AgenteId } from '@/data/mock';
+import { AGENTES, CAPAS, type AgenteId } from '@/data/agentes';
 
 /** Filas por capa (detectores delante, ejecución al fondo), mirando hacia el núcleo de datos. */
 const FILAS: Record<1 | 2 | 3, { z: number; paso: number }> = {

@@ -30,3 +30,22 @@ export function cobrosFunding(t0: number, t1: number): number {
 export function factorFunding(posicion: number, tasa: number, cobros: number): number {
   return cobros > 0 && posicion !== 0 ? (1 - posicion * tasa) ** cobros : 1;
 }
+
+// Deslizamiento dinámico para la ejecución en vivo (Paper), fracción del precio:
+//   desliz = base + 0,1 · (ATR / precio) + (orden / liquidez de 10 niveles de ese lado) · (distancia del 10.º nivel)
+//   base: el deslizamiento fijo de los costos · volatilidad: 10 % del rango típico de una barra ·
+//   impacto: si la orden se come una fracción de los 10 primeros niveles, recorre esa fracción del libro.
+//   Se limita a 50 pb (una orden que se coma todo el libro no se simula: el Guardián limita el tamaño).
+export const DESLIZ_MAXIMO = 0.005;
+
+export function deslizamientoDinamico(c: Costos, e: { precio: number; atr: number | null; nocionalOrden: number; liquidezLado: number | null; distanciaLado: number | null }): number {
+  const base = c.deslizamientoPb / 10_000;
+  const vol = e.atr && e.precio > 0 ? 0.1 * (e.atr / e.precio) : 0;
+  const impacto = e.liquidezLado && e.liquidezLado > 0 && e.distanciaLado !== null ? Math.min(1, e.nocionalOrden / e.liquidezLado) * e.distanciaLado : 0;
+  return Math.min(DESLIZ_MAXIMO, base + vol + impacto);
+}
+
+/** Comisión en USD de una orden a mercado (taker). */
+export function comisionUsd(c: Costos, nocional: number): number {
+  return Math.abs(nocional) * (c.comisionPb / 10_000);
+}

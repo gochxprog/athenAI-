@@ -193,7 +193,7 @@ export class LiquidityPoolEngine {
     const real: LiquidityColumn[] = [];
     for (let i = history.size - 1; i >= 0 && real.length < AUTO_SAMPLE_COLUMNS; i -= 1) {
       const col = history.get(i) as LiquidityColumn;
-      if (!col.synthetic) real.push(col);
+      real.push(col);
     }
     const vols: number[] = [];
     for (const col of real) for (const v of bucketVolumes(col, cfg.group).values()) vols.push(v);
@@ -359,7 +359,6 @@ export class LiquidityPoolEngine {
       : history.lowerBound(this.cursorT + 1);
     for (let i = from; i < history.size; i += 1) {
       const col = history.get(i) as LiquidityColumn;
-      if (col.synthetic) continue; // los pools salen SOLO del libro real
       if (this.processColumn(col, step, cfg)) changed = true;
       this.cursorT = col.t;
     }

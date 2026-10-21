@@ -9,9 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "test": "vitest run",
-    "soak": "node --expose-gc node_modules/vite-node/vite-node.mjs scripts/soak.ts 8",
-    "binance-simulado": "vite-node scripts/binance-simulado.ts"
+    "test": "vitest run"
   },
   "dependencies": {
     "@react-three/drei": "^9.117.3",

@@ -24,14 +24,14 @@ describe('almacén de Features por fuente', () => {
 
   it('cada proveedor es una base separada y se borra sin tocar a las demás', async () => {
     const bin = new AlmacenFeatures('binance');
-    const sim = new AlmacenFeatures('simulacion');
-    const s = await sim.nuevaSesion('BTCUSDT', parametrosPorDefecto(), 1);
-    sim.guardar('BTCUSDT', s, [fila(1, 9000)]);
-    await sim.vaciar();
+    const urus = new AlmacenFeatures('urus');
+    const s = await urus.nuevaSesion('BTCUSDT', parametrosPorDefecto(), 1);
+    urus.guardar('BTCUSDT', s, [fila(1, 9000)]);
+    await urus.vaciar();
     const antesBinance = (await bin.resumen()).find((r) => r.simbolo === 'BTCUSDT')?.filas;
-    expect((await sim.resumen())[0].filas).toBe(1);
-    await sim.borrar();
-    expect(await sim.resumen()).toEqual([]);
+    expect((await urus.resumen())[0].filas).toBe(1);
+    await urus.borrar();
+    expect(await urus.resumen()).toEqual([]);
     expect((await bin.resumen()).find((r) => r.simbolo === 'BTCUSDT')?.filas).toBe(antesBinance);
   });
 });

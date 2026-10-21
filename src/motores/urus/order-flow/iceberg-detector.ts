@@ -17,8 +17,8 @@
  * Lado: un trade agresor BUY golpea un ASK (iceberg de venta); un agresor SELL golpea un BID (iceberg de compra).
  *
  * Es una inferencia: otro participante puede reponer liquidez en el mismo precio. Por eso todo se marca "probable"
- * (confianza "alta" solo si los números superan con holgura los umbrales). Nada se inventa: columnas sintéticas
- * (siembra REST) y huecos largos se saltan. Con una fuente MBO bastará con alimentar `IcebergEvent` desde ella.
+ * (confianza "alta" solo si los números superan con holgura los umbrales). Nada se inventa: los huecos largos se
+ * saltan. Con una fuente MBO bastará con alimentar `IcebergEvent` desde ella.
  */
 
 export type IcebergSide = "BID" | "ASK";
@@ -30,7 +30,6 @@ export interface IcebergColumn {
   minIdx: number;
   bestBidIdx: number;
   sizes: ArrayLike<number>;
-  synthetic?: boolean;
 }
 
 export interface IcebergHistory {
@@ -258,7 +257,7 @@ export interface IcebergSnapshot {
 
 /**
  * Seguidor incremental: procesa solo columnas nuevas. Arranca VACÍO (la primera llamada solo ancla el "ahora"),
- * igual que Fill:Kill, para no mezclar el pasado ni la siembra sintética.
+ * igual que Fill:Kill, para no mezclar el pasado.
  */
 export class IcebergTracker {
   private candidates = new Map<string, Candidate>();
@@ -314,7 +313,7 @@ export class IcebergTracker {
       if (!prev || !cur || cur.t <= this.lastT) continue;
       this.lastT = cur.t;
       const dt = cur.t - prev.t;
-      if (prev.synthetic || cur.synthetic || !(dt > 0) || dt > ICE_MAX_GAP_MS) continue;
+      if (!(dt > 0) || dt > ICE_MAX_GAP_MS) continue;
       if (stepIcebergs(this.candidates, prev, cur, trades, step, this.params, this.eventMap)) changed = true;
     }
     if (this.eventMap.size > ICE_MAX_EVENTS) {

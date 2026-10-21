@@ -21,7 +21,7 @@ export function redondeoAmable(x: number): number {
   return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * base;
 }
 
-/** Parámetros calibrados para BTCUSDT (los de las pruebas y el modo Simulación). */
+/** Parámetros calibrados para BTCUSDT (por defecto mientras llega la información de la fuente). */
 export function parametrosPorDefecto(simbolo = 'BTCUSDT', tickSize = 0.1): ParametrosSimbolo {
   return { simbolo, tickSize, pasos: { ...AGRUPACION_POR_TEMPORALIDAD }, temporalidades: { ...TEMPORALIDADES } };
 }

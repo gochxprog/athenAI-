@@ -5,7 +5,7 @@ Todo lo que tiene la plataforma hoy, pantalla por pantalla y motor por motor.
 **Estado:**
 - ✅ real y verificado: tiene motor, fórmulas y pruebas;
 - 🟢 real: funciona con datos reales, falta pasarlo por el proceso de verificación;
-- 🟡 DEMO: datos de ejemplo, todavía sin motor;
+- ⏸ sin motor todavía: la pantalla lo dice y no muestra datos de ejemplo;
 - ⬜ por hacer.
 
 ---
@@ -16,14 +16,14 @@ Todo lo que tiene la plataforma hoy, pantalla por pantalla y motor por motor.
 |---|---|---|---|
 | Panel General | **Panel General** | Cerebro 3D que reacciona a los eventos reales. 8 carteles: pulso del flujo, señales en vivo, Features fuera de lo normal, contexto, lectura del momento, día gemelo, tus estrategias ahora y alertas. Mercados de un vistazo y registro del día | 🟢 |
 | Panel General | **Order Flow** | Gráfico de velas, Footprint, heatmap de liquidez (tipo Bookmap), DOM, eventos, memoria del mercado y tabla de Features con exportación a CSV | 🟢 |
-| Cerebro | **Laboratorio** | Editor de estrategias en Python, plantillas, el Juez completo (10 motores), papers. Pestaña DEMO con la curva de capital y el modelo ML de ejemplo | ✅ Juez · 🟡 restos DEMO |
-| Cerebro | **Investigación** | Red de hipótesis 3D, temas e hipótesis | 🟡 (aplazado a propósito) |
-| Cerebro | **Estrategias** | Catálogo de estrategias con veredicto | 🟡 |
-| Cerebro | **Conocimiento** | Patrones encontrados y mapa 2D | 🟡 |
+| Cerebro | **Laboratorio** | Editor de estrategias en Python, plantillas, el Juez completo (10 motores), papers y el Etiquetador | ✅ |
+| Cerebro | **Investigación** | Red de hipótesis (aplazada a propósito) | ⏸ |
+| Cerebro | **Estrategias** | Tus estrategias con el veredicto, la nota y la curva de su última prueba del Juez | 🟢 |
+| Cerebro | **Conocimiento** | Patrones encontrados (llega con el bloque de machine learning) | ⏸ |
 | Cerebro | **Agentes** | Sala 3D con los 10 agentes. Vigía, Flujo, Rastreador, Programador y Juez trabajan de verdad | 🟢 (5 de 10) |
-| Dinero | **Paper Trading** | Cuenta simulada, bots y posiciones | 🟡 |
-| Dinero | **Decisiones** | Bitácora de veredictos, bots y monitor | 🟡 |
-| Sistema | **Máquinas** | CPU, RAM y procesos | 🟡 |
+| Dinero | **Paper Trading** | Bots en Paper con el Guardián (siguiente motor) | ⏸ |
+| Dinero | **Decisiones** | Bitácora real: pruebas del Juez, avisos y registro del motor | 🟢 |
+| Sistema | **Máquinas** | Telemetría real del navegador (memoria, núcleos, workers) | 🟢 |
 | Sistema | **Datos (Centro de datos)** | Fuentes y activos, grabación, almacenamiento, calendario de eventos fuertes, notificaciones y diagnóstico de Binance | 🟢 |
 
 Barra superior: reloj, estado de la conexión, «no operar» (eventos fuertes) y «hoy es distinto». 🟢
@@ -38,7 +38,6 @@ Barra lateral: números y estados reales. 🟢
 | Fuente **Binance USD-M Futures** | Trades, libro de órdenes, Open Interest, liquidaciones y funding. Gratis, sin clave. Rutas /public y /market (abril de 2026); se reconecta sola y sigue funcionando aunque falle el REST | 🟢 |
 | Fuente **Rithmic** (puente) | Futuros CME (NQ, ES, GC…) a través de un puente | 🟢 código listo, pendiente de cuenta |
 | Fuente **Urus** (servidor) | Datos desde un servidor propio | 🟢 |
-| Fuente **Simulación** | Generador de datos sintéticos para pruebas. Solo se usa si la eliges | 🟢 |
 | **Vigía** | Marca los cortes de conexión como «hueco»: no se aprende de datos rotos | 🟢 |
 | **Barras** | Dollar bars (canónicas), 1m / 5m / 15m y por volumen | 🟢 |
 | **Almacén** | Una «carpeta» por fuente (IndexedDB del navegador), con exportación a CSV y borrado | 🟢 |
@@ -161,11 +160,8 @@ Laboratorio con «Explicación simple» y «Cómo se calcula».
    - generador de hipótesis.
    
    Todo lo que encuentren pasa por el mismo Juez.
-2. **Conectar las pantallas DEMO:**
-   - Estrategias;
-   - Decisiones;
-   - Paper Trading (bots + Guardián);
-   - Máquinas;
+2. **Pantallas que aún no tienen motor** (dicen «sin motor» y no muestran datos de ejemplo):
+   - Paper Trading (bots + Guardián): es el siguiente;
    - Conocimiento;
    - Investigación, con la Red de hipótesis (aplazada a propósito).
 3. **VPS 24/7:** grabar y avisar aunque el computador esté apagado.

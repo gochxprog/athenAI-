@@ -1,122 +1,58 @@
-import { useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Bot, Gavel, Landmark, ShieldAlert } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Gavel } from 'lucide-react';
 import Encabezado from '@/components/ui/Encabezado';
 import Panel from '@/components/ui/Panel';
-import { InsigniaVeredicto } from '@/components/ui/Insignia';
-import { useSistema } from '@/hooks/SistemaDemo';
-import { DECISIONES, type Decision } from '@/data/mock';
-import { horaCorta, num } from '@/lib/format';
+import { useFeeds } from '@/components/orderflow/OrderFlowChart';
+import { leerPapers } from '@/motores/papers/paper';
+import { notificador } from '@/motores/notificaciones/notificador';
+import { num } from '@/lib/format';
 
-type Tipo = Decision['tipo'];
-const ICONOS: Record<Tipo, typeof Gavel> = { 'Veredicto del Juez': Gavel, 'Ejecución de bot': Bot, Monitor: ShieldAlert, 'Dinero real': Landmark };
-const FILTROS: (Tipo | 'Todas')[] = ['Todas', 'Veredicto del Juez', 'Ejecución de bot', 'Monitor', 'Dinero real'];
+type Fila = { t: number; tipo: 'Juez' | 'Aviso' | 'Datos'; texto: string; resultado: string };
 
-interface Fila {
-  clave: string;
-  hora: Date;
-  tipo: Tipo;
-  ref: string;
-  detalle: string;
-  resultado: Decision['resultado'];
-  enVivo?: boolean;
-}
-
+/** Bitácora real: veredictos del Juez, avisos enviados y eventos del motor de datos. */
 export default function DecisionesView() {
-  const { eventos, ahora, motor } = useSistema();
-  const [filtro, setFiltro] = useState<(typeof FILTROS)[number]>('Todas');
-
+  const { registro } = useFeeds();
+  const [version, setVersion] = useState(0);
+  useEffect(() => notificador.suscribir(() => setVersion((v) => v + 1)), []);
+  useEffect(() => {
+    const id = setInterval(() => setVersion((v) => v + 1), 5_000);
+    return () => clearInterval(id);
+  }, []);
   const filas = useMemo<Fila[]>(() => {
-    // Veredictos que el Juez emite durante la sesión (vienen del registro en vivo).
-    const vivos: Fila[] = eventos
-      .filter((e) => e.tipo === 'juez' && (e.texto.includes('APROBADA') || e.texto.includes('RECHAZADA')))
-      .map((e) => {
-        const [, cuerpo] = e.texto.split('Juez: ');
-        const [ref, ...resto] = cuerpo.split(' · ');
-        const aprobada = e.texto.includes('APROBADA');
-        return {
-          clave: `v-${e.id}`,
-          hora: e.hora,
-          tipo: 'Veredicto del Juez' as const,
-          ref: ref.replace(/ (APROBADA|RECHAZADA)$/, ''),
-          detalle: resto.join(' · '),
-          resultado: aprobada ? ('APROBADA' as const) : ('RECHAZADA' as const),
-          enVivo: true,
-        };
-      });
-    const base = ahora.getTime();
-    const fijas: Fila[] = DECISIONES.map((d, i) => ({ clave: `d-${i}`, hora: new Date(base - d.haceMin * 60_000), tipo: d.tipo, ref: d.ref, detalle: d.detalle, resultado: d.resultado }));
-    return [...vivos, ...fijas].sort((a, b) => b.hora.getTime() - a.hora.getTime());
-    // La hora base solo se recalcula al llegar eventos nuevos para que la lista no salte cada segundo.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventos]);
-
-  const visibles = filas.filter((f) => filtro === 'Todas' || f.tipo === filtro);
-  const cuenta = (t: Tipo) => filas.filter((f) => f.tipo === t).length;
+    void version;
+    const juez: Fila[] = leerPapers().map((p) => ({ t: p.creado, tipo: 'Juez', texto: `«${p.estrategia}» · ${p.simbolo} · ${p.respuesta.resultado.resumen}`, resultado: p.respuesta.resultado.veredicto }));
+    const avisos: Fila[] = notificador.historial.map((h) => ({ t: h.t, tipo: 'Aviso', texto: `${h.aviso.titulo} · ${h.canal ?? 'sin canal'}`, resultado: h.ok ? 'enviado' : h.detalle }));
+    const datos: Fila[] = registro.slice(0, 60).map((e) => ({ t: e.t, tipo: 'Datos', texto: e.texto, resultado: '' }));
+    return [...juez, ...avisos, ...datos].sort((a, b) => b.t - a.t);
+  }, [version, registro]);
+  const [filtro, setFiltro] = useState<'Todo' | Fila['tipo']>('Todo');
+  const vistas = filas.filter((f) => filtro === 'Todo' || f.tipo === filtro);
+  const cuenta = (t: Fila['tipo']) => filas.filter((f) => f.tipo === t).length;
 
   return (
     <div className="space-y-4">
-      <Encabezado
-        modulo="Decisiones"
-        titulo="Bitácora de decisiones"
-        descripcion="Todo lo que se decide queda registrado: veredictos del Juez, ejecuciones de los bots, pausas del monitor y solicitudes de dinero real. Incluye los rechazos."
-      />
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {FILTROS.slice(1).map((t) => {
-          const Icono = ICONOS[t as Tipo];
-          return (
-            <div key={t} className="panel p-4">
-              <p className="etiqueta flex items-center gap-1.5">
-                <Icono size={11} /> {t}
-              </p>
-              <p className="cifra mt-2 text-2xl font-light text-white">{cuenta(t as Tipo)}</p>
-              <p className="mt-1 text-[10px] text-plata-500">
-                {t === 'Veredicto del Juez' ? `${num(motor.aprobadas)} aprobadas · ${num(motor.rechazadas)} rechazadas en total` : 'últimas 6 h'}
-              </p>
-            </div>
-          );
-        })}
+      <Encabezado modulo="Decisiones" titulo="Bitácora de decisiones" descripcion="Todo lo que se decide queda registrado: cada veredicto del Juez (con su motivo), cada aviso enviado y los eventos del motor de datos. Las decisiones de los bots se sumarán cuando exista el motor de Paper Trading." />
+      <div className="flex flex-wrap gap-1 rounded-xl border border-borde p-1 w-fit">
+        {(['Todo', 'Juez', 'Aviso', 'Datos'] as const).map((t) => (
+          <button key={t} onClick={() => setFiltro(t)} className={`rounded-lg px-3 py-1.5 text-xs ${filtro === t ? 'bg-white text-black' : 'text-plata-300 hover:text-white'}`}>
+            {t} {t !== 'Todo' && <span className="cifra opacity-60">{num(cuenta(t))}</span>}
+          </button>
+        ))}
       </div>
-
-      <Panel
-        cuerpo="p-0"
-        titulo="Registro"
-        accion={
-          <div className="flex flex-wrap gap-1">
-            {FILTROS.map((f) => (
-              <button key={f} onClick={() => setFiltro(f)} className={`rounded-md px-2.5 py-1 text-[10px] transition-colors ${filtro === f ? 'bg-white text-black' : 'text-plata-400 hover:bg-white/5 hover:text-white'}`}>
-                {f}
-              </button>
+      <Panel titulo="Registro" icono={Gavel} cuerpo="overflow-x-auto px-4 py-2">
+        <table className="w-full min-w-[640px] text-left text-xs" data-bitacora>
+          <tbody>
+            {vistas.slice(0, 300).map((f, i) => (
+              <tr key={`${f.t}-${i}`} className="border-t border-borde-suave">
+                <td className="w-36 py-1.5 text-plata-500">{new Date(f.t).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
+                <td className="w-16 py-1.5 text-[10px] uppercase tracking-[0.1em] text-plata-400">{f.tipo}</td>
+                <td className="py-1.5 text-plata-100">{f.texto}</td>
+                <td className="py-1.5 text-right text-white">{f.resultado}</td>
+              </tr>
             ))}
-          </div>
-        }
-      >
-        <ol className="relative">
-          <AnimatePresence initial={false}>
-            {visibles.map((f) => {
-              const Icono = ICONOS[f.tipo];
-              return (
-                <motion.li key={f.clave} layout initial={{ opacity: 0, backgroundColor: 'rgba(255,255,255,0.06)' }} animate={{ opacity: 1, backgroundColor: 'rgba(255,255,255,0)' }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }} className="grid grid-cols-[52px_28px_minmax(0,1fr)_auto] items-start gap-3 border-b border-borde-suave px-4 py-3 last:border-0 md:grid-cols-[60px_28px_180px_minmax(0,1fr)_auto]">
-                  <time className="cifra pt-0.5 text-[11px] text-plata-500">{horaCorta(f.hora)}</time>
-                  <span className="flex h-7 w-7 items-center justify-center rounded-md border border-borde">
-                    <Icono size={13} className="text-plata-300" />
-                  </span>
-                  <div className="hidden md:block">
-                    <p className="text-xs text-plata-200">{f.tipo}</p>
-                    <p className="font-mono text-[10px] text-plata-500">{f.ref}</p>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-mono text-[10px] text-plata-500 md:hidden">{f.ref}</p>
-                    <p className="text-xs leading-relaxed text-plata-200">{f.detalle}</p>
-                    {f.enVivo && <p className="mt-0.5 text-[9.5px] uppercase tracking-[0.14em] text-plata-500">Sesión en curso</p>}
-                  </div>
-                  <InsigniaVeredicto valor={f.resultado} />
-                </motion.li>
-              );
-            })}
-          </AnimatePresence>
-        </ol>
+          </tbody>
+        </table>
+        {!vistas.length && <p className="py-4 text-center text-xs text-plata-500">Todavía no hay decisiones registradas.</p>}
       </Panel>
     </div>
   );

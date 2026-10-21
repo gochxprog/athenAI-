@@ -8,7 +8,7 @@ import Insignia from '@/components/ui/Insignia';
 import Punto from '@/components/ui/Punto';
 import Consola, { type LineaConsola } from '@/components/ui/Consola';
 import { NOMBRE_PROVEEDOR, useFeeds } from '@/components/orderflow/OrderFlowChart';
-import { AGENTES, CAPAS, type Agente, type AgenteId } from '@/data/mock';
+import { AGENTES, CAPAS, type Agente, type AgenteId } from '@/data/agentes';
 import type { EstadoFeed } from '@/motores/worker/protocolo';
 import { conSigno, decimalesDe, num } from '@/lib/format';
 import { leerEstrategias } from '@/components/laboratorio/plantillas';

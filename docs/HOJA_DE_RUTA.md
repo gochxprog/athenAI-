@@ -10,7 +10,7 @@ Marca de progreso: ✅ hecho · 🔶 en curso · ⬜ pendiente.
 **Funciona de verdad**
 
 - ✅ **Centro de datos** (módulo Datos):
-  - fuentes: Binance Futures (por defecto, sin API key), Rithmic (por puente), servidor Urus y Simulación;
+  - fuentes: Binance Futures (por defecto, sin API key), Rithmic (por puente) y servidor Urus;
   - hasta 6 activos a la vez;
   - al aplicar una configuración, el pipeline se limpia y empieza de cero.
 - ✅ **Motores de Urus** en vivo por activo:
@@ -19,16 +19,16 @@ Marca de progreso: ✅ hecho · 🔶 en curso · ⬜ pendiente.
   - pools de liquidez (LHM), Open Interest y DOM.
 - ✅ **Features para el ML**:
   - 38 datos por cada dollar bar, sin mirar al futuro;
-  - se guardan en una "carpeta" por fuente: `athenai-binance`, `athenai-rithmic`, `athenai-urus` y `athenai-simulacion`;
+  - se guardan en una "carpeta" por fuente: `athenai-binance`, `athenai-rithmic` y `athenai-urus`;
   - se exportan a CSV.
 - ✅ **Gráfico de Order Flow**: velas o Footprint, 1m/5m/15m/Dollar/Volume, CVD, OI, LHM y DOM.
 - ✅ **Bloque C completo**: estrategias en Python con prueba anti-futuro y el Juez real (Walk-Forward, Monte Carlo, Luck test, robustez, Deflated Sharpe, PBO).
 - ✅ **Bloque B completo**: régimen, "hoy es distinto", día gemelo, cruce entre mercados, heatmap y calendario.
 - ✅ **Bloque A completo**: toda la plataforma lee del mismo chorro, panel de mercados, liquidaciones, huecos, fuentes mezcladas, Vigía y Flujo con motor real.
 
-**Todavía es DEMO (pantallas sin motor detrás)**
+**Todavía sin motor (la pantalla lo dice; no hay datos de ejemplo)**
 
-- Bots y modelos (LightGBM, red neuronal). Los contadores de hipótesis/épocas del Panel General y la pestaña «Ejemplos DEMO» del Laboratorio siguen siendo DEMO hasta los bloques D y E.
+- Bots y modelos (LightGBM, red neuronal), hasta los bloques D y E.
 - De los agentes 3D, Vigía, Flujo, Rastreador, Programador y Juez tienen motor; los otros 5 dicen «Sin motor · Bloque X».
 
 **Regla:** ningún agente aparece "trabajando" si no tiene un motor real detrás. Mientras su motor no exista, se muestra como «Sin motor · próximamente».
@@ -125,7 +125,7 @@ Dónde verlo: **Order Flow → pestaña «Memoria del mercado»**, las tarjetas 
 
 ### Bloque C — Tus estrategias y el Juez real ✅
 
-Dónde verlo: **Laboratorio → «Mis estrategias (Python) · real»** (lo de antes sigue en «Ejemplos DEMO»).
+Dónde verlo: **Laboratorio → «Mis estrategias (Python) · real»**.
 
 - ✅ **Editor de estrategias en Python**, con Python dentro del navegador (Pyodide, incluido en la app: funciona sin internet). Sin numpy: Python estándar.
   - Contrato: `estrategia(filas, p)` devuelve una posición por fila (1 largo, −1 corto, 0 fuera). `PARAMETROS` (opcional) es la rejilla de valores.
@@ -159,7 +159,7 @@ Dónde verlo: **Laboratorio → «Mis estrategias (Python) · real»** (lo de an
 ### Próximo (antes de los motores de IA) ⬜
 
 - ✅ **Papers**: cada prueba del Juez genera un paper (idea en texto plano, lógica, código, parámetros por tramo, métricas, reglas, Monte Carlo, Luck test, robustez y conclusión). Laboratorio → «Papers»: ver, descargar (HTML), PDF (imprimir) y enviar como archivo a Discord / Telegram / ntfy. Se guardan los últimos 50 en este navegador.
-- ✅ **Monte Carlo con cartelitos**: al tocar o pasar el ratón por una trayectoria, sus métricas (resultado final, peor caída, máximo y mínimo). En el Juez real y en los ejemplos DEMO.
+- ✅ **Monte Carlo con cartelitos**: al tocar o pasar el ratón por una trayectoria, sus métricas (resultado final, peor caída, máximo y mínimo).
 - ⬜ **Red de hipótesis** (Investigación) real: estrategias y papers como nodos, unidos por las Features que usan.
 - ⬜ **Bots en Paper** con estrategias aprobadas por el Juez + Guardián + avisos de operaciones (Bloque E sin IA).
 - ⬜ **VPS 24/7** (Bloque F).
@@ -196,7 +196,7 @@ Dónde verlo: **Laboratorio → «Mis estrategias (Python) · real»** (lo de an
 
 | Grupo | Motor | Qué da |
 |---|---|---|
-| Datos | Fuentes Binance, Rithmic (puente), Urus, Simulación | Trades, libro, OI y liquidaciones en vivo |
+| Datos | Fuentes Binance, Rithmic (puente), Urus | Trades, libro, OI y liquidaciones en vivo |
 | | Vigía | Huecos y cortes marcados (`hueco`) |
 | | Barras | Dollar bars (canónicas), 1m/5m/15m, volumen |
 | | Almacén | Una carpeta (IndexedDB) por fuente |

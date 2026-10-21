@@ -17,11 +17,3 @@ export default function Insignia({ children, variante = 'contorno', className = 
   );
 }
 
-/** Veredictos y estados sin color: aprobada = sólida, rechazada = tachada, pendiente = contorno. */
-export function InsigniaVeredicto({ valor }: { valor: string }) {
-  const v = valor.toUpperCase();
-  if (v.startsWith('APROBAD') || v === 'EJECUTADA') return <Insignia variante="solida">{v}</Insignia>;
-  if (v.startsWith('RECHAZAD') || v === 'BLOQUEADO') return <Insignia variante="tachada">{v}</Insignia>;
-  if (v === 'PAUSADO') return <Insignia variante="tenue">{v}</Insignia>;
-  return <Insignia variante="contorno">{v}</Insignia>;
-}

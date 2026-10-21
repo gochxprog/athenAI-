@@ -1,5 +1,5 @@
 // Web Worker del motor de Order Flow: todo el cálculo vive aquí, fuera del hilo de la interfaz.
-// Un Pipeline por activo asignado y cada activo con su fuente (se pueden mezclar Binance, Rithmic, Urus y Simulación).
+// Un Pipeline por activo asignado y cada activo con su fuente (se pueden mezclar Binance, Rithmic y Urus).
 // La UI recibe el estado del activo que mira (5 Hz) y un resumen de todos los feeds (1 Hz).
 // Al aplicar una configuración se cierran todas las fuentes y se descarta todo el estado (pipeline limpio);
 // las Features nuevas de cada activo se guardan en la "carpeta" de SU fuente, nunca mezcladas.
@@ -7,11 +7,10 @@ import { Pipeline } from '../nucleo/pipeline';
 import { filasACsv } from '../nucleo/features';
 import { featuresExtremas } from '../investigacion/extremos';
 import { inferirTick, parametrosParaSimbolo, parametrosPorDefecto, type ParametrosSimbolo } from '../nucleo/parametros';
-import { GeneradorDemo } from '../fuentes/demo';
 import { FuenteUrus } from '../fuentes/urusSSE';
 import { FuenteBinance } from '../fuentes/binance';
 import { iniciarSesionRithmic } from '../fuentes/rithmicPuente';
-import { AlmacenFeatures, type FilaGuardada } from '../almacen/almacen';
+import { AlmacenFeatures, borrarCarpetaSintetica, PROVEEDORES, type FilaGuardada } from '../almacen/almacen';
 import { detectarRegimen, MIN_BARRAS_REGIMEN } from '../memoria/regimen';
 import { buscarMemoria, MIN_VENTANAS } from '../memoria/gemelos';
 import { cruzarMercados, type CruceMercados, type SerieCierres } from '../memoria/cruce';
@@ -22,6 +21,9 @@ import type { ConfigCentro, EstadoFeed, MemoriaFeed, MensajeAlMotor, MensajeDelM
 const ctx = self as unknown as { postMessage: (m: MensajeDelMotor) => void; onmessage: ((e: MessageEvent<MensajeAlMotor>) => void) | null };
 
 const HZ_ESTADO = 5;
+
+// La plataforma solo trabaja con mercado real: se borra cualquier carpeta de datos sintéticos que quede.
+borrarCarpetaSintetica();
 
 interface Activo {
   proveedor: Proveedor;
@@ -96,8 +98,8 @@ function procesar(simbolo: string, m: MensajeMercado, gen: number): void {
       a = calibrar(simbolo, parametrosParaSimbolo(simbolo, inferirTick(simbolo, precios), precios[precios.length - 1], 0));
     }
     a.trades += m.trades.length;
-    // Latencia = llegada − hora del trade en el exchange (en Simulación no aplica).
-    if (a.proveedor !== 'simulacion') a.latenciaMs = Math.max(0, Date.now() - m.trades[m.trades.length - 1].timestamp);
+    // Latencia = llegada − hora del trade en el exchange.
+    a.latenciaMs = Math.max(0, Date.now() - m.trades[m.trades.length - 1].timestamp);
   }
   if (m.tipo === 'conexion' && (m.estado !== a.pipeline.conexion || m.detalle !== a.pipeline.detalleConexion)) {
     if (m.estado === 'en-vivo' || m.estado === 'error' || m.estado === 'reconectando' || m.estado === 'sin-datos') registrar(`${simbolo}: ${m.estado}${m.detalle ? ` · ${m.detalle}` : ''}`);
@@ -185,7 +187,7 @@ function detenerTodo(): void {
 
 const vaciarAlmacenes = () => Promise.all([...almacenes.values()].map((al) => al.vaciar().catch(() => 0)));
 
-const NOMBRE: Record<Proveedor, string> = { binance: 'Binance USD-M Futures', rithmic: 'Rithmic (puente)', urus: 'Servidor Urus', simulacion: 'Simulación' };
+const NOMBRE: Record<Proveedor, string> = { binance: 'Binance USD-M Futures', rithmic: 'Rithmic (puente)', urus: 'Servidor Urus' };
 
 async function aplicar(c: ConfigCentro): Promise<void> {
   detenerTodo();
@@ -206,7 +208,7 @@ async function aplicar(c: ConfigCentro): Promise<void> {
   // Pipeline limpio: no queda nada de la configuración anterior.
   activos = new Map();
   cruces = [];
-  for (const x of lista) activos.set(x.simbolo, crearActivo(x.proveedor, parametrosPorDefecto(x.simbolo), x.proveedor === 'simulacion'));
+  for (const x of lista) activos.set(x.simbolo, crearActivo(x.proveedor, parametrosPorDefecto(x.simbolo), false));
   if (!visible || !activos.has(visible)) visible = lista[0]?.simbolo ?? null;
   const descripcion = [...grupos].map(([p, ss]) => `${NOMBRE[p]}: ${ss.join(', ')}`).join(' · ');
   registrar(`Pipeline limpio · ${descripcion || 'sin activos'}${c.guardar ? ` · guardando en ${[...grupos.keys()].map((p) => `athenai-${p}`).join(', ')}` : ' · sin guardar'}`);
@@ -220,29 +222,6 @@ async function aplicar(c: ConfigCentro): Promise<void> {
 async function iniciarFuente(proveedor: Proveedor, simbolos: string[], c: ConfigCentro, gen: number): Promise<void> {
   const emitir = (s: string) => (m: MensajeMercado) => procesar(s, m, gen);
   switch (proveedor) {
-    case 'simulacion': {
-      const gens = simbolos.map((s, i) => {
-        // Precarga de historia (≈ 6 s de cálculo por hora): 60 min para el primer activo, 15 min para el resto.
-        const precarga = (i === 0 ? 60 : 15) * 60_000;
-        const g = new GeneradorDemo((Date.now() + i * 7919) % 1_000_000, Date.now() - precarga);
-        for (const m of g.avanzar(precarga, true)) procesar(s, m, gen);
-        // La precarga no cuenta para el ritmo de barras por minuto.
-        const act = activos.get(s);
-        if (act) act.filasVentana = 0;
-        procesar(s, { tipo: 'conexion', estado: 'en-vivo', detalle: 'Datos sintéticos (solo pruebas)' }, gen);
-        return g;
-      });
-      let ultimo = Date.now();
-      const id = setInterval(() => {
-        const ahora = Date.now();
-        gens.forEach((g, i) => {
-          for (const m of g.avanzar(ahora - ultimo)) procesar(simbolos[i], m, gen);
-        });
-        ultimo = ahora;
-      }, 100);
-      detenerFuentes.push(() => clearInterval(id));
-      break;
-    }
     case 'binance': {
       const f = new FuenteBinance({
         simbolos,
@@ -403,7 +382,7 @@ ctx.onmessage = (e) => {
         responder(m.id, async () => {
           await vaciarAlmacenes();
           const salida: Record<string, unknown> = {};
-          for (const p of ['binance', 'rithmic', 'urus', 'simulacion'] as Proveedor[]) {
+          for (const p of PROVEEDORES) {
             const propio = almacenes.get(p);
             const al = propio ?? new AlmacenFeatures(p);
             salida[p] = await al.resumen();

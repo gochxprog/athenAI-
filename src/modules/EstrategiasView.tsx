@@ -1,130 +1,109 @@
-import { Fragment, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
-import { ChevronDown, Library } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Library } from 'lucide-react';
 import Encabezado from '@/components/ui/Encabezado';
 import Panel from '@/components/ui/Panel';
-import Insignia, { InsigniaVeredicto } from '@/components/ui/Insignia';
-import Sparkline from '@/components/charts/Sparkline';
-import { useSistema } from '@/hooks/SistemaDemo';
-import { BOTS, CAPITAL_BACKTEST, ESTRATEGIAS, type Estrategia, type Veredicto } from '@/data/mock';
-import { serieEquity } from '@/lib/random';
-import { num, pct, usd } from '@/lib/format';
+import { leerEstrategias } from '@/components/laboratorio/plantillas';
+import { Linea } from '@/components/laboratorio/graficos';
+import { VisorPaper } from '@/components/laboratorio/BibliotecaPapers';
+import { leerPapers, type Paper } from '@/motores/papers/paper';
+import { useNavegar } from '@/hooks/Navegacion';
+import { conSigno, num } from '@/lib/format';
 
-const FILTROS: (Veredicto | 'Todas')[] = ['Todas', 'Aprobada', 'En evaluación', 'Rechazada'];
+const pct = (v: number | null | undefined) => (v === null || v === undefined ? '—' : conSigno(v * 100, 1, '%'));
+const fecha = (t: number) => new Date(t).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
 
+/** Catálogo real: tus estrategias del Laboratorio con el resultado de su última prueba del Juez. */
 export default function EstrategiasView() {
-  const { motor } = useSistema();
-  const [filtro, setFiltro] = useState<(typeof FILTROS)[number]>('Todas');
-  const [abierta, setAbierta] = useState<string | null>('E-087');
-  const lista = ESTRATEGIAS.filter((e) => filtro === 'Todas' || e.veredicto === filtro);
-  const cuenta = (v: Veredicto) => ESTRATEGIAS.filter((e) => e.veredicto === v).length;
+  const navegar = useNavegar();
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setVersion((v) => v + 1), 5_000);
+    return () => clearInterval(id);
+  }, []);
+  const filas = useMemo(() => {
+    void version;
+    const papers = leerPapers();
+    return leerEstrategias()
+      .map((e) => ({ e, p: papers.filter((x) => x.estrategia === e.nombre).sort((a, b) => b.creado - a.creado)[0] as Paper | undefined }))
+      .sort((a, b) => (b.p?.creado ?? b.e.actualizada) - (a.p?.creado ?? a.e.actualizada));
+  }, [version]);
+  const [selId, setSelId] = useState<string | null>(null);
+  const sel = filas.find((x) => x.e.id === selId) ?? filas[0];
+  const [viendo, setViendo] = useState<Paper | null>(null);
+  const cuenta = (v: string) => filas.filter((x) => x.e.ultimoVeredicto === v).length;
 
   return (
     <div className="space-y-4">
-      <Encabezado
-        modulo="Estrategias"
-        titulo="Biblioteca de estrategias"
-        descripcion="Cada estrategia que los modelos propusieron y pasó por el Laboratorio, con el veredicto del Juez. Se guardan todas, también las fallidas: cada prueba queda registrada, incluso las muertas."
-      >
-        <Insignia variante="solida">{num(motor.aprobadas)} aprobadas</Insignia>
-        <Insignia variante="tachada">{num(motor.rechazadas)} rechazadas</Insignia>
-        <Insignia variante="tenue">histórico</Insignia>
-      </Encabezado>
-
-      <Panel
-        titulo={`Últimas ${ESTRATEGIAS.length} evaluaciones`}
-        icono={Library}
-        cuerpo="overflow-x-auto p-0"
-        accion={
-          <div className="flex flex-wrap gap-1">
-            {FILTROS.map((f) => (
-              <button key={f} onClick={() => setFiltro(f)} className={`rounded-md px-2.5 py-1 text-[10px] transition-colors ${filtro === f ? 'bg-white text-black' : 'text-plata-400 hover:bg-white/5 hover:text-white'}`}>
-                {f === 'Todas' ? `Todas · ${ESTRATEGIAS.length}` : `${f} · ${cuenta(f)}`}
-              </button>
-            ))}
+      <Encabezado modulo="Estrategias" titulo="Catálogo de estrategias" descripcion="Tus estrategias del Laboratorio con el veredicto de su última prueba del Juez. Las aprobadas para Paper Trading son las candidatas a bot." />
+      <div className="grid gap-3 sm:grid-cols-4">
+        {[
+          ['Estrategias', filas.length],
+          ['Aprobadas para Paper', cuenta('APROBADA')],
+          ['Con reserva', cuenta('APROBADA CON RESERVA')],
+          ['Rechazadas', cuenta('RECHAZADA')],
+        ].map(([k, v]) => (
+          <div key={k as string} className="rounded-lg border border-borde-suave p-3">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-plata-500">{k}</p>
+            <p className="cifra text-xl font-light text-white">{num(v as number)}</p>
           </div>
-        }
-      >
-        <table className="w-full min-w-[960px] text-left text-xs">
+        ))}
+      </div>
+      <Panel titulo="Estrategias" icono={Library} cuerpo="overflow-x-auto px-4 py-2">
+        <table className="w-full min-w-[760px] text-left text-xs" data-catalogo>
           <thead>
-            <tr className="text-[9.5px] uppercase tracking-[0.14em] text-plata-500">
-              {['', 'ID', 'Estrategia', 'Modelo', 'Win Rate', 'PF', 'Expectancy', 'Max DD', 'Sharpe', 'PBO', 'Operaciones', 'Veredicto'].map((h, i) => (
-                <th key={i} className="px-3 py-3 font-normal first:pl-4">
-                  {h}
-                </th>
-              ))}
+            <tr className="text-[9.5px] uppercase tracking-[0.12em] text-plata-500">
+              <th className="py-1.5 font-normal">Estrategia</th>
+              <th className="py-1.5 font-normal">Veredicto</th>
+              <th className="py-1.5 font-normal">Mercado</th>
+              <th className="py-1.5 text-right font-normal">Nota</th>
+              <th className="py-1.5 text-right font-normal">Retorno fuera de muestra</th>
+              <th className="py-1.5 text-right font-normal">Sharpe</th>
+              <th className="py-1.5 text-right font-normal">Caída máx.</th>
+              <th className="py-1.5 font-normal">Probada</th>
             </tr>
           </thead>
           <tbody>
-            {lista.map((e) => (
-              <Fragment key={e.id}>
-                <tr onClick={() => setAbierta(abierta === e.id ? null : e.id)} className={`cursor-pointer border-t border-borde-suave transition-colors hover:bg-white/[0.02] ${e.veredicto === 'Rechazada' ? 'text-plata-400' : 'text-plata-100'}`}>
-                  <td className="py-3 pl-4 pr-1">
-                    <ChevronDown size={13} className={`text-plata-500 transition-transform ${abierta === e.id ? 'rotate-180' : ''}`} />
-                  </td>
-                  <td className="px-3 py-3 font-mono">{e.id}</td>
-                  <td className="px-3 py-3">
-                    <p>{e.nombre}</p>
-                    <p className="font-mono text-[10px] text-plata-500">{e.origen} · {e.fecha}</p>
-                  </td>
-                  <td className="px-3 py-3 font-mono text-[11px]">{e.modelo}</td>
-                  <td className="cifra px-3 py-3">{pct(e.winRate, 1)}</td>
-                  <td className="cifra px-3 py-3">{num(e.profitFactor, 2)}</td>
-                  <td className="cifra px-3 py-3">{usd(e.expectancy, 1)}</td>
-                  <td className="cifra px-3 py-3">{usd(e.maxDD, 0)}</td>
-                  <td className="cifra px-3 py-3">{num(e.sharpe, 2)}</td>
-                  <td className="cifra px-3 py-3">{e.overfitting}%</td>
-                  <td className="cifra px-3 py-3">{num(e.trades)}</td>
-                  <td className="px-3 py-3">
-                    <InsigniaVeredicto valor={e.veredicto} />
-                  </td>
+            {filas.map(({ e, p }) => {
+              const j = p?.respuesta.resultado;
+              return (
+                <tr key={e.id} onClick={() => setSelId(e.id)} className={`cursor-pointer border-t border-borde-suave ${sel?.e.id === e.id ? 'bg-white/[0.04]' : ''}`}>
+                  <td className="py-2 text-plata-100">{e.nombre}</td>
+                  <td className="py-2 text-white">{e.ultimoVeredicto ?? 'sin probar'}</td>
+                  <td className="py-2 text-plata-300">{p ? `${p.simbolo} · ${p.proveedor}` : '—'}</td>
+                  <td className="cifra py-2 text-right text-plata-200">{j?.score ? num(j.score.total, 0) : '—'}</td>
+                  <td className="cifra py-2 text-right text-white">{pct(j?.oos.retornoTotal)}</td>
+                  <td className="cifra py-2 text-right text-plata-300">{j?.oos.sharpe == null ? '—' : num(j.oos.sharpe, 2)}</td>
+                  <td className="cifra py-2 text-right text-plata-300">{j ? pct(-j.oos.maxDrawdown) : '—'}</td>
+                  <td className="py-2 text-plata-500">{p ? fecha(p.creado) : '—'}</td>
                 </tr>
-                  {abierta === e.id && (
-                    <tr>
-                      <td colSpan={12} className="p-0">
-                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                          <Detalle e={e} />
-                        </motion.div>
-                      </td>
-                    </tr>
-                  )}
-              </Fragment>
-            ))}
+              );
+            })}
           </tbody>
         </table>
+        {!filas.length && <p className="py-4 text-center text-xs text-plata-500">Aún no hay estrategias. Créalas en el Laboratorio.</p>}
       </Panel>
-    </div>
-  );
-}
-
-function Detalle({ e }: { e: Estrategia }) {
-  const curva = useMemo(() => {
-    const deriva = e.expectancy / CAPITAL_BACKTEST;
-    return serieEquity(e.semilla, Math.min(e.trades, 260), CAPITAL_BACKTEST, deriva, 0.0045);
-  }, [e]);
-  const bots = BOTS.filter((b) => b.estrategia === e.id);
-  return (
-    <div className="grid gap-4 border-t border-borde-suave bg-white/[0.015] px-4 py-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-      <div>
-        <p className="etiqueta mb-2">Equity Out-of-Sample · {num(curva.length)} operaciones</p>
-        <Sparkline datos={curva} alto={90} base={CAPITAL_BACKTEST} dibujar />
-      </div>
-      <div className="space-y-3 text-xs">
-        <div>
-          <p className="etiqueta">Veredicto del Juez</p>
-          <p className="mt-1 text-plata-100">
-            {e.veredicto === 'Aprobada' && `Aprobada: cumple todas las reglas · luck test p = ${num(e.pValor, 3)} · Sortino ${num(e.sortino, 2)}`}
-            {e.veredicto === 'Rechazada' && `Rechazada: ${e.motivo}`}
-            {e.veredicto === 'En evaluación' && `En evaluación: Walk-Forward y Monte Carlo en curso · p provisional ${num(e.pValor, 3)}`}
-          </p>
-        </div>
-        <div>
-          <p className="etiqueta">Ejecución</p>
-          <p className="mt-1 text-plata-300">
-            {bots.length ? bots.map((b) => `${b.id} ${b.nombre} (${b.estado.toLowerCase()})`).join(' · ') : e.veredicto === 'Aprobada' ? 'Sin bot asignado' : 'Ningún bot puede ejecutarla'}
-          </p>
-        </div>
-      </div>
+      {sel && (
+        <Panel titulo={`Detalle · ${sel.e.nombre}`} cuerpo="space-y-3 p-4">
+          {sel.p ? (
+            <>
+              <p className="text-sm text-plata-100">{sel.p.respuesta.resultado.resumen}</p>
+              <p className="text-[10px] uppercase tracking-[0.14em] text-plata-500">Capital fuera de muestra (lo que no vio al elegir sus parámetros)</p>
+              <Linea datos={sel.p.respuesta.resultado.equityOos} base={1} />
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => setViendo(sel.p!)} className="rounded-md border border-borde px-3 py-1.5 text-[11px] text-plata-200 hover:text-white">
+                  Ver paper completo
+                </button>
+                <button onClick={() => navegar('laboratorio')} className="rounded-md border border-borde px-3 py-1.5 text-[11px] text-plata-200 hover:text-white">
+                  Abrir en el Laboratorio
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-plata-400">Esta estrategia aún no ha pasado por el Juez. Pruébala en el Laboratorio.</p>
+          )}
+        </Panel>
+      )}
+      <VisorPaper p={viendo} alCerrar={() => setViendo(null)} />
     </div>
   );
 }

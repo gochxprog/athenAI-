@@ -7,6 +7,7 @@ import { Anillo, CintaTrades } from './anillo';
 import { SerieBarras, type BarraAnalizada } from './serieBarras';
 import { MotorMercado, type MetricasFlujo } from './motorMercado';
 import { construirFila, type FilaFeatures } from './features';
+import type { OrderBookView } from '../urus/order-flow/order-book';
 import { parametrosPorDefecto, type ParametrosSimbolo } from './parametros';
 import { eventoEnVentana, type EventoCalendario } from './calendario';
 import { type EstadoConexion, type EventoMotor, type IdTemporalidad, type MensajeMercado } from './tipos';
@@ -125,9 +126,29 @@ export interface ResumenFlujo {
   absorcionSpike: number | null;
   /** Compras y ventas agresivas de las últimas 28 dollar bars. */
   barrasFlujo: { compra: number; venta: number }[];
+  /** Mejor precio de compra y de venta del libro. */
+  bid: number | null;
+  ask: number | null;
+  /** Liquidez de los 10 primeros niveles por lado (USD) y distancia del 10.º al precio medio (fracción). */
+  libro10: { bidUsd: number; askUsd: number; bidDist: number; askDist: number } | null;
+  /** Tasa de funding vigente (perpetuos). */
+  fundingTasa: number | null;
 }
 
 const CAPACIDAD_FEATURES = 20_000;
+
+/** Liquidez de los 10 primeros niveles por lado y cuánto se aleja el 10.º del precio medio. */
+function libro10(l: OrderBookView | null): ResumenFlujo['libro10'] {
+  if (!l || l.mid === null || !l.bids.length || !l.asks.length) return null;
+  const b = l.bids.slice(0, 10);
+  const a = l.asks.slice(0, 10);
+  return {
+    bidUsd: b.reduce((s, [p, q]) => s + p * q, 0),
+    askUsd: a.reduce((s, [p, q]) => s + p * q, 0),
+    bidDist: (l.mid - b[b.length - 1][0]) / l.mid,
+    askDist: (a[a.length - 1][0] - l.mid) / l.mid,
+  };
+}
 
 export class Pipeline {
   readonly mercado: MotorMercado;
@@ -309,7 +330,7 @@ export class Pipeline {
     const cols: NonNullable<ReturnType<typeof lhm.get>>[] = [];
     for (let i = (n - 1) % salto; i < n; i += salto) {
       const col = lhm.get(i);
-      if (col && !col.synthetic) cols.push(col);
+      if (col) cols.push(col);
     }
     if (cols.length < 2) return null;
     const idx0 = ultima.bestBidIdx - Math.floor(maxFilas / 2);
@@ -483,6 +504,10 @@ export class Pipeline {
       deltaRatio: ultima && ultima.volumen > 0 ? ultima.delta / ultima.volumen : null,
       absorcionSpike: ultima && mediaAbs > 0 ? maxAbs(ultima) / mediaAbs : null,
       barrasFlujo: canon.slice(-28).map((b) => ({ compra: (b.volumen + b.delta) / 2, venta: (b.volumen - b.delta) / 2 })),
+      bid: m.libro?.bestBid ?? null,
+      ask: m.libro?.bestAsk ?? null,
+      libro10: libro10(m.libro),
+      fundingTasa: m.fundingTasa,
     };
   }
 

@@ -1,4 +1,4 @@
-import { useReloj } from '@/hooks/SistemaDemo';
+import { useReloj } from '@/hooks/useReloj';
 import { fechaLarga, hora } from '@/lib/format';
 import Punto from '@/components/ui/Punto';
 import Insignia from '@/components/ui/Insignia';
@@ -59,7 +59,7 @@ export default function Topbar({ titulo, seccion }: { titulo: string; seccion: s
             {texto}
           </span>
         </button>
-        <Insignia variante="tenue" className="hidden md:inline-flex">DEMO</Insignia>
+        <Insignia variante="tenue" className="hidden md:inline-flex">PAPER</Insignia>
       </div>
     </header>
   );

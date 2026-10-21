@@ -35,13 +35,13 @@ Los únicos cambios en código de Urus están marcados con comentarios `athenAI:
 
 - **Agotamiento:** el `ExhaustionEngine` de Urus usa la **vela siguiente** para confirmar. athenAI evalúa el agotamiento de la barra *N* solo cuando cierra la *N+1*, y lo escribe en la fila de la *N+1*.
 - **Cada evento lleva `disponibleEn`:** es el instante del flujo en que el motor pudo afirmarlo. Una fila de Features solo usa eventos con `disponibleEn ≤ cierre de la barra`.
-- **El reloj es siempre el del flujo de datos, nunca `Date.now()`:** la misma cinta produce los mismos eventos en vivo, en DEMO y en un backtest.
+- **El reloj es siempre el del flujo de datos, nunca `Date.now()`:** la misma cinta produce los mismos eventos en vivo y en un backtest.
 - **Prueba automática:** las filas pasadas son **idénticas** aunque lleguen datos posteriores (`pipeline.test.ts`).
 
 ## 4. Arquitectura en athenAI
 
 ```
-Fuente (DEMO | servidor Urus por SSE)  ──►  Web Worker del motor
+Fuente (Binance | servidor Urus por SSE)  ──►  Web Worker del motor
                                               ├─ MotorMercado: DOM, LHM, icebergs, stop runs, big trades, CVD, OI
                                               ├─ Serie canónica: dollar bars de 10 M USD ──► Features (34) ──► CSV
                                               └─ Serie del gráfico: 1m · 5m · 15m · Dollar · Volume
@@ -82,7 +82,6 @@ La fuente ya no se elige en el gráfico: se configura en **Datos → Centro de d
 | **Binance Futures** (por defecto) | Nada: datos públicos | aggTrades y liquidaciones por `wss://fstream.binance.com/market/stream`, libro L2 por `/public/stream` (snapshot + diffs encadenados por `pu`), Open Interest cada 5 s. La ruta antigua `/stream` desde el 23-abr-2026 solo entrega el libro |
 | **Rithmic** | Usuario, contraseña, sistema, gateway y la URL de un **puente R\|Protocol** | Rithmic no acepta conexiones desde un navegador. athenAI hace `POST {puente}/api/rithmic/login` y luego lee el mercado con el protocolo de Urus. Sin puente, el feed muestra el error |
 | **Servidor Urus** | URL del servidor | `GET /api/realtime/stream`, `POST /api/realtime/subscriptions`, `GET /api/oi` (CORS para el origen de athenAI) |
-| **Simulación** | Nada | Solo pruebas; nunca se mezcla con datos reales |
 
 Al pulsar **Aplicar y empezar a aprender**:
 
@@ -100,7 +99,7 @@ La configuración se guarda en el navegador. La contraseña de Rithmic **no** se
 
 Se pueden **mezclar fuentes por activo** (por ejemplo BTC y ETH de Binance y NQ de Rithmic). Al aplicar se cierran todas las fuentes y todo vuelve a fluir; toda la plataforma (Panel General, Order Flow, Agentes, barra superior) lee de ese mismo chorro.
 
-Cada fuente tiene su propia base IndexedDB (su "carpeta"): `athenai-binance`, `athenai-rithmic`, `athenai-urus`, `athenai-simulacion`.
+Cada fuente tiene su propia base IndexedDB (su "carpeta"): `athenai-binance`, `athenai-rithmic`, `athenai-urus`.
 
 - Cada fila lleva `simbolo` y `sesion`. La sesión cambia al reaplicar o reconectar, porque la numeración de barras se reinicia.
 - Cada carpeta se exporta a CSV por activo o se borra sin tocar las demás.

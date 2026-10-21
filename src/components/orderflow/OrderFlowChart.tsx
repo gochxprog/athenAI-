@@ -61,7 +61,6 @@ export const NOMBRE_PROVEEDOR: Record<Proveedor, string> = {
   binance: 'Binance Futures',
   rithmic: 'Rithmic',
   urus: 'Servidor Urus',
-  simulacion: 'Simulación',
 };
 
 /**

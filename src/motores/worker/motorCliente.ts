@@ -54,7 +54,9 @@ function leerConfig(): ConfigGuardada {
       // Configuraciones antiguas: una sola fuente para todos los activos.
       const viejo = x.config as unknown as { proveedor?: Proveedor; simbolos?: string[] };
       const activos = x.config.activos ?? (viejo.proveedor && viejo.simbolos ? viejo.simbolos.map((simbolo) => ({ simbolo, proveedor: viejo.proveedor! })) : CONFIG_POR_DEFECTO.activos);
-      const c = { ...x.config, activos };
+      // Los activos de la antigua fuente «Simulación» (sintética) se descartan.
+      const reales = activos.filter((a) => (a.proveedor as string) !== 'simulacion');
+      const c = { ...x.config, activos: reales.length ? reales : CONFIG_POR_DEFECTO.activos };
       delete (c as { proveedor?: unknown }).proveedor;
       delete (c as { simbolos?: unknown }).simbolos;
       return {

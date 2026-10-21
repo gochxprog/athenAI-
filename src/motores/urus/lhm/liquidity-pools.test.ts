@@ -7,7 +7,7 @@ import {
 } from "./liquidity-pools";
 
 /**
- * Tests del detector de pools de liquidez con datos sintéticos.
+ * Tests del detector de pools de liquidez con valores fijos de prueba.
  * Verifica: persistencia anti-ruido, clasificación por lado, barrido (swept),
  * retiro (withdrawn) y respeto del umbral.
  */

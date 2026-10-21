@@ -10,7 +10,7 @@
 // Desde el 23-abr-2026 Binance separa los WebSockets de futuros en rutas /public, /market y /private.
 // La ruta antigua ({ws}/stream) solo entrega los streams de /public: el libro llega pero los trades NO.
 // Por eso se abren dos conexiones. Con el servidor oficial NUNCA se usa la ruta antigua (no da trades): si un
-// canal no recibe nada se reconecta a la misma ruta con espera creciente. Solo un endpoint propio (simulador,
+// canal no recibe nada se reconecta a la misma ruta con espera creciente. Solo un endpoint propio (p. ej. un
 // proxy) sin las rutas nuevas prueba una vez la ruta antigua.
 // Si el REST no responde (bloqueo de red, CORS), se abren igual los WebSockets con el tick conocido; el libro
 // espera a que el snapshot llegue (se reintenta en segundo plano).

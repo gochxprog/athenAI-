@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Database, FolderOpen, KeyRound, Play, Plus, Radio, RefreshCw, ScrollText, Server, Square, Trash2, Waves, X, FlaskConical, Download } from 'lucide-react';
+import { ArrowRight, Database, FolderOpen, KeyRound, Play, Plus, Radio, RefreshCw, ScrollText, Server, Square, Trash2, Waves, X, Download } from 'lucide-react';
 import { useNavegar } from '@/hooks/Navegacion';
 import { DEFINICIONES_FEATURES } from '@/motores/nucleo/features';
 import Encabezado from '@/components/ui/Encabezado';
@@ -38,13 +38,6 @@ const PROVEEDORES: { id: Proveedor; icono: typeof Radio; nota: string; descripci
     nota: 'SSE',
     descripcion: 'Tu servidor de Urus: recibe trades y la vista del libro ya calculada por su OrderBookEngine.',
     sugeridos: ['BTCUSDT', 'ETHUSDT'],
-  },
-  {
-    id: 'simulacion',
-    icono: FlaskConical,
-    nota: 'Solo pruebas',
-    descripcion: 'Mercado sintético calibrado a BTC. Sirve para probar la plataforma; nunca se mezcla con datos reales.',
-    sugeridos: ['BTCUSDT'],
   },
 ];
 
@@ -163,9 +156,6 @@ export default function DatosView() {
               </div>
             )}
             {fuente === 'urus' && <Campo etiqueta="URL del servidor de Urus" valor={borrador.urus.baseUrl} onChange={(v) => set('urus', { baseUrl: v })} />}
-            {fuente === 'simulacion' && (
-              <p className="text-[11px] text-plata-300">Genera un mercado sintético con icebergs, stop runs, pools y bloques grandes. Sus Features se guardan aparte, en la carpeta de Simulación, y no deben usarse para entrenar modelos de producción.</p>
-            )}
           </div>
         </Panel>
 
