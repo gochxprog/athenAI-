@@ -10,7 +10,7 @@
 //   5. Deflated Sharpe (López de Prado): descuenta haber probado muchas variantes.
 //   6. PBO (CSCV): probabilidad de que la mejor variante dentro de muestra sea peor que la mediana fuera.
 import { crearAleatorio } from '@/lib/random';
-import { normalInversa } from '@/lib/backtest';
+import { deflatedSharpe, DSR_MINIMO, pboCscv, PBO_MAXIMO, type DetalleDsr, type DetallePbo } from './sobreajuste';
 import { robustez, type ResultadoRobustez } from './robustez';
 import { ALFA_LUCK, luckTest, type ConfigLuck, type ResultadoLuck } from './luckTest';
 import { monteCarlo, RUINA_MAXIMA, type ConfigMc, type ResultadoMc } from './monteCarlo';
@@ -83,73 +83,14 @@ export interface ResultadoJuez {
   robustez: ResultadoRobustez;
   deflatedSharpe: number | null;
   pbo: number | null;
+  /** Términos del Deflated Sharpe y del PBO (para mostrarlos). */
+  dsrDetalle: DetalleDsr | null;
+  pboDetalle: DetallePbo | null;
   ensayos: number;
 }
 
 export const MIN_BARRAS_OOS = 500;
 export const MIN_OPERACIONES = 30;
-
-/** Φ(x): función de distribución normal estándar. */
-export function normalCdf(x: number): number {
-  const t = 1 / (1 + 0.2316419 * Math.abs(x));
-  const d = 0.3989422804014327 * Math.exp((-x * x) / 2);
-  const p = d * t * (0.31938153 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
-  return x >= 0 ? 1 - p : p;
-}
-
-/**
- * Deflated Sharpe Ratio (Bailey y López de Prado, 2014).
- * sr: Sharpe por barra; t: barras; n: variantes probadas; varSr: varianza del Sharpe entre variantes.
- */
-export function deflatedSharpe(sr: number, t: number, asimetria: number, curtosis: number, n: number, varSr: number): number {
-  const g = 0.5772156649;
-  const sr0 = n > 1 ? Math.sqrt(Math.max(varSr, 0)) * ((1 - g) * normalInversa(1 - 1 / n) + g * normalInversa(1 - 1 / (n * Math.E))) : 0;
-  const den = Math.sqrt(Math.max(1e-12, 1 - asimetria * sr + ((curtosis - 1) / 4) * sr * sr));
-  return normalCdf(((sr - sr0) * Math.sqrt(Math.max(1, t - 1))) / den);
-}
-
-function momentos(x: readonly number[]): { asimetria: number; curtosis: number } {
-  const n = x.length;
-  const m = x.reduce((a, v) => a + v, 0) / n;
-  const s2 = x.reduce((a, v) => a + (v - m) ** 2, 0) / n;
-  if (s2 <= 0) return { asimetria: 0, curtosis: 3 };
-  const s = Math.sqrt(s2);
-  return { asimetria: x.reduce((a, v) => a + ((v - m) / s) ** 3, 0) / n, curtosis: x.reduce((a, v) => a + ((v - m) / s) ** 4, 0) / n };
-}
-
-/** PBO por CSCV con 8 bloques (70 combinaciones mitad/mitad). Necesita al menos 2 variantes. */
-export function pboCscv(retornos: readonly (readonly number[])[], bloques = 8): number | null {
-  const k = retornos.length;
-  if (k < 2) return null;
-  const n = retornos[0].length;
-  const tam = Math.floor(n / bloques);
-  if (tam < 20) return null;
-  const sr = (r: readonly number[], idx: number[]) => {
-    const xs: number[] = [];
-    for (const b of idx) for (let i = b * tam; i < (b + 1) * tam; i += 1) xs.push(r[i]);
-    return sharpeBarras(xs) ?? -Infinity;
-  };
-  const combos: number[][] = [];
-  const rec = (desde: number, act: number[]) => {
-    if (act.length === bloques / 2) {
-      combos.push([...act]);
-      return;
-    }
-    for (let i = desde; i < bloques; i += 1) rec(i + 1, [...act, i]);
-  };
-  rec(0, []);
-  let malos = 0;
-  for (const dentro of combos) {
-    const fuera = [...Array(bloques).keys()].filter((b) => !dentro.includes(b));
-    const srIn = retornos.map((r) => sr(r, dentro));
-    const mejor = srIn.indexOf(Math.max(...srIn));
-    const srOut = retornos.map((r) => sr(r, fuera));
-    const rango = srOut.filter((v) => v < srOut[mejor]).length + 1;
-    const w = rango / (k + 1);
-    if (Math.log(w / (1 - w)) <= 0) malos += 1;
-  }
-  return malos / combos.length;
-}
 
 const pctTxt = (v: number) => `${(v * 100).toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`;
 const dec = (v: number, d: number) => v.toLocaleString('es-ES', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -191,19 +132,14 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
   const otro = e.otroMercado ? { simbolo: e.otroMercado.simbolo, ...metricas(backtest(e.otroMercado.cierres, e.otroMercado.posiciones, costos), e.otroMercado.tiempos) } : null;
   const rob = robustez({ cierres: e.cierres, tiempos: e.tiempos, posiciones, combos: e.combos, mejor, metCompletas, ventanas: wfo.ventanas, inicioOos, retornosOos: retOos, ddOos: oos.maxDrawdown, costos, opciones: fx, otroMercado: otro });
 
-  // Deflated Sharpe sobre los retornos fuera de muestra.
+  // Motores 7 y 8 · Sobreajuste: Deflated Sharpe (fuera de muestra) y PBO (CSCV con todas las variantes).
   const ensayos = Math.max(e.ensayos ?? 1, e.combos.length);
   const retO = retOos.slice(inicioOos);
   const srO = sharpeBarras(retO);
-  let dsr: number | null = null;
-  if (srO !== null) {
-    const { asimetria, curtosis } = momentos(retO);
-    const validos = srCompletos.filter((x) => Number.isFinite(x));
-    const media = validos.reduce((a, v) => a + v, 0) / Math.max(1, validos.length);
-    const varSr = validos.length > 1 ? validos.reduce((a, v) => a + (v - media) ** 2, 0) / (validos.length - 1) : 1 / Math.max(1, retO.length);
-    dsr = deflatedSharpe(srO, retO.length, asimetria, curtosis, ensayos, varSr);
-  }
-  const pbo = pboCscv(completos.map((b) => b.retornos));
+  const dsrDetalle = srO === null ? null : deflatedSharpe(retO, srO, ensayos, srCompletos);
+  const dsr = dsrDetalle?.dsr ?? null;
+  const pboDetalle = pboCscv(completos.map((b) => b.retornos));
+  const pbo = pboDetalle?.pbo ?? null;
 
   // Reglas del Juez (fijas: los modelos no pueden cambiarlas).
   const reglas: Regla[] = [
@@ -214,8 +150,8 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
     { nombre: 'Luck test', ok: suerte ? suerte.p < ALFA_LUCK : null, valor: suerte ? `p = ${dec(suerte.p, 3)}` : '—', umbral: 'p < 0,05', explicacion: 'Mercados falsos o entradas al azar no deben igualarla más de 1 de cada 20 veces.' },
     { nombre: 'Drawdown máximo', ok: oos.maxDrawdown <= 0.2, valor: pctTxt(oos.maxDrawdown), umbral: '≤ 20 %', explicacion: 'Peor caída desde un máximo, fuera de muestra.' },
     { nombre: 'Monte Carlo: riesgo de ruina', ok: mc ? mc.probRuina <= RUINA_MAXIMA : null, valor: mc ? `${pctTxt(mc.probRuina)} de simulaciones caen ≥ ${pctTxt(mc.umbralRuina)}` : '—', umbral: '≤ 5 %', explicacion: 'Reordenando las operaciones miles de veces, la mala suerte no debe quemar la cuenta.' },
-    { nombre: 'Deflated Sharpe', ok: dsr === null ? null : dsr >= 0.95, valor: dsr === null ? '—' : dec(dsr, 3), umbral: '≥ 0,95', explicacion: `Descuenta haber probado ${ensayos} ${ensayos === 1 ? 'variante' : 'variantes'}.` },
-    { nombre: 'PBO (sobreajuste)', ok: pbo === null ? null : pbo <= 0.25, valor: pbo === null ? 'una sola variante' : pctTxt(pbo), umbral: '≤ 25 %', explicacion: 'Probabilidad de que la mejor variante dentro de muestra sea mediocre fuera.' },
+    { nombre: 'Deflated Sharpe', ok: dsr === null ? null : dsr >= DSR_MINIMO, valor: dsr === null ? '—' : dec(dsr, 3), umbral: '≥ 0,95', explicacion: `Descuenta haber probado ${ensayos} ${ensayos === 1 ? 'variante' : 'variantes'}.` },
+    { nombre: 'PBO (sobreajuste)', ok: pbo === null ? null : pbo < PBO_MAXIMO, valor: pbo === null ? 'una sola variante' : pctTxt(pbo), umbral: '< 5 %', explicacion: 'Probabilidad de que la mejor variante en entrenamiento quede por debajo de la mediana fuera.' },
     { nombre: 'Robustez (costos ×2, vecinos, estabilidad)', ok: rob.estado !== 'rechazado', valor: `${3 - rob.fallas - (rob.vecinos.ok === null ? 1 : 0)}/${rob.vecinos.ok === null ? 2 : 3} pruebas superadas`, umbral: 'falla como mucho 1', explicacion: 'Debe aguantar el doble de costos, cambios pequeños en sus parámetros y distintos regímenes del mercado.' },
     { nombre: 'Otro mercado', ok: rob.otroMercado ? rob.otroMercado.ok : null, valor: rob.otroMercado ? `${rob.otroMercado.simbolo}: ${pctTxt(rob.otroMercado.retornoTotal)}, caída ${pctTxt(rob.otroMercado.maxDrawdown)}` : 'no probado', umbral: '> −10 % y caída ≤ 2× la original', explicacion: 'Con los mismos parámetros en otro activo no debe destruir capital.' },
   ];
@@ -251,6 +187,8 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
     robustez: rob,
     deflatedSharpe: dsr,
     pbo,
+    dsrDetalle,
+    pboDetalle,
     ensayos,
   };
 }

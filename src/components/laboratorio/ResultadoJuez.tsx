@@ -499,6 +499,94 @@ function SeccionRobustez({ r }: { r: RespuestaLaboratorio }) {
   );
 }
 
+/** Motores 7 y 8 · Sobreajuste: Deflated Sharpe y PBO. */
+function SeccionSobreajuste({ r }: { r: RespuestaLaboratorio }) {
+  const j = r.resultado;
+  const d = j.dsrDetalle;
+  const p = j.pboDetalle;
+  const dato = (k: string, v: string) => (
+    <div key={k} className="flex justify-between gap-2 border-t border-borde-suave py-1 text-[11px]">
+      <span className="text-plata-400">{k}</span>
+      <span className="cifra text-plata-100">{v}</span>
+    </div>
+  );
+  return (
+    <Panel titulo="Motores 7 y 8 · Sobreajuste" accion={<span className="text-[10px] text-plata-500">{num(j.ensayos)} variantes probadas en total con esta idea</span>} cuerpo="grid gap-6 p-4 xl:grid-cols-2">
+      <div className="space-y-3" data-dsr={d?.dsr ?? 'null'}>
+        <p className="text-[11px] uppercase tracking-[0.14em] text-white">Motor 7 · Deflated Sharpe</p>
+        <Explicacion
+          que="si pruebas muchas versiones de una idea, alguna sale con buen Sharpe por pura suerte. Este motor calcula el Sharpe que el azar daría con ese número de pruebas y mira si el tuyo lo supera de verdad."
+          sirve="saber si tu Sharpe es real o fruto de haber probado demasiadas versiones."
+          mirar="el DSR debe ser 0,95 o más (95 % de confianza)."
+        />
+        {d ? (
+          <>
+            <div>
+              <p className="cifra text-3xl font-light text-white">{num(d.dsr, 3)}</p>
+              <p className="text-[11px] text-plata-300">{d.dsr >= 0.95 ? 'Aprobado: el Sharpe es genuino' : 'Rechazado: puede ser efecto de probar muchas variantes'}</p>
+            </div>
+            <div>
+              {dato('Sharpe observado (por barra, fuera de muestra) · SR_obs', num(d.srObs, 4))}
+              {dato('Sharpe que el azar logra con N pruebas · SR*', num(d.srEstrella, 4))}
+              {dato('Variantes probadas · N', num(d.n))}
+              {dato('Barras · T', num(d.t))}
+              {dato('Asimetría · γ₃', num(d.asimetria, 3))}
+              {dato('Curtosis · γ₄ (3 = normal)', num(d.curtosis, 3))}
+              {dato(`Varianza de los Sharpe · Var_SR (${d.origenVarSr === 'variantes' ? 'de tus variantes' : 'una sola variante: 1/T'})`, d.varSr.toExponential(3))}
+              {dato('Desviación del Sharpe · σ_SR', num(d.sigma, 5))}
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-plata-500">Sin datos suficientes fuera de muestra.</p>
+        )}
+        <details className="rounded-lg border border-borde-suave px-3 py-2 text-[11px] text-plata-300">
+          <summary className="cursor-pointer text-plata-100">Cómo se calcula</summary>
+          <ul className="mt-2 list-disc space-y-1 pl-4">
+            <li>SR* = √Var_SR × ((1 − γ) × Z⁻¹(1 − 1/N) + γ × Z⁻¹(1 − 1/(N × e))), con γ = 0,5772 (Euler-Mascheroni) y Z⁻¹ el cuantil de la normal.</li>
+            <li>σ_SR = √((1 − γ₃ × SR_obs + ((γ₄ − 1) ÷ 4) × SR_obs²) ÷ (T − 1)).</li>
+            <li>DSR = Φ((SR_obs − SR*) ÷ σ_SR), con Φ la normal acumulada. Aprueba si ≥ 0,95.</li>
+            <li>N cuenta todas las variantes que has probado con esta idea, también en pruebas anteriores.</li>
+          </ul>
+        </details>
+      </div>
+      <div className="space-y-3" data-pbo={p?.pbo ?? 'null'}>
+        <p className="text-[11px] uppercase tracking-[0.14em] text-white">Motor 8 · PBO (probabilidad de sobreajuste)</p>
+        <Explicacion
+          que="corta la historia en 16 trozos y prueba todas las formas de usar la mitad para elegir la mejor variante y la otra mitad para comprobarla (12.870 combinaciones)."
+          sirve="saber si elegir «la mejor» fue una lotería: si la elegida suele quedar por debajo de la mitad fuera, el proceso de optimizar está engañándote."
+          mirar="el PBO debe ser menor que 5 %. (En la literatura se alarma desde el 50 %; tu especificación pide 5 %, que es muy exigente.)"
+        />
+        {p ? (
+          <>
+            <div>
+              <p className="cifra text-3xl font-light text-white">{pctSin(p.pbo, 1)}</p>
+              <p className="text-[11px] text-plata-300">
+                {num(p.malas)} de {num(p.combinaciones)} combinaciones eligieron una variante que fuera quedó por debajo de la mediana.
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.14em] text-plata-500">λ = logit(ω) de cada combinación (izquierda de 0 = sobreajuste)</p>
+              <Histograma valores={p.lambdas} marcas={[{ v: 0, etiqueta: 'λ = 0 (mediana)', fuerte: true }]} />
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-plata-500">No aplica: hay una sola variante. Pon varios valores en PARAMETROS para medirlo.</p>
+        )}
+        <details className="rounded-lg border border-borde-suave px-3 py-2 text-[11px] text-plata-300">
+          <summary className="cursor-pointer text-plata-100">Cómo se calcula</summary>
+          <ul className="mt-2 list-disc space-y-1 pl-4">
+            <li>La serie de cada variante se divide en S = 16 bloques. Combinaciones = 16! ÷ (8! × 8!) = 12.870.</li>
+            <li>En cada combinación, la mitad de los bloques es entrenamiento (IS) y la otra mitad prueba (OOS).</li>
+            <li>Se elige la variante con mayor rendimiento acumulado en el IS (suma de log-retornos).</li>
+            <li>ω = su puesto en el OOS ÷ (N + 1); λ = ln(ω ÷ (1 − ω)).</li>
+            <li>PBO = combinaciones con ω &lt; 0,5 ÷ 12.870. Aprueba si &lt; 5 %.</li>
+          </ul>
+        </details>
+      </div>
+    </Panel>
+  );
+}
+
 /** Motor 2 · Métricas: fuera de muestra (lo que cuenta) frente a dentro (optimista). */
 function SeccionMetricas({ r }: { r: RespuestaLaboratorio }) {
   const j = r.resultado;
@@ -591,17 +679,7 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
 
       <SeccionRobustez r={r} />
 
-      <Panel titulo="Pendientes de revisar · Deflated Sharpe y PBO" cuerpo="grid gap-3 p-4 sm:grid-cols-2">
-        {[
-          ['Deflated Sharpe', j.deflatedSharpe === null ? '—' : num(j.deflatedSharpe, 3)],
-          ['PBO (sobreajuste)', j.pbo === null ? '—' : `${num(j.pbo * 100, 0)} %`],
-        ].map(([k, v]) => (
-          <div key={k} className="rounded-lg border border-borde-suave p-3">
-            <p className="etiqueta">{k}</p>
-            <p className="cifra mt-1 text-lg font-light text-white">{v}</p>
-          </div>
-        ))}
-      </Panel>
+      <SeccionSobreajuste r={r} />
     </div>
   );
 }

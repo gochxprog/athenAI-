@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { backtest, metricas, normalizarPosiciones } from './backtest';
-import { deflatedSharpe, juzgar, pboCscv, type Combo } from './juez';
+import { juzgar, type Combo } from './juez';
 import { crearAleatorio, normal } from '@/lib/random';
 
 /** Mercado sintético. `persistencia` > 0 crea momentum explotable; 0 = paseo aleatorio. */
@@ -87,20 +87,4 @@ describe('Juez', () => {
     expect(res.dentroMuestra.retornoTotal).toBeLessThan(0.01);
   });
 
-  it('el Deflated Sharpe baja al probar más variantes; el PBO detecta sobreajuste', () => {
-    const una = deflatedSharpe(0.05, 2_000, 0, 3, 1, 0.0004);
-    const cien = deflatedSharpe(0.05, 2_000, 0, 3, 100, 0.0004);
-    expect(cien).toBeLessThan(una);
-    // Con variantes de puro ruido el PBO ronda 0,5 (promedio de varias semillas: una sola varía mucho).
-    let suma = 0;
-    for (let s = 1; s <= 12; s += 1) {
-      const rs = crearAleatorio(s);
-      suma += pboCscv(Array.from({ length: 10 }, () => Array.from({ length: 1_600 }, () => normal(rs) * 0.01)))!;
-    }
-    expect(suma / 12).toBeGreaterThan(0.3);
-    const r = crearAleatorio(5);
-    const ruido = Array.from({ length: 10 }, () => Array.from({ length: 1_600 }, () => normal(r) * 0.01));
-    const buena = Array.from({ length: 1_600 }, () => 0.002 + normal(r) * 0.01);
-    expect(pboCscv([buena, ...ruido.slice(0, 5)])!).toBeLessThan(0.15);
-  });
 });

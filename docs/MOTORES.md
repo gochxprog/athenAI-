@@ -33,8 +33,8 @@ Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el p
 | 4 | Monte Carlo | Bootstrap o shuffle de las operaciones (1.000–10.000), probabilidad de ruina (≤ 5 %), DD P95, P5/P50/P95, alerta de orden (DD P95 > 2× backtest) | `monteCarlo.ts` | ✅ |
 | 5 | Luck test | Permutación de retornos o entradas aleatorias (1.000–10.000), métrica Sharpe / Retorno / Esperanza, p = (c+1)/(N+1), aprueba si p < 0,05; cada escenario usa el Backtest | `luckTest.ts` | ✅ |
 | 6 | Robustez | Costos ×2 (PF > 1,2 y retorno > 0), vecinos contiguos (≥ 70 % aceptables, alerta de isla), otro mercado (automático de la misma familia; no destruye capital), estabilidad en 10 sub-periodos por régimen (≥ 60 % y < 90 % de concentración); 0 fallos aprueba, 1 alerta, ≥ 2 rechaza | `robustez.ts` | ✅ |
-| 7 | Deflated Sharpe | Sharpe descontando las variantes probadas | `juez.ts` | 🔍 |
-| 8 | PBO | Probabilidad de sobreajuste (CSCV) | `juez.ts` | 🔍 |
+| 7 | Deflated Sharpe | SR* por valores extremos, σ_SR con asimetría y curtosis, DSR = Φ((SR − SR*)/σ_SR) ≥ 0,95 | `sobreajuste.ts` | ✅ |
+| 8 | PBO | CSCV con 16 bloques (12.870 combinaciones), mejor IS por rendimiento acumulado, ω y λ = logit(ω), PBO < 5 % | `sobreajuste.ts` | ✅ |
 | 9 | Anti-futuro | Si el código mira datos posteriores | `src/motores/laboratorio/python.ts` | 🔍 |
 | 10 | Veredicto | Reglas fijas sobre los motores 1–9 | `juez.ts` | 🔍 |
 
