@@ -11,6 +11,7 @@ import type { Proveedor, ResumenSimbolo } from '@/motores/worker/protocolo';
 import { COSTOS_POR_DEFECTO } from '@/motores/juez/backtest';
 import { NOMBRE_OBJETIVO, type ObjetivoWfo } from '@/motores/juez/walkForward';
 import { MC_POR_DEFECTO, type MetodoMc } from '@/motores/juez/monteCarlo';
+import { LUCK_POR_DEFECTO, NOMBRE_METODO_LUCK, NOMBRE_METRICA_LUCK, type MetodoLuck, type MetricaLuck } from '@/motores/juez/luckTest';
 import { DEFINICIONES_FEATURES } from '@/motores/nucleo/features';
 import { num } from '@/lib/format';
 import { guardarEstrategias, leerEstrategias, PLANTILLAS, type EstrategiaGuardada } from './plantillas';
@@ -40,6 +41,9 @@ export default function EstrategiasPython() {
   const [simulaciones, setSimulaciones] = useState(MC_POR_DEFECTO.simulaciones);
   const [ruinaPct, setRuinaPct] = useState(MC_POR_DEFECTO.umbralRuina * 100);
   const [capital, setCapital] = useState(MC_POR_DEFECTO.capitalInicial);
+  const [metodoLuck, setMetodoLuck] = useState<MetodoLuck>(LUCK_POR_DEFECTO.metodo);
+  const [metricaLuck, setMetricaLuck] = useState<MetricaLuck>(LUCK_POR_DEFECTO.metrica);
+  const [permutaciones, setPermutaciones] = useState(LUCK_POR_DEFECTO.permutaciones);
   const [corriendo, setCorriendo] = useState(false);
   const [progreso, setProgreso] = useState<string[]>([]);
   const [resultado, setResultado] = useState<RespuestaLaboratorio | null>(null);
@@ -95,7 +99,7 @@ export default function EstrategiasPython() {
     setProgreso([]);
     try {
       const r = await laboratorio.ejecutar(
-        { codigo: sel.codigo, proveedor: f.proveedor, simbolo: f.simbolo, otro: o && { proveedor: o.proveedor, simbolo: o.simbolo }, costos: { comisionPb: comision, deslizamientoPb: deslizamiento }, ensayosPrevios: sel.ensayos, wfo: { objetivo: objetivoWfo, lIs, lOos }, monteCarlo: { metodo: metodoMc, simulaciones: Math.min(10_000, Math.max(100, simulaciones)), umbralRuina: ruinaPct / 100, capitalInicial: capital } },
+        { codigo: sel.codigo, proveedor: f.proveedor, simbolo: f.simbolo, otro: o && { proveedor: o.proveedor, simbolo: o.simbolo }, costos: { comisionPb: comision, deslizamientoPb: deslizamiento }, ensayosPrevios: sel.ensayos, wfo: { objetivo: objetivoWfo, lIs, lOos }, monteCarlo: { metodo: metodoMc, simulaciones: Math.min(10_000, Math.max(100, simulaciones)), umbralRuina: ruinaPct / 100, capitalInicial: capital }, luck: { metodo: metodoLuck, metrica: metricaLuck, permutaciones: Math.min(10_000, Math.max(100, permutaciones)) } },
         (t) => setProgreso((p) => [...p.slice(-6), t]),
       );
       setResultado(r);
@@ -231,7 +235,7 @@ export default function EstrategiasPython() {
           </label>
         </div>
         <details className="text-[11px] text-plata-400">
-          <summary className="cursor-pointer text-plata-300">Avanzado · Walk-Forward y Monte Carlo</summary>
+          <summary className="cursor-pointer text-plata-300">Avanzado · Walk-Forward, Monte Carlo y Luck test</summary>
           <div className="mt-2 flex flex-wrap items-end gap-3">
             <label className="block">
               <span className="etiqueta">Objetivo para elegir parámetros</span>
@@ -269,6 +273,30 @@ export default function EstrategiasPython() {
             <label className="block">
               <span className="etiqueta">Capital inicial (USD)</span>
               <input type="number" min={0} step={1000} value={capital} onChange={(e) => setCapital(Number(e.target.value))} aria-label="Capital inicial" className="mt-1 w-24 rounded-md border border-borde bg-black px-2 py-1.5 font-mono text-[11px] text-plata-100" />
+            </label>
+            <label className="block">
+              <span className="etiqueta">Luck test · método</span>
+              <select value={metodoLuck} onChange={(e) => setMetodoLuck(e.target.value as MetodoLuck)} aria-label="Método Luck test" className="mt-1 block rounded-md border border-borde bg-black px-2 py-1.5 text-[11px] text-plata-100">
+                {Object.entries(NOMBRE_METODO_LUCK).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="etiqueta">Luck test · métrica</span>
+              <select value={metricaLuck} onChange={(e) => setMetricaLuck(e.target.value as MetricaLuck)} aria-label="Métrica Luck test" className="mt-1 block rounded-md border border-borde bg-black px-2 py-1.5 text-[11px] text-plata-100">
+                {Object.entries(NOMBRE_METRICA_LUCK).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="etiqueta">Permutaciones</span>
+              <input type="number" min={0} step={1000} value={permutaciones} onChange={(e) => setPermutaciones(Number(e.target.value))} aria-label="Permutaciones" className="mt-1 w-24 rounded-md border border-borde bg-black px-2 py-1.5 font-mono text-[11px] text-plata-100" />
             </label>
           </div>
         </details>

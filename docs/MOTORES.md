@@ -31,7 +31,7 @@ Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el p
 | 2 | Métricas | Retorno, CAGR, Sharpe, Sortino, drawdown, Calmar, aciertos, factor de beneficio, esperanza, rachas | `backtest.ts` | ✅ |
 | 3 | Walk-Forward | Ventanas rolling IS → OOS (4:1, paso = OOS), θ* por objetivo (Sharpe / Profit Factor / Retorno), embargo, eficiencia WFE | `walkForward.ts` | ✅ |
 | 4 | Monte Carlo | Bootstrap o shuffle de las operaciones (1.000–10.000), probabilidad de ruina (≤ 5 %), DD P95, P5/P50/P95, alerta de orden (DD P95 > 2× backtest) | `monteCarlo.ts` | ✅ |
-| 5 | Luck test | Si el resultado es suerte (p-valor) | `juez.ts` | 🔍 |
+| 5 | Luck test | Permutación de retornos o entradas aleatorias (1.000–10.000), métrica Sharpe / Retorno / Esperanza, p = (c+1)/(N+1), aprueba si p < 0,05; cada escenario usa el Backtest | `luckTest.ts` | ✅ |
 | 6 | Robustez | Costos ×2, parámetros vecinos, otro mercado, estabilidad | `juez.ts` | 🔍 |
 | 7 | Deflated Sharpe | Sharpe descontando las variantes probadas | `juez.ts` | 🔍 |
 | 8 | PBO | Probabilidad de sobreajuste (CSCV) | `juez.ts` | 🔍 |
@@ -68,7 +68,6 @@ Estado: ✅ verificado con el proceso · 🔍 funciona, falta revisarlo con el p
 
 ## Pendientes conocidos
 - **Backtest:** el funding solo se descuenta en datos grabados desde que se guarda (Feature `funding_tasa`).
-- **Luck test:** hoy recalcula el capital por su cuenta, de forma aditiva. En el motor 5 pasará a usar el Backtest.
 
 ## Para después (no se construye ahora)
 - Fuente de datos de calidad (Databento o Rithmic): añadirla como fuente, con una función que **descargue datos

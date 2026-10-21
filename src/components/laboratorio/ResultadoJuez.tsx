@@ -4,6 +4,7 @@ import AbanicoTrayectorias from '@/components/charts/AbanicoTrayectorias';
 import type { OperacionConHora, RespuestaLaboratorio } from '@/motores/laboratorio/protocolo';
 import type { Metricas } from '@/motores/juez/backtest';
 import { NOMBRE_OBJETIVO } from '@/motores/juez/walkForward';
+import { ALFA_LUCK, NOMBRE_METODO_LUCK, NOMBRE_METRICA_LUCK } from '@/motores/juez/luckTest';
 import { conSigno, num } from '@/lib/format';
 
 const pct = (v: number | null | undefined, d = 1) => (v === null || v === undefined ? '—' : conSigno(v * 100, d, '%'));
@@ -363,6 +364,54 @@ function SeccionMonteCarlo({ r }: { r: RespuestaLaboratorio }) {
   );
 }
 
+/** Motor 5 · Luck test: ¿habilidad o suerte? */
+function SeccionLuck({ r }: { r: RespuestaLaboratorio }) {
+  const l = r.resultado.suerte;
+  if (!l) return (
+    <Panel titulo="Motor 5 · Luck test" cuerpo="p-4">
+      <p className="text-xs text-plata-500">Hacen falta al menos 5 operaciones fuera de muestra.</p>
+    </Panel>
+  );
+  const metrica = l.metrica ?? 'retorno';
+  const fmt = (v: number) => (metrica === 'sharpe' ? num(v, 3) : pct(v, metrica === 'esperanza' ? 3 : 1));
+  const N = l.permutaciones ?? 1000;
+  const aprueba = l.p < ALFA_LUCK;
+  return (
+    <Panel titulo="Motor 5 · Luck test" accion={<span className="text-[10px] text-plata-500">{NOMBRE_METODO_LUCK[l.metodo ?? 'permutacion']} · {NOMBRE_METRICA_LUCK[metrica]} · {num(N)} escenarios</span>} cuerpo="space-y-4 p-4">
+      <Explicacion
+        que="crear cientos de mercados falsos (los mismos movimientos del precio en otro orden) o de entradas tiradas a la moneda, y ver si tu estrategia les gana."
+        sirve="separar habilidad de suerte. Si el azar consigue lo mismo que tu estrategia con frecuencia, sus ganancias pudieron ser casualidad."
+        mirar="el valor p: menor que 0,05 quiere decir que el azar la iguala menos de 1 de cada 20 veces (aprobado)."
+      />
+      <div className="flex flex-wrap items-end gap-6" data-luck={l.p}>
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.14em] text-plata-500">Valor p</p>
+          <p className="cifra text-3xl font-light text-white">{num(l.p, 3)}</p>
+          <p className="text-[11px] text-plata-300">{aprueba ? 'Aprobado: ventaja real' : 'Rechazado: puede ser suerte'}</p>
+        </div>
+        <p className="max-w-md text-[11.5px] text-plata-300">
+          {l.superiores === undefined ? '' : `${num(l.superiores)} de ${num(N)} versiones al azar igualaron o superaron a tu estrategia (${NOMBRE_METRICA_LUCK[metrica]} ${fmt(l.real)}).`}
+        </p>
+      </div>
+      <div>
+        <p className="text-[10px] uppercase tracking-[0.14em] text-plata-500">Lo que logra el azar (distribución nula) y tu estrategia</p>
+        <Histograma valores={l.simulaciones} marcas={[{ v: l.real, etiqueta: `Tu estrategia ${fmt(l.real)}`, fuerte: true }]} />
+      </div>
+      <details className="rounded-lg border border-borde-suave px-3 py-2 text-[11px] text-plata-300">
+        <summary className="cursor-pointer text-plata-100">Cómo se calcula</summary>
+        <ul className="mt-2 list-disc space-y-1 pl-4">
+          <li>Hipótesis nula: «la estrategia no tiene habilidad». Se usa lo que hizo fuera de muestra.</li>
+          <li>Permutación de retornos: se barajan sin reemplazo los movimientos de cada barra del mercado y se arma un precio falso; tus posiciones quedan igual.</li>
+          <li>Entradas aleatorias: el mismo número de operaciones y con las mismas duraciones, pero el lado (compra o venta) sale de una moneda (p = 0,5) y el momento es al azar.</li>
+          <li>Cada escenario pasa por el mismo Backtest (comisiones, funding y huecos) y se mide la {NOMBRE_METRICA_LUCK[metrica]}.</li>
+          <li>p = (escenarios con métrica ≥ la tuya + 1) ÷ (escenarios + 1). El +1 evita decir «p = 0», que significaría «imposible que sea suerte», algo que nunca se puede asegurar.</li>
+          <li>p &lt; 0,05 → aprobado. p ≥ 0,05 → el Juez rechaza por posible suerte.</li>
+        </ul>
+      </details>
+    </Panel>
+  );
+}
+
 /** Motor 2 · Métricas: fuera de muestra (lo que cuenta) frente a dentro (optimista). */
 function SeccionMetricas({ r }: { r: RespuestaLaboratorio }) {
   const j = r.resultado;
@@ -435,6 +484,7 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
       <SeccionMetricas r={r} />
       <SeccionWalkForward r={r} />
       <SeccionMonteCarlo r={r} />
+      <SeccionLuck r={r} />
 
       <Panel titulo="Reglas del Juez" cuerpo="overflow-x-auto px-4 py-2">
         <table className="w-full min-w-[720px] text-left text-xs">
@@ -451,21 +501,6 @@ export default function ResultadoJuezVista({ r }: { r: RespuestaLaboratorio }) {
           </tbody>
         </table>
       </Panel>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Panel titulo="Luck test · 1.000 versiones al azar" accion={<span className="text-[10px] text-plata-500">misma exposición, desplazada en el tiempo</span>}>
-          {j.suerte ? (
-            <>
-              <Histograma valores={j.suerte.simulaciones} marcas={[{ v: j.suerte.real, etiqueta: `Tu estrategia ${pct(j.suerte.real)}`, fuerte: true }]} />
-              <p className="mt-2 text-[11px] text-plata-300">
-                p = {num(j.suerte.p, 3)}: {j.suerte.p <= 0.05 ? 'el azar casi nunca lo iguala.' : `el azar la iguala o supera en ${num(j.suerte.p * 100, 0)} de cada 100 intentos.`}
-              </p>
-            </>
-          ) : (
-            <p className="text-xs text-plata-500">Menos de 5 operaciones fuera de muestra.</p>
-          )}
-        </Panel>
-      </div>
 
       <Panel titulo="Robustez" cuerpo="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-5">
         {[

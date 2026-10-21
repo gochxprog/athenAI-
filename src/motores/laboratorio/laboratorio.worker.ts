@@ -92,6 +92,7 @@ ctx.onmessage = async (e) => {
       funding: fundingIncluido ? funding : undefined,
       wfo: p.wfo,
       monteCarlo: p.monteCarlo,
+      luck: p.luck,
       combos: ejec.combos,
       posiciones: ejec.posiciones,
       costos: p.costos,

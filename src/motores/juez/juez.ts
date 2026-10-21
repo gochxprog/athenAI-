@@ -11,7 +11,7 @@
 //   6. PBO (CSCV): probabilidad de que la mejor variante dentro de muestra sea peor que la mediana fuera.
 import { crearAleatorio } from '@/lib/random';
 import { normalInversa } from '@/lib/backtest';
-import { costoPorLado } from './costos';
+import { ALFA_LUCK, luckTest, type ConfigLuck, type ResultadoLuck } from './luckTest';
 import { monteCarlo, RUINA_MAXIMA, type ConfigMc, type ResultadoMc } from './monteCarlo';
 import { walkForward, type ClaseWfe, type ConfigWfo, type ObjetivoWfo, type VentanaResultado } from './walkForward';
 import { aplicarHuecos, backtest, COSTOS_POR_DEFECTO, metricas, sharpeBarras, type Costos, type Metricas, type Operacion } from './backtest';
@@ -38,6 +38,8 @@ export interface EntradaJuez {
   semilla?: number;
   /** Ventanas y objetivo del Walk-Forward (por defecto: automáticos y Sharpe). */
   wfo?: ConfigWfo;
+  /** Método, métrica y permutaciones del Luck test. */
+  luck?: ConfigLuck;
   /** Simulaciones, método, umbral de ruina y capital del Monte Carlo. */
   monteCarlo?: ConfigMc;
 }
@@ -76,7 +78,7 @@ export interface ResultadoJuez {
   monteCarlo: ResultadoMc | null;
   /** Avisos que no rechazan pero hay que mirar (p. ej. el orden de las operaciones pesa mucho). */
   alertas: string[];
-  suerte: { p: number; real: number; simulaciones: number[] } | null;
+  suerte: ResultadoLuck | null;
   robustez: { costosDobles: number; vecinosPositivos: number | null; tramosPositivos: number; otroMercado: (Metricas & { simbolo: string }) | null };
   deflatedSharpe: number | null;
   pbo: number | null;
@@ -189,30 +191,9 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
   // Motor 4 · Monte Carlo de las operaciones fuera de muestra.
   const mc = opsOos.length >= 5 ? monteCarlo(opsOos.map((o) => o.retorno), r, e.monteCarlo) : null;
 
-  // Luck test: la misma secuencia de posiciones fuera de muestra desplazada al azar (circular).
-  let suerte: ResultadoJuez['suerte'] = null;
+  // Motor 5 · Luck test sobre lo hecho fuera de muestra.
   const largoOos = n - inicioOos;
-  if (opsOos.length >= 5 && largoOos > 50) {
-    const pos = posOos.slice(inicioOos);
-    const rb = new Array(largoOos).fill(0);
-    for (let i = 0; i + 1 < largoOos; i += 1) rb[i] = e.cierres[inicioOos + i] > 0 ? e.cierres[inicioOos + i + 1] / e.cierres[inicioOos + i] - 1 : 0;
-    const coste = costoPorLado(costos);
-    const total = (despl: number) => {
-      let cap = 1;
-      let previa = 0;
-      for (let i = 0; i < largoOos; i += 1) {
-        const p = pos[(i + despl) % largoOos];
-        cap *= 1 + p * rb[i] - Math.abs(p - previa) * coste;
-        previa = p;
-      }
-      return cap - 1;
-    };
-    const real = total(0);
-    const sims: number[] = [];
-    for (let s = 0; s < 1_000; s += 1) sims.push(total(1 + Math.floor(r() * (largoOos - 1))));
-    sims.sort((a, b) => a - b);
-    suerte = { p: (sims.filter((x) => x >= real).length + 1) / (sims.length + 1), real, simulaciones: sims.filter((_, i) => i % 5 === 0) };
-  }
+  const suerte = opsOos.length >= 5 && largoOos > 50 ? luckTest({ cierres: e.cierres, posiciones: posOos, operaciones: opsOos, desde: inicioOos, hasta: n, costos, opciones: { ...fx, huecos: e.huecos }, azar: r, config: e.luck }) : null;
 
   // Parámetros vecinos: variantes que difieren en un solo parámetro de la mejor.
   let vecinosPositivos: number | null = null;
@@ -249,7 +230,7 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
     { nombre: 'Gana fuera de muestra (Walk-Forward)', ok: oos.retornoTotal > 0, valor: pctTxt(oos.retornoTotal), umbral: '> 0 %', explicacion: 'Solo cuentan los tramos que la estrategia no vio al elegir sus parámetros.' },
     { nombre: 'Eficiencia Walk-Forward (WFE)', ok: wfo.wfe === null ? false : wfo.wfe >= 0.5, valor: wfo.wfe === null ? 'el entrenamiento no gana' : `${dec(wfo.wfe, 2)} (${wfo.clase})`, umbral: '≥ 0,50', explicacion: 'Cuánto de lo que gana entrenando conserva en datos que no vio. < 0,30 = sobreajuste.' },
     { nombre: 'Estable entre tramos', ok: tramosPositivos >= 0.6, valor: `${Math.round(tramosPositivos * tramos.length)}/${tramos.length} tramos positivos`, umbral: '≥ 60 %', explicacion: 'Una ventaja real no depende de un solo periodo.' },
-    { nombre: 'Luck test', ok: suerte ? suerte.p <= 0.05 : null, valor: suerte ? `p = ${dec(suerte.p, 3)}` : '—', umbral: 'p ≤ 0,05', explicacion: 'El azar con la misma exposición no debe igualarla más de 1 de cada 20 veces.' },
+    { nombre: 'Luck test', ok: suerte ? suerte.p < ALFA_LUCK : null, valor: suerte ? `p = ${dec(suerte.p, 3)}` : '—', umbral: 'p < 0,05', explicacion: 'Mercados falsos o entradas al azar no deben igualarla más de 1 de cada 20 veces.' },
     { nombre: 'Drawdown máximo', ok: oos.maxDrawdown <= 0.2, valor: pctTxt(oos.maxDrawdown), umbral: '≤ 20 %', explicacion: 'Peor caída desde un máximo, fuera de muestra.' },
     { nombre: 'Monte Carlo: riesgo de ruina', ok: mc ? mc.probRuina <= RUINA_MAXIMA : null, valor: mc ? `${pctTxt(mc.probRuina)} de simulaciones caen ≥ ${pctTxt(mc.umbralRuina)}` : '—', umbral: '≤ 5 %', explicacion: 'Reordenando las operaciones miles de veces, la mala suerte no debe quemar la cuenta.' },
     { nombre: 'Aguanta costos ×2', ok: costosDobles > 0, valor: pctTxt(costosDobles), umbral: '> 0 %', explicacion: 'Con el doble de comisión y deslizamiento debe seguir ganando.' },
