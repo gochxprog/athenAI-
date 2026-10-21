@@ -4,7 +4,7 @@ import Encabezado from '@/components/ui/Encabezado';
 import Etiquetador from '@/components/laboratorio/Etiquetador';
 import EstrategiasPython from '@/components/laboratorio/EstrategiasPython';
 import Insignia from '@/components/ui/Insignia';
-import ResultadosJuez from '@/components/juez/ResultadosJuez';
+import ResultadosJuez from '@/components/laboratorio/vista/ResultadosJuez';
 
 export default function LaboratorioView() {
   const [modo, setModo] = useState<'python' | 'resultados' | 'etiquetador'>('python');

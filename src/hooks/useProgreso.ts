@@ -12,7 +12,7 @@ export default function useProgreso(ms: number, clave: unknown) {
     const inicio = performance.now();
     setT(0);
     const paso = (ahora: number) => {
-      const v = Math.min(1, (ahora - inicio) / ms);
+      const v = Math.min(1, Math.max(0, (ahora - inicio) / ms));
       setT(v);
       if (v < 1) raf = requestAnimationFrame(paso);
     };

@@ -57,9 +57,6 @@ const vigia: Dibujo = (g, t, color) => {
     ys.push(78 - (fase > 9 && fase < 11 ? (fase < 10 ? 34 : -18) : onda(i + t * 4, 1) * 4));
   }
   curva(g, ys, 10, 246, color);
-  g.fillStyle = TENUE;
-  g.fillText(`trades ${(18234 + Math.floor(t * 71)).toLocaleString('es')}`, 10, 132);
-  g.fillText('sin huecos', 180, 132);
 };
 
 /** Flujo: libro de órdenes (compras a la izquierda, ventas a la derecha). */

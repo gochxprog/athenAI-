@@ -98,8 +98,6 @@ export interface VentanaResultado extends VentanaWfo {
   /** Variante elegida (θ*). */
   combo: number;
   objetivoIs: number;
-  /** Sharpe anualizado del IS con θ* (solo para dibujar IS frente a OOS: no decide nada). */
-  sharpeIs?: number | null;
   anualIs: number;
   anualOos: number;
   /** Retorno, Sharpe y operaciones del OOS. */
@@ -147,7 +145,6 @@ export function walkForward(e: { cierres: readonly number[]; tiempos: readonly n
       ...v,
       combo,
       objetivoIs: mejor,
-      sharpeIs: metricas(bIs, e.tiempos, v.isDesde, v.isHasta).sharpe,
       anualIs: anualizado(bIs.retornos, e.tiempos, v.isDesde, v.isHasta),
       anualOos: anualizado(b.retornos, e.tiempos, v.oosDesde, v.oosHasta),
       retorno: m.retornoTotal,

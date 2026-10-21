@@ -25,7 +25,6 @@ PONERLE NOMBRE Y CANDADO (recomendado)
       sudo bash athenai-grabadora/asegurar.sh TU-NOMBRE TU-TOKEN
 3. Abre  https://TU-NOMBRE.duckdns.org  desde el celular o la PC y entra con tu clave.
    El puerto 8080 se cierra; SSH sigue funcionando igual. No hay que instalar ninguna app.
-   Si tenías Tailscale de la versión anterior, el script lo quita solo.
    Para volver a como estaba:  sudo bash athenai-grabadora/asegurar.sh --deshacer
 
 ÚTIL

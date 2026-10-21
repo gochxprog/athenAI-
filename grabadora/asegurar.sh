@@ -5,7 +5,6 @@
 #   3. La grabadora escucha solo en 127.0.0.1 (detrás de Caddy) y la página pide la clave (/entrar),
 #      con bloqueo tras 5 intentos malos.
 #   4. Cortafuegos (ufw): SSH y HTTPS abiertos; el puerto viejo (8080) y lo demás, cerrados.
-#   Si quedó Tailscale de la versión anterior, se apaga y se desinstala.
 #
 # Uso:       sudo bash asegurar.sh <nombre> <token>        (nombre = lo que va antes de .duckdns.org)
 # Deshacer:  sudo bash asegurar.sh --deshacer               (vuelve a http://IP:PUERTO, sin borrar datos)
@@ -34,20 +33,6 @@ if [ "$SIMULAR" != "1" ] && [ "$(id -u)" -ne 0 ]; then echo "Ejecútalo con sudo
 PUERTO="$(sed -n 's/^Environment=PUERTO=//p' "$UNIDAD" 2>/dev/null || true)"
 PUERTO="${PUERTO:-8080}"
 
-# Quita Tailscale si quedó de la versión anterior (ya no se usa).
-quitar_tailscale() {
-  if command -v tailscale >/dev/null 2>&1 || systemctl list-unit-files 2>/dev/null | grep -q '^tailscaled'; then
-    echo "== Quitando Tailscale (ya no hace falta)…"
-    correr tailscale down || true
-    correr systemctl disable --now tailscaled || true
-    correr apt-get remove -y tailscale || true
-  fi
-  if command -v ufw >/dev/null 2>&1; then
-    correr ufw delete allow in on tailscale0 >/dev/null 2>&1 || true
-    correr ufw delete allow 41641/udp >/dev/null 2>&1 || true
-  fi
-}
-
 # ---------------------------------------------------------------------------------------------------------------
 if [ "${1:-}" = "--deshacer" ]; then
   echo "== Deshaciendo: la plataforma vuelve a http://IP:$PUERTO (los datos no se tocan)"
@@ -56,7 +41,6 @@ if [ "${1:-}" = "--deshacer" ]; then
   correr systemctl daemon-reload
   correr systemctl restart athenai-grabadora
   correr systemctl disable --now caddy-athenai || true
-  quitar_tailscale
   if command -v ufw >/dev/null 2>&1; then correr ufw allow "$PUERTO"/tcp; fi
   echo "== Listo: http://IP-DE-TU-VPS:$PUERTO (sigue pidiendo la clave para entrar)."
   exit 0
@@ -75,9 +59,6 @@ if ! [[ "$TOKEN" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 fi
 DOMINIO="$NOMBRE.duckdns.org"
 echo "== AthenAI · plataforma con candado en https://$DOMINIO (puerto interno $PUERTO)"
-
-# 0) Fuera Tailscale (versión anterior) --------------------------------------------------------------------------
-quitar_tailscale
 
 # 1) DuckDNS → IP pública del VPS ----------------------------------------------------------------------------------
 if [ "$SIMULAR" = "1" ]; then

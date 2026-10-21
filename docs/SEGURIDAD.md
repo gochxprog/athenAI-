@@ -17,9 +17,6 @@ instalar apps y sin perder nunca el acceso por SSH. Script: `grabadora/asegurar.
 | **Grabadora en 127.0.0.1** | Solo Caddy habla con ella | El puerto 8080 deja de existir hacia fuera |
 | **Cortafuegos (ufw)** | Primero abre SSH (puerto detectado con `sshd -T`), luego 443 y 80; cierra el resto | Nada más queda expuesto |
 
-Tailscale se probó en la versión anterior y se quitó, porque hacía más lento el acceso. Si quedó instalado,
-`asegurar.sh` lo apaga y lo desinstala.
-
 ## Archivos que crea
 
 - `/etc/athenai/seguro.conf`: nombre de DuckDNS. `instalar.sh` lo lee para no volver a abrir el 8080.
