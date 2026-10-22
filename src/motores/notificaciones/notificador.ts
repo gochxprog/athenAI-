@@ -2,7 +2,7 @@
 // Vigila los feeds (fallos y recuperación), la memoria del mercado ("hoy es distinto", régimen), el calendario
 // (eventos fuertes) y el Juez. Anti-spam por aviso. Mientras la plataforma corra en el navegador, los avisos
 // solo salen con la pestaña abierta (24/7 requiere el VPS, Bloque F).
-import { canalesActivos, CONFIG_NOTIF_POR_DEFECTO, peticion, peticionArchivo, type Aviso, type Canal, type ConfigNotificaciones } from './canales';
+import { canalesActivos, CONFIG_NOTIF_POR_DEFECTO, peticion, peticionArchivo, resultadoEnvio, type Aviso, type Canal, type ConfigNotificaciones } from './canales';
 import type { EstadoFeed } from '../worker/protocolo';
 import type { EventoCalendario } from '../nucleo/calendario';
 
@@ -49,7 +49,7 @@ export class Notificador {
       const x = JSON.parse(this.almacen?.getItem(CLAVE) ?? 'null') as Partial<ConfigNotificaciones> | null;
       if (x) {
         const d = CONFIG_NOTIF_POR_DEFECTO;
-        return { ...d, ...x, discord: { ...d.discord, ...x.discord }, telegram: { ...d.telegram, ...x.telegram }, ntfy: { ...d.ntfy, ...x.ntfy }, tipos: { ...d.tipos, ...x.tipos } };
+        return { ...d, ...x, discord: { ...d.discord, ...x.discord }, telegram: { ...d.telegram, ...x.telegram }, ntfy: { ...d.ntfy, ...x.ntfy }, whatsapp: { ...d.whatsapp, ...x.whatsapp }, tipos: { ...d.tipos, ...x.tipos } };
       }
     } catch {
       // Configuración por defecto.
@@ -101,8 +101,7 @@ export class Notificador {
         let e: EnvioRegistrado;
         try {
           const { url, init } = peticion(canal, c, a);
-          const r = await this.fetchImpl(url, init);
-          e = { t: this.reloj(), aviso: a, canal, ok: r.ok, detalle: r.ok ? 'Enviado' : `HTTP ${r.status}` };
+          e = { t: this.reloj(), aviso: a, canal, ...(await resultadoEnvio(await this.fetchImpl(url, init))) };
         } catch (err) {
           e = { t: this.reloj(), aviso: a, canal, ok: false, detalle: err instanceof Error ? err.message : String(err) };
         }
@@ -122,8 +121,7 @@ export class Notificador {
         let e: EnvioRegistrado;
         try {
           const { url, init } = peticionArchivo(canal, this.config, nombre, contenido, texto);
-          const r = await this.fetchImpl(url, init);
-          e = { t: this.reloj(), aviso, canal, ok: r.ok, detalle: r.ok ? 'Enviado' : `HTTP ${r.status}` };
+          e = { t: this.reloj(), aviso, canal, ...(await resultadoEnvio(await this.fetchImpl(url, init))) };
         } catch (err) {
           e = { t: this.reloj(), aviso, canal, ok: false, detalle: err instanceof Error ? err.message : String(err) };
         }

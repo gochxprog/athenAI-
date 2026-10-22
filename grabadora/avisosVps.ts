@@ -1,9 +1,9 @@
-// Avisos 24/7 desde el VPS (Discord, Telegram, ntfy): los bots avisan aunque la plataforma esté cerrada.
+// Avisos 24/7 desde el VPS (Discord, Telegram, ntfy, WhatsApp): los bots avisan aunque la plataforma esté cerrada.
 // Mismas peticiones que la plataforma (src/motores/notificaciones/canales.ts). La configuración (tokens de los
 // canales) se guarda solo en el VPS, en {datos}/avisos.json con permisos 600, y nunca se devuelve por la API.
 import fs from 'node:fs';
 import path from 'node:path';
-import { canalesActivos, CONFIG_NOTIF_POR_DEFECTO, peticion, type Aviso, type ConfigNotificaciones } from '../src/motores/notificaciones/canales';
+import { canalesActivos, CONFIG_NOTIF_POR_DEFECTO, peticion, resultadoEnvio, type Aviso, type ConfigNotificaciones } from '../src/motores/notificaciones/canales';
 
 export interface ApiAvisos {
   accion(nombre: string, cuerpo: Record<string, unknown>): Promise<unknown>;
@@ -18,11 +18,12 @@ const texto = (x: unknown, max = 500) => (typeof x === 'string' ? x.trim().slice
 function limpiar(c: Record<string, unknown>): ConfigNotificaciones {
   const d = CONFIG_NOTIF_POR_DEFECTO;
   const o = (k: string) => (typeof c[k] === 'object' && c[k] ? (c[k] as Record<string, unknown>) : {});
-  const [di, te, nt, ti] = [o('discord'), o('telegram'), o('ntfy'), o('tipos')];
+  const [di, te, nt, wa, ti] = [o('discord'), o('telegram'), o('ntfy'), o('whatsapp'), o('tipos')];
   return {
     discord: { activo: di.activo === true, webhook: texto(di.webhook) },
     telegram: { activo: te.activo === true, token: texto(te.token, 200), chatId: texto(te.chatId, 100) },
     ntfy: { activo: nt.activo === true, servidor: texto(nt.servidor) || d.ntfy.servidor, tema: texto(nt.tema, 200) },
+    whatsapp: { activo: wa.activo === true, telefono: texto(wa.telefono, 30), apikey: texto(wa.apikey, 100) },
     tipos: Object.fromEntries(Object.keys(d.tipos).map((k) => [k, typeof ti[k] === 'boolean' ? ti[k] : d.tipos[k as keyof typeof d.tipos]])) as ConfigNotificaciones['tipos'],
     antiSpamMin: Number.isFinite(Number(c.antiSpamMin)) ? Math.max(0, Number(c.antiSpamMin)) : d.antiSpamMin,
   };
@@ -43,9 +44,9 @@ export function crearAvisos(o: { datos: string; log: (t: string) => void; fetchI
       canalesActivos(config).map(async (canal) => {
         try {
           const { url, init } = peticion(canal, config, a);
-          const r = await pedir(url, { ...init, signal: AbortSignal.timeout(10_000) });
-          if (!r.ok) o.log(`Avisos · ${canal}: HTTP ${r.status}`);
-          return { canal, ok: r.ok, detalle: r.ok ? 'Enviado' : `HTTP ${r.status}` };
+          const res = await resultadoEnvio(await pedir(url, { ...init, signal: AbortSignal.timeout(10_000) }));
+          if (!res.ok) o.log(`Avisos · ${canal}: ${res.detalle}`);
+          return { canal, ...res };
         } catch (e) {
           o.log(`Avisos · ${canal}: ${e instanceof Error ? e.message : e}`);
           return { canal, ok: false, detalle: e instanceof Error ? e.message : String(e) };

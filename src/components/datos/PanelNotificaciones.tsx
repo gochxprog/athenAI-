@@ -3,10 +3,10 @@ import { BellRing, Send } from 'lucide-react';
 import Panel from '@/components/ui/Panel';
 import Insignia from '@/components/ui/Insignia';
 import { notificador } from '@/motores/notificaciones/notificador';
-import { canalesActivos, TIPOS_AVISO, type Canal, type ConfigNotificaciones } from '@/motores/notificaciones/canales';
+import { canalesActivos, chatsTelegram, TIPOS_AVISO, type Canal, type ConfigNotificaciones } from '@/motores/notificaciones/canales';
 import { hora } from '@/lib/format';
 
-const NOMBRE: Record<Canal, string> = { discord: 'Discord', telegram: 'Telegram', ntfy: 'ntfy (push al teléfono)' };
+const NOMBRE: Record<Canal, string> = { discord: 'Discord', telegram: 'Telegram', ntfy: 'ntfy (push al teléfono)', whatsapp: 'WhatsApp (CallMeBot)' };
 
 function useNotificador() {
   const [, setN] = useState(0);
@@ -41,6 +41,19 @@ export default function PanelNotificaciones() {
   const cambios = JSON.stringify(c) !== JSON.stringify(n.config);
 
   const [vps, setVps] = useState('');
+  const [chats, setChats] = useState('');
+  // Busca a quién le escribió tu bot (getUpdates) y pone el primer Chat ID: sin adivinar ni otras apps.
+  const buscarChat = async () => {
+    setChats('Buscando…');
+    try {
+      const xs = await chatsTelegram(c.telegram.token);
+      if (!xs.length) return setChats('Tu bot aún no tiene mensajes: ábrelo en Telegram, escríbele «hola» y vuelve a buscar.');
+      set({ telegram: { ...c.telegram, chatId: xs[0].id } });
+      setChats(`Encontrado: ${xs.map((x) => `${x.nombre || 'chat'} (${x.id})`).join(' · ')}. Guarda y envía una prueba.`);
+    } catch (e) {
+      setChats(`Telegram dice: ${e instanceof Error ? e.message : e}. Revisa el token.`);
+    }
+  };
   const set = (x: Partial<ConfigNotificaciones>) => setC((v) => ({ ...v, ...x }));
   // Copia esta configuración a la grabadora (misma dirección) y manda una prueba: los bots del VPS avisan 24/7.
   const alVps = async () => {
@@ -82,7 +95,7 @@ export default function PanelNotificaciones() {
         Avisos al teléfono de fallos, «hoy es distinto», eventos fuertes, decisiones del Juez y (cuando existan) operaciones de los bots. Mientras athenAI corra en el navegador, <span className="text-plata-200">los avisos solo salen con la pestaña abierta</span>: para avisos 24/7 hace falta el VPS (Bloque F). Las claves se guardan solo en este navegador.
       </p>
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-2 rounded-lg border border-borde-suave p-3" data-canal="discord">
           <div className="flex items-center justify-between">
             <Activo canal="discord" valor={c.discord.activo} onChange={(v) => set({ discord: { ...c.discord, activo: v } })} />
@@ -98,7 +111,9 @@ export default function PanelNotificaciones() {
           </div>
           <Campo etiqueta="Token del bot" tipo="password" valor={c.telegram.token} placeholder="123456:ABC…" onChange={(v) => set({ telegram: { ...c.telegram, token: v } })} />
           <Campo etiqueta="Chat ID" valor={c.telegram.chatId} placeholder="123456789" onChange={(v) => set({ telegram: { ...c.telegram, chatId: v } })} />
-          <p className="text-[10px] text-plata-500">Habla con @BotFather → /newbot y copia el token. Escribe algo a tu bot y saca tu Chat ID con @userinfobot.</p>
+          <button onClick={() => void buscarChat()} disabled={!c.telegram.token.trim()} className="rounded-md border border-borde px-2 py-1 text-[10.5px] text-plata-200 hover:border-plata-400 disabled:opacity-40">Buscar mi chat ID</button>
+          {chats && <p className="text-[10.5px] text-plata-200" data-chats-telegram>{chats}</p>}
+          <p className="text-[10px] text-plata-500">1) @BotFather → /newbot y copia el token. 2) Abre TU bot y escríbele «hola» (si no, Telegram no le deja escribirte). 3) «Buscar mi chat ID».</p>
         </div>
         <div className="space-y-2 rounded-lg border border-borde-suave p-3" data-canal="ntfy">
           <div className="flex items-center justify-between">
@@ -108,6 +123,17 @@ export default function PanelNotificaciones() {
           <Campo etiqueta="Tema" valor={c.ntfy.tema} placeholder="athenai-tu-nombre-7f3k" onChange={(v) => set({ ntfy: { ...c.ntfy, tema: v } })} />
           <Campo etiqueta="Servidor" valor={c.ntfy.servidor} onChange={(v) => set({ ntfy: { ...c.ntfy, servidor: v } })} />
           <p className="text-[10px] text-plata-500">Instala la app ntfy (Android / iPhone), suscríbete al mismo tema y listo. El tema es público: usa un nombre difícil de adivinar.</p>
+        </div>
+        <div className="space-y-2 rounded-lg border border-borde-suave p-3" data-canal="whatsapp">
+          <div className="flex items-center justify-between">
+            <Activo canal="whatsapp" valor={c.whatsapp.activo} onChange={(v) => set({ whatsapp: { ...c.whatsapp, activo: v } })} />
+            {probarBoton('whatsapp')}
+          </div>
+          <Campo etiqueta="Tu número (con +código de país)" valor={c.whatsapp.telefono} placeholder="+58 412 1234567" onChange={(v) => set({ whatsapp: { ...c.whatsapp, telefono: v } })} />
+          <Campo etiqueta="Apikey de CallMeBot" tipo="password" valor={c.whatsapp.apikey} placeholder="123456" onChange={(v) => set({ whatsapp: { ...c.whatsapp, apikey: v } })} />
+          <p className="text-[10px] text-plata-500">
+            CallMeBot es un servicio externo gratis: los avisos pasan por él. En <a className="underline" href="https://www.callmebot.com/blog/free-api-whatsapp-messages/" target="_blank" rel="noreferrer">callmebot.com</a> sale su número: guárdalo en tus contactos y mándale por WhatsApp «I allow callmebot to send me messages». Te responde con tu apikey.
+          </p>
         </div>
       </div>
 
