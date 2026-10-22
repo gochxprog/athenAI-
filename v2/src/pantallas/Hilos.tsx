@@ -2,7 +2,7 @@
 // salen hacia las métricas) y el anillo con los agentes. Canvas 2D, un solo bucle, sin re-renders de React.
 import { useEffect, useRef } from 'react';
 
-export interface AgenteAnillo { nombre: string; activo: boolean }
+export interface AgenteAnillo { nombre: string; activo: boolean; color: string }
 interface Destello { linea: number; t: number; vel: number }
 
 export default function Hilos({ agentes, pulsos }: { agentes: AgenteAnillo[]; pulsos: number }) {
@@ -111,12 +111,14 @@ export default function Hilos({ agentes, pulsos }: { agentes: AgenteAnillo[]; pu
         const px = centro.x + Math.cos(f) * ra;
         const py = centro.y + Math.sin(f) * ra * 0.92;
         x.beginPath();
-        x.arc(px, py, a.activo ? 3.5 : 3, 0, Math.PI * 2);
-        x.fillStyle = a.activo ? '#fff' : '#000';
-        x.strokeStyle = a.activo ? '#fff' : 'rgba(255,255,255,0.35)';
+        // Trabajando: se enciende con el color de su agente (el de la sala) y late; apagado: anillo hueco gris.
+        const latido = 0.75 + 0.25 * Math.sin(ahora / 400 + i);
+        x.arc(px, py, a.activo ? 4 : 3, 0, Math.PI * 2);
+        x.fillStyle = a.activo ? a.color : '#000';
+        x.strokeStyle = a.activo ? a.color : 'rgba(255,255,255,0.35)';
         if (a.activo) {
-          x.shadowColor = '#fff';
-          x.shadowBlur = 10;
+          x.shadowColor = a.color;
+          x.shadowBlur = 14 * latido;
         }
         x.fill();
         x.stroke();

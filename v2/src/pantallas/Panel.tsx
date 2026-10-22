@@ -1,7 +1,7 @@
 // Panel general (v2): lo que pasa ahora, con datos reales de la grabadora. En el centro, el cerebro (machine learning)
 // con el ojo: cada fila nueva que graba el VPS es un golpe. Alrededor, el anillo de agentes y los hilos a las tarjetas.
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
-import { AGENTES } from '@/data/agentes';
+import { AGENTES, ESTILO_AGENTE } from '@/data/agentes';
 import { deHoy, movimientos, useVps, type Fila, type Vps } from '../vps';
 import Hilos from './Hilos';
 import './panel.css';
@@ -62,7 +62,7 @@ export default function Panel() {
   const pnl = hoy.reduce((s, o) => s + o.pnl, 0);
   // Encendidos solo los agentes que ya trabajan en la versión 2 (el resto llega con sus fases).
   const trabajando: Record<string, boolean> = { vigia: vivos > 0, flujo: vivos > 0, ejecutor: activos > 0, guardian: v.bots.length > 0 };
-  const agentes = AGENTES.map((a) => ({ nombre: a.nombre, activo: !!trabajando[a.id] }));
+  const agentes = AGENTES.map((a) => ({ nombre: a.nombre, activo: !!trabajando[a.id], color: ESTILO_AGENTE[a.id].color }));
 
   return (
     <div className="panel">
