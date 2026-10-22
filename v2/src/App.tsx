@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import Shell from './Shell';
 import Panel from './pantallas/Panel';
 import { TODAS, type IdPantalla } from './menu';
+
+const Laboratorio = lazy(() => import('./pantallas/laboratorio/Laboratorio'));
 
 // Ruta en el hash (#/panel). Solo existen las pantallas ya construidas; el resto del menú va con candado.
 const leer = (): IdPantalla => {
@@ -18,7 +20,7 @@ export default function App() {
   }, []);
   return (
     <Shell pantalla={pantalla} ir={(id) => (location.hash = `/${id}`)}>
-      <Panel />
+      <Suspense fallback={null}>{pantalla === 'laboratorio' ? <Laboratorio /> : <Panel />}</Suspense>
     </Shell>
   );
 }

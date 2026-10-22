@@ -9,7 +9,7 @@ export const MENU: { seccion: string; items: Item[] }[] = [
   {
     seccion: 'Cerebro',
     items: [
-      { id: 'laboratorio', nombre: 'Laboratorio', icono: FlaskConical, fase: 2 },
+      { id: 'laboratorio', nombre: 'Laboratorio', icono: FlaskConical },
       { id: 'biblioteca', nombre: 'Biblioteca', icono: BookMarked, fase: 3 },
       { id: 'investigacion', nombre: 'Investigación', icono: Sparkles, fase: 4 },
       { id: 'red', nombre: 'Red neuronal', icono: Brain, fase: 5 },

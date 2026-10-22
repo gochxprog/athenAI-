@@ -7,10 +7,11 @@ import path from 'node:path';
 import { AlmacenDisco } from './almacenDisco';
 import { cargadorPython } from './botsVps';
 import { armarVelas, SERIES, type Serie, type VelaLab } from '../src/motores/laboratorio/velas';
+export type { Fuente, PedidoPrueba, ResultadoPrueba, Trabajo };
 import { ejecutarEstrategia, mensajeError, type PyodideMinimo } from '../src/motores/laboratorio/python';
 import { entradaJuez } from '../src/motores/laboratorio/entradaJuez';
-import { juzgar, type Combo, type ResultadoJuez } from '../src/motores/juez/juez';
-import type { ReglasSalida } from '../src/motores/juez/salidas';
+import { juzgar } from '../src/motores/juez/juez';
+import { FUENTES, type Fuente, type PedidoPrueba, type ResultadoPrueba, type Trabajo } from '../src/motores/laboratorio/prueba';
 import { mercadoId } from '../src/motores/mercado/mercadoId';
 
 /** Velas como máximo por prueba (las más recientes): memoria y tiempo acotados en el VPS. */
@@ -18,28 +19,6 @@ export const MAX_VELAS = 120_000;
 export const MIN_VELAS = 300;
 const MAX_CODIGO = 100_000;
 const LIMITE_MS = 30 * 60_000;
-export const FUENTES = ['todo', 'historia', 'grabado'] as const;
-export type Fuente = (typeof FUENTES)[number];
-
-export interface PedidoPrueba { codigo: string; simbolo: string; serie: Serie; fuente: Fuente; nombre?: string }
-export interface ResultadoPrueba {
-  juez: ResultadoJuez;
-  combos: Combo[];
-  gestion: ReglasSalida | null;
-  velas: { total: number; desde: number; hasta: number; serie: Serie; fuente: Fuente };
-  /** Hora de cierre de cada vela (para poner fechas a los tramos y operaciones). */
-  tiempos: number[];
-}
-export interface Trabajo {
-  id: string;
-  estado: 'corriendo' | 'listo' | 'error';
-  pasos: string[];
-  inicio: number;
-  fin: number | null;
-  pedido: Omit<PedidoPrueba, 'codigo'>;
-  resultado: ResultadoPrueba | null;
-  error: string | null;
-}
 export interface ApiLaboratorio {
   accion(nombre: string, cuerpo: Record<string, unknown>): Promise<unknown>;
   trabajo(id: string): Trabajo | { error: string };
