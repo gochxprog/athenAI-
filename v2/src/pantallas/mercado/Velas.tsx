@@ -10,6 +10,8 @@ export interface Linea { precio: number; titulo: string; tipo: 'entrada' | 'stop
 
 const SUBE = '#7ee2a8';
 const BAJA = '#e5848b';
+/** Velas: verde subiendo, morado bajando (el rojo queda para stops y pérdidas). */
+const MORADO = '#a855f7';
 // lightweight-charts dibuja en UTC: se corre la hora para que el eje muestre la hora de tu teléfono.
 const local = (ms: number) => (Math.floor(ms / 1000) - new Date(ms).getTimezoneOffset() * 60) as UTCTimestamp;
 const COLOR_LINEA = { entrada: '#d9dbdf', stop: BAJA, objetivo: SUBE } as const;
@@ -29,7 +31,7 @@ export default function Velas({ velas, vivas, marcas, lineas, clave }: { velas: 
       handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
       handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
     });
-    const serie = chart.addCandlestickSeries({ upColor: SUBE, downColor: BAJA, borderVisible: false, wickUpColor: SUBE, wickDownColor: BAJA, priceLineColor: '#45484e' });
+    const serie = chart.addCandlestickSeries({ upColor: SUBE, downColor: MORADO, borderVisible: false, wickUpColor: SUBE, wickDownColor: MORADO, priceLineColor: '#45484e' });
     grafico.current = { chart, serie, lineas: [] };
     return () => {
       chart.remove();
