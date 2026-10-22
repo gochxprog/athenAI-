@@ -82,23 +82,49 @@ def en_cada_vela(v, ctx):
 - **Órdenes:** Paper hoy → tu broker mañana. Los bots no saben dónde operan.
 - **Tamaño:** en contratos o lotes según la ficha de cada mercado.
 
-## 7. Pantallas propuestas (menos y más completas)
+## 7. El camino de una estrategia (propuesta del usuario, 22-oct-2026)
 
-| # | Pantalla | Qué tiene | Junta lo que hoy está en |
-|---|---|---|---|
-| 1 | **Panel** | Resumen del día: mercados, bots, alertas. Cerebro 3D | Panel General |
-| 2 | **Terminal** | Gráfico, DOM, ticket, posiciones, motores de order flow | Terminal |
-| 3 | **Laboratorio** | Editor de código libre, el Juez, tus estrategias y su historial | Laboratorio + Estrategias |
-| 4 | **Investigación** | El buscador de edge del ML, la red de hipótesis, patrones | Investigación + Conocimiento |
-| 5 | **Red neuronal** | Los modelos profundos (cuando toque) | El lugar reservado |
-| 6 | **Bots** | Bots en Paper, Guardián, «¿cumple lo que prometió?» | Pestaña Bots |
-| 7 | **Diario** | Calendario, métricas, cada operación con su porqué | Pestaña Diario + Decisiones |
-| 8 | **Agentes** | Sala 3D: quién está trabajando en qué | Agentes |
-| 9 | **Sistema** | Datos, grabadora, VPS, notificaciones, salud | Datos + Máquinas |
+```mermaid
+flowchart LR
+  L[Laboratorio<br/>la escribes o la propone el ML] --> J{Juez}
+  J -- aprueba --> B[Biblioteca<br/>solo aprobadas]
+  B -- tú la pones --> P[Paper<br/>bot sin dinero real]
+  P -- cumple lo prometido<br/>+ tu OK --> R[Real<br/>bot con tu broker]
+  P -- no cumple --> B
+  R -- el Guardián la frena --> P
+```
 
-De 11 pantallas a 9, y ninguna vacía «de adorno»: si una no tiene motor, no aparece en el menú hasta que lo tenga.
+- **Biblioteca:** solo estrategias aprobadas por el Juez, con su nota, su curva y en qué mercado se aprobó.
+- **Paper:**
+  - Cada bot tiene su propia cuenta dentro de AthenAI, para saber exacto cuánto gana cada uno.
+  - Además, cada bot puede mandar sus órdenes a **una cuenta demo de un broker**, marcadas con su nombre, para comparar el precio de AthenAI con el llenado real del broker.
+  - **Ojo:** en una sola cuenta, dos bots en el mismo mercado se pueden cancelar entre sí. Por eso la cuenta propia de cada bot manda.
+  - Cada operación muestra por qué abrió, por qué cerró y si ganó o perdió, en R y en dinero.
+- **Pasar a Real:** el bot necesita semanas de Paper haciendo lo que prometió el Juez, más tu OK. Real queda bloqueado hasta que haya broker conectado (decidir cuál al comprar la fuente de datos; MT5 solo corre bien en Windows).
+- **Eventos fuertes (CPI, FOMC, nóminas):**
+  - El calendario se llena solo, desde una fuente automática por definir.
+  - Los bots **no operan** desde un rato antes hasta un rato después y muestran «esperando CPI».
+  - No se intenta adivinar si el dato sale bueno o malo.
 
-## 8. Orden de construcción (unos 3 meses)
+## 8. Pantallas propuestas (ajustadas con el usuario)
+
+| # | Pantalla | Qué tiene |
+|---|---|---|
+| 1 | **Panel** | Resumen del día: mercados, bots, alertas. Cerebro 3D |
+| 2 | **Laboratorio** | Editor de código libre y el Juez |
+| 3 | **Biblioteca** | Estrategias aprobadas por el Juez |
+| 4 | **Paper** | Bots en prueba, cada uno con su porqué (cuenta propia + demo del broker) |
+| 5 | **Real** | Bots que pasaron Paper (bloqueado hasta conectar broker) |
+| 6 | **Terminal** | Lista tipo MetaTrader: posiciones, órdenes e historial de **todos** los bots (filtro Paper/Real), gráfico con DOM y motores de order flow; ticket a mano pequeño, a un lado |
+| 7 | **Diario** | Calendario, métricas y cada operación con su porqué |
+| 8 | **Investigación** | Buscador de edge del ML, red de hipótesis, patrones |
+| 9 | **Red neuronal** | Modelos profundos (cuando toque) |
+| 10 | **Agentes** | Sala 3D: quién trabaja en qué |
+| 11 | **Datos y sistema** | Simple: fuentes, grabadora, VPS, calendario automático, notificaciones |
+
+Ninguna pantalla vacía «de adorno»: si no tiene motor, no aparece en el menú hasta que lo tenga.
+
+## 9. Orden de construcción (unos 3 meses)
 La plataforma actual sigue funcionando hasta que la nueva la reemplace. La grabadora graba todo el tiempo.
 
 | Fase | Qué | Cómo se sabe que está lista |
@@ -106,19 +132,19 @@ La plataforma actual sigue funcionando hasta que la nueva la reemplace. La graba
 | 0 | Este croquis | Lo apruebas |
 | 1 | Esqueleto nuevo: menú, diseño, carga de datos grabados | Abre rápido y lee tus datos del VPS |
 | 2 | **Motor de estrategias + Juez** | Una estrategia de ejemplo pasa por el Juez de punta a punta |
-| 3 | Terminal, Bots y Diario | Un bot corre 24/7 en Paper con stop y objetivo |
+| 3 | Biblioteca, Paper, Terminal (lista) y Diario | Un bot corre 24/7 en Paper con stop y objetivo, y se ve en la lista |
 | 4 | Investigación y ML (armado, sin entrenar) | Con datos de prueba, el buscador propone y el Juez filtra |
 | 5 | Visual: Panel 3D, Agentes, Red neuronal | Fotos aprobadas, sin lag en celular |
 
-## 9. Reglas de trabajo
+## 10. Reglas de trabajo
 1. **Una pantalla a la vez**: fotos y tu OK antes de seguir.
 2. **Sin lag:** cada pantalla se mide en un celular lento simulado; mínimo 30 cuadros por segundo.
 3. **Sin código basura:** lo que se reemplaza se borra; nada de dos versiones de lo mismo.
 4. **Solo datos reales** en la plataforma; los datos de prueba, solo para probar.
 5. **Ideas nuevas** a `docs/PENDIENTES.md`, no directo al código.
 
-## 10. Lo que tienes que decidir tú
-1. ¿Te gustan las 9 pantallas, o quieres juntar o separar alguna?
+## 11. Lo que tienes que decidir tú
+1. ~~Pantallas~~ → propuesta del usuario anotada en las secciones 7 y 8. Falta: ¿qué broker para la cuenta demo? (se decide al comprar la fuente de datos)
 2. ¿Dónde hacemos la versión 2? Mi recomendación: en este mismo repositorio, en una carpeta nueva. Así se reutilizan los motores sin copiarlos.
 3. ¿Qué mercados además de BTC y XAU? (Más mercados = más datos para el ML, pero más disco en el VPS.)
 4. ¿Qué te gusta del diseño actual y qué no? Si tienes fotos de plataformas que te gusten, mándamelas.
