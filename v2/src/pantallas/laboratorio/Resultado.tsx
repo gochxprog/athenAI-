@@ -8,8 +8,8 @@ import type { OperacionGestionada } from '@/motores/juez/salidas';
 // Las vistas animadas del Juez de la primera plataforma, sin cambios: mismo código, mismo aspecto.
 import CurvaEquityJuez from '@/components/laboratorio/vista/CurvaEquityJuez';
 import WalkForwardJuez from '@/components/laboratorio/vista/WalkForwardJuez';
-import MonteCarloJuez from '@/components/laboratorio/vista/MonteCarloJuez';
 import LuckTestJuez from '@/components/laboratorio/vista/LuckTestJuez';
+import MonteCarlo from './MonteCarlo';
 
 const PESTANAS = ['Resumen', 'Walk-Forward', 'Monte Carlo', 'Suerte', 'Robustez', 'Sobreajuste', 'Operaciones'] as const;
 const pct = (v: number | null | undefined, d = 1) => (v === null || v === undefined || !Number.isFinite(v) ? '—' : `${(v * 100).toLocaleString('es-ES', { maximumFractionDigits: d })} %`);
@@ -95,7 +95,7 @@ export default function Resultado({ t }: { t: Trabajo }) {
           </>
         )}
         {pestana === 'Walk-Forward' && <WalkForwardJuez r={resp} />}
-        {pestana === 'Monte Carlo' && <MonteCarloJuez r={resp} />}
+        {pestana === 'Monte Carlo' && (j.monteCarlo ? <MonteCarlo mc={j.monteCarlo} /> : <p className="vacio">Hacen falta al menos 5 operaciones fuera de muestra para el Monte Carlo.</p>)}
         {pestana === 'Suerte' && <LuckTestJuez r={resp} />}
         {pestana === 'Robustez' && (
           <div className="datos">
