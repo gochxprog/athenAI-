@@ -1,9 +1,10 @@
 // Terminal: la mesa de operaciones en Paper. Arriba la cuenta y la cinta; «Operar» = gráfico de Order Flow con las
-// operaciones encima, ticket a mano, posiciones y libro; «Bots» = los bots, crear uno nuevo y el Guardián.
+// operaciones encima, ticket a mano, posiciones y libro; «Diario» = calendario estilo ATAS y métricas;
+// «Bots» = los bots, crear uno nuevo y el Guardián.
 // Reemplaza la antigua pantalla de Paper Trading: todo lo que hacía sigue aquí.
 import { useMemo, useState, useSyncExternalStore } from 'react';
 import { motion } from 'framer-motion';
-import { Bot as IconoBot, CandlestickChart, Crosshair, Layers } from 'lucide-react';
+import { Bot as IconoBot, CalendarDays, CandlestickChart, Crosshair, Layers } from 'lucide-react';
 import Encabezado from '@/components/ui/Encabezado';
 import Panel from '@/components/ui/Panel';
 import { Explicacion } from '@/components/laboratorio/graficos';
@@ -15,13 +16,15 @@ import Ticket from '@/components/terminal/Ticket';
 import Posiciones from '@/components/terminal/Posiciones';
 import LibroOperaciones from '@/components/terminal/LibroOperaciones';
 import PanelGuardian from '@/components/terminal/PanelGuardian';
+import Diario from '@/components/terminal/Diario';
 import { NuevoBot, TarjetaBot } from '@/components/terminal/Bots';
 import { ahoraSuscribir, useMotorPaper, useOperaciones } from '@/components/terminal/comun';
 import { tieneObjetivo } from '@/motores/paper/manual';
 
-type Pestana = 'operar' | 'bots';
+type Pestana = 'operar' | 'diario' | 'bots';
 const PESTANAS: { id: Pestana; titulo: string; icono: typeof Layers }[] = [
   { id: 'operar', titulo: 'Operar', icono: Crosshair },
+  { id: 'diario', titulo: 'Diario', icono: CalendarDays },
   { id: 'bots', titulo: 'Bots', icono: IconoBot },
 ];
 
@@ -99,6 +102,8 @@ export default function TerminalView() {
             </Panel>
             <LibroOperaciones ops={ops} nombre={nombre} />
           </>
+        ) : pestana === 'diario' ? (
+          <Diario ops={ops} />
         ) : (
           <>
             <Explicacion
