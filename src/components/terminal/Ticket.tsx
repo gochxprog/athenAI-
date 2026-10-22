@@ -1,4 +1,5 @@
-// Ticket a mano de la Terminal (Paper): lado, riesgo en % de la cuenta, stop (ATR o precio), objetivo (RR) y gestión.
+// Ticket a mano de la Terminal (Paper): lado, tamaño en CONTRATOS (directo o desde el riesgo % de la cuenta, según la
+// ficha del mercado), stop (ATR o precio), objetivo (RR) y gestión.
 // La vista previa dibuja la «regla de R»: dónde quedan el stop, la entrada y el objetivo, y cuánto vale 1R.
 import { useState } from 'react';
 import { motion } from 'framer-motion';
@@ -6,6 +7,7 @@ import { useFeeds } from '@/components/orderflow/OrderFlowChart';
 import { motorOrderFlow } from '@/motores/worker/motorCliente';
 import { mercadoDe, CAPITAL_MANUAL, idManual } from '@/motores/paper/motorPaper';
 import { mercadoIdSeguro } from '@/motores/mercado/mercadoId';
+import { contratosDe, fichaDe, riesgoPorContrato, unidadesDe } from '@/motores/mercado/fichas';
 import { previaOrden, RIESGO_MAXIMO, type OrdenManual } from '@/motores/paper/manual';
 import { NOMBRE_GESTION, type ModoGestion } from '@/motores/juez/salidas';
 import { num } from '@/lib/format';
@@ -35,8 +37,8 @@ export default function Ticket() {
   const feed = feeds.feeds.find((f) => f.simbolo === feeds.visible) ?? feeds.feeds[0];
   const [lado, setLado] = useState<1 | -1>(1);
   const [riesgo, setRiesgo] = useState(0.005);
-  const [modoTam, setModoTam] = useState<'riesgo' | 'lotaje'>('riesgo');
-  const [lotaje, setLotaje] = useState('0.01');
+  const [modoTam, setModoTam] = useState<'riesgo' | 'contratos'>('riesgo');
+  const [contratosTxt, setContratosTxt] = useState('1');
   const [modoStop, setModoStop] = useState<'atr' | 'precio'>('atr');
   const [k, setK] = useState(1.5);
   const [stopPrecio, setStopPrecio] = useState('');
@@ -49,12 +51,15 @@ export default function Ticket() {
   const mercado = feed ? mercadoIdSeguro(feed.proveedor, feed.simbolo) : null;
   const cuenta = mercado ? motor.bots.find((b) => b.id === idManual(mercado)) : undefined;
   const capital = cuenta?.capital ?? CAPITAL_MANUAL;
-  const cantidadLotaje = Number(lotaje.replace(',', '.'));
-  const orden: OrdenManual = { lado, riesgoPct: riesgo, gestion, ...(modoTam === 'lotaje' ? { cantidad: cantidadLotaje > 0 ? cantidadLotaje : 0 } : {}), ...(modoStop === 'atr' ? { stopAtr: k } : { stopPrecio: Number(stopPrecio) || undefined }), ...(rr ? { rr } : {}) };
-  const pre = previaOrden(capital, m, orden);
+  const ficha = mercado ? fichaDe(mercado) : null;
+  const sinTamano: OrdenManual = { lado, riesgoPct: riesgo, gestion, ...(modoStop === 'atr' ? { stopAtr: k } : { stopPrecio: Number(stopPrecio) || undefined }), ...(rr ? { rr } : {}) };
+  // Siempre se opera en contratos enteros: por riesgo % se calculan (redondeando hacia abajo) o se ponen directo.
+  const preRiesgo = previaOrden(capital, m, sinTamano);
+  const contratos = !ficha ? 0 : modoTam === 'riesgo' ? (preRiesgo ? contratosDe(ficha, preRiesgo.cantidad) : 0) : Math.max(0, Math.floor(Number(contratosTxt.replace(',', '.')) || 0));
+  const orden: OrdenManual = { ...sinTamano, cantidad: ficha ? unidadesDe(ficha, contratos) : 0 };
+  const pre = contratos > 0 ? previaOrden(capital, m, orden) : null;
   const abierta = !!cuenta?.posicion;
-  const base = feed?.simbolo.replace(/USDT$|USDC$/, '') ?? '';
-  const lotes = base === 'BTC' ? [0.001, 0.005, 0.01, 0.05] : base === 'ETH' ? [0.01, 0.05, 0.1, 0.5] : [0.1, 0.5, 1, 5];
+  const porContrato = ficha && pre ? riesgoPorContrato(ficha, pre.entrada, pre.stop) : null;
   const nocional = pre ? pre.cantidad * pre.entrada : 0;
   const riesgoCuenta = pre && capital > 0 ? pre.riesgoUsd / capital : 0;
   const excede = !!pre && (nocional > capital || riesgoCuenta > RIESGO_MAXIMO);
@@ -96,9 +101,9 @@ export default function Ticket() {
         <div className="flex items-center justify-between">
           <p className="etiqueta">Tamaño</p>
           <div className="flex rounded-md border border-borde p-0.5 text-[10px]" role="radiogroup" aria-label="Modo de tamaño">
-            {(['riesgo', 'lotaje'] as const).map((x) => (
+            {(['riesgo', 'contratos'] as const).map((x) => (
               <button key={x} role="radio" aria-checked={modoTam === x} onClick={() => setModoTam(x)} className={`rounded px-2 py-0.5 ${modoTam === x ? 'bg-white text-black' : 'text-plata-300 hover:text-white'}`} data-modo-tamano={x}>
-                {x === 'riesgo' ? 'Por riesgo %' : 'Lotaje'}
+                {x === 'riesgo' ? 'Por riesgo %' : 'Contratos'}
               </button>
             ))}
           </div>
@@ -107,18 +112,29 @@ export default function Ticket() {
           <Chips nombre="Riesgo" valores={RIESGOS} valor={riesgo} texto={(v) => `${num(v * 100, v < 0.01 ? 2 : 0)} %`} alElegir={setRiesgo} />
         ) : (
           <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <input type="number" min={0} step="any" value={lotaje} onChange={(e) => setLotaje(e.target.value)} aria-label="Lotaje" className="w-full rounded-md border border-borde bg-black px-2.5 py-1.5 font-mono text-[11px] text-plata-100 outline-none focus:border-plata-400" data-lotaje />
-              <span className="font-mono text-[11px] text-plata-400">{base}</span>
-            </div>
-            <Chips nombre="Lotes rápidos" valores={lotes} valor={cantidadLotaje} texto={(v) => String(v).replace('.', ',')} alElegir={(v) => setLotaje(String(v))} />
+            <input type="number" min={1} step={1} value={contratosTxt} onChange={(e) => setContratosTxt(e.target.value)} aria-label="Contratos" className="w-full rounded-md border border-borde bg-black px-2.5 py-1.5 font-mono text-[11px] text-plata-100 outline-none focus:border-plata-400" data-contratos />
+            <Chips nombre="Contratos rápidos" valores={[1, 5, 10, 25, 50, 100]} valor={contratos} texto={(v) => String(v)} alElegir={(v) => setContratosTxt(String(v))} />
           </div>
         )}
-        {pre && (
-          <p className={`cifra text-[10px] ${excede ? 'text-white' : 'text-plata-500'}`} data-tamano-resumen>
-            {num(pre.cantidad, 4)} {base} · {num(nocional, 0)} USD · arriesga {num(riesgoCuenta * 100, 2)} % de la cuenta
-            {excede ? (nocional > capital ? ' · no cabe sin apalancamiento' : ` · supera el ${RIESGO_MAXIMO * 100} %`) : ''}
-          </p>
+        {ficha && (
+          <div className="rounded-lg border border-borde-suave px-2.5 py-2 font-mono text-[10px] leading-relaxed text-plata-400" data-tamano-resumen>
+            <p>
+              <span className="text-white">{contratos} contrato{contratos === 1 ? '' : 's'}</span> = {num(unidadesDe(ficha, contratos), 4)} {ficha.unidad}
+              {pre ? ` · ${num(nocional, 0)} USD` : ''}
+            </p>
+            {porContrato !== null && pre && (
+              <p className={excede ? 'text-white' : ''}>
+                riesgo {num(porContrato, 2)} USD por contrato · total {num(pre.riesgoUsd, 2)} USD ({num(riesgoCuenta * 100, 2)} % de la cuenta)
+                {excede ? (nocional > capital ? ' · no cabe sin apalancamiento' : ` · supera el ${RIESGO_MAXIMO * 100} %`) : ''}
+              </p>
+            )}
+            {modoTam === 'riesgo' && preRiesgo?.recortada && contratos > 0 && <p className="text-plata-300">Pediste {num(riesgo * 100, 2)} % de riesgo, pero sin apalancamiento no caben más contratos.</p>}
+            {modoTam === 'riesgo' && preRiesgo && contratos === 0 && <p className="text-white">Con este riesgo y este stop no alcanza para 1 contrato: sube el riesgo o acerca el stop.</p>}
+            <p className="text-plata-500">
+              1 contrato = {num(ficha.contrato, 3)} {ficha.unidad} · {ficha.nombre}
+              {ficha.verificada ? '' : ' · ficha por defecto, revisar'}
+            </p>
+          </div>
         )}
       </div>
       <div className="space-y-1.5">
@@ -144,10 +160,10 @@ export default function Ticket() {
         <p className="text-[10px] text-plata-500">{NOMBRE_GESTION[gestion]}</p>
       </div>
 
-      <ReglaR pre={pre} lado={lado} />
+      <ReglaR pre={pre ?? preRiesgo} lado={lado} />
 
       <button onClick={enviar} disabled={!pre || excede || enviando || abierta || motor.apagado} className="w-full rounded-xl bg-white py-2.5 text-xs font-medium text-black transition-opacity disabled:opacity-30" data-enviar-orden>
-        {abierta ? 'Ya tienes una posición en este mercado' : enviando ? 'Enviando…' : `${lado > 0 ? 'Comprar' : 'Vender'} ${pre ? num(pre.cantidad, 4) : ''} ${feed?.simbolo.replace('USDT', '') ?? ''}`}
+        {abierta ? 'Ya tienes una posición en este mercado' : enviando ? 'Enviando…' : `${lado > 0 ? 'Comprar' : 'Vender'} ${contratos} contrato${contratos === 1 ? '' : 's'}`}
       </button>
       {estado && <p className={`text-[11px] ${estado.ok ? 'text-white' : 'text-plata-300'}`}>{estado.texto}</p>}
       <p className="text-[10px] leading-relaxed text-plata-500">Sin dinero real. Riesgo máximo {RIESGO_MAXIMO * 100} % por operación y sin apalancamiento. El stop se vigila cada segundo con el lado del libro por el que saldrías.</p>

@@ -1,6 +1,6 @@
 # Mapa del código · AthenAI
 
-Generado por `scripts/mapa.mjs` (215 archivos). Leer esto antes de explorar.
+Generado por `scripts/mapa.mjs` (217 archivos). Leer esto antes de explorar.
 Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 
 ## grabadora
@@ -67,7 +67,7 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 - `LibroOperaciones.tsx` → comun.ts, Panel.tsx, format.ts, ejecutor.ts, motorCliente.ts · ← TerminalView.tsx
 - `PanelGuardian.tsx` → comun.ts, Panel.tsx, format.ts · ← TerminalView.tsx
 - `Posiciones.tsx` → comun.ts, format.ts, ejecutor.ts, manual.ts · ← TerminalView.tsx
-- `Ticket.tsx` → OrderFlowChart.tsx, comun.ts, format.ts, salidas.ts, mercadoId.ts, manual.ts, motorPaper.ts, motorCliente.ts · ← TerminalView.tsx
+- `Ticket.tsx` → OrderFlowChart.tsx, comun.ts, format.ts, salidas.ts, fichas.ts, mercadoId.ts, manual.ts, motorPaper.ts, motorCliente.ts · ← TerminalView.tsx
 - `comun.ts` → format.ts, ejecutor.ts, iniciar.ts · ← 9 archivos
 
 ## components/three
@@ -200,7 +200,8 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 - `regimen.ts` → hmm.ts, features.ts · ← MemoriaMercado.tsx, motor.worker.ts, protocolo.ts · 🧪 memoria.test.ts
 
 ## motores/mercado
-- `mercadoId.ts` → almacen.ts · ← 14 archivos · 🧪 mercadoId.test.ts
+- `fichas.ts` → mercadoId.ts · ← Ticket.tsx · 🧪 fichas.test.ts
+- `mercadoId.ts` → almacen.ts · ← 15 archivos · 🧪 mercadoId.test.ts
 
 ## motores/ml
 - `antifuga.ts` · 🧪 antifuga.test.ts

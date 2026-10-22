@@ -12,8 +12,8 @@ Las ideas nuevas se anotan aquí, no van directo al código. Se hacen **una a la
 ## En espera (en este orden, salvo que el usuario diga otra cosa)
 
 ### Enchufes (que la plataforma no dependa de ningún proveedor)
-- **Fichas de mercado:** tipo, tick, valor del tick, multiplicador, contratos o lotes, costos, funding, sesiones, vencimientos y margen. Binance sería la primera ficha.
-- **Contratos en el ticket:** «1R = X $ → N contratos», o contratos directos.
+- ✅ **Fichas de mercado (básica)** (`src/motores/mercado/fichas.ts`): tamaño del contrato, valor del punto y tick. Hay fichas para Binance BTC, XAU y ETH, y para el micro oro de la CME (MGC). **Falta:** costos, funding, sesiones, vencimientos y margen en la ficha.
+- ✅ **Contratos en el ticket:** por riesgo % (se redondea a contratos enteros) o contratos directos, con el riesgo por contrato.
 - **Enchufe de órdenes para el broker del usuario:** el stop y el objetivo se mandan como distancia, y el tamaño se traduce a contratos o lotes. En el Diario, el precio de la señal frente al precio del broker.
 - **Enchufe de datos Rithmic (CME):** el puente ya existe en `src/motores/fuentes/rithmicPuente.ts`. Cuando el usuario compre la API.
 - **Bybit:** datos, Demo Trading y comparación Paper vs Demo. El usuario decide si se hace.
