@@ -22,6 +22,9 @@ Rol: director técnico + ingeniero sénior + arquitecto de IA para trading (Orde
 - Quirúrgico: no borrar lógica de motores ni pantallas que funcionan; solo añadir o arreglar. Nada de trabajo doble: planear dependencias antes.
 - Pantallas nuevas: una por una, con fotos, y esperar el OK antes de la siguiente.
 - No PR salvo que lo pidan. Rama de la sesión.
+- **CONGELADO (desde 22-oct-2026):** una cosa a la vez; nada nuevo hasta que lo anterior esté en uso. Prioridad: que la grabadora grabe en el VPS y el usuario pruebe estrategias con el Juez. Ideas nuevas → `docs/PENDIENTES.md`, nunca directo al código. No proponer 3 cosas nuevas por cada pregunta.
+- **Sin depender de un proveedor:** datos y órdenes son ENCHUFES intercambiables (datos: Binance hoy, Rithmic mañana; órdenes: Paper hoy, el broker del usuario mañana). Los bots no saben dónde operan: solo abren, cierran y ponen stop/objetivo (como DISTANCIA, no precio de otro mercado). Las etiquetas (`proveedor:símbolo`) son para el Juez y el Diario. Tamaño en contratos/lotes según la ficha de cada mercado (pendiente).
+- Bots, diario y ML viven en el VPS junto a los datos; el navegador solo muestra y manda.
 
 ## 3. Fases
 **spec** — plan corto en lenguaje simple: qué, por qué, orden por dependencias, qué se reutiliza. Si cambia el núcleo (Juez, motores) o hay decisión del usuario → preguntar antes.

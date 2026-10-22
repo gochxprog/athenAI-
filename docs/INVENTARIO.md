@@ -21,7 +21,7 @@ Todo lo que tiene la plataforma hoy, pantalla por pantalla y motor por motor.
 | Cerebro | **Estrategias** | Tus estrategias con el veredicto, la nota y la curva de su última prueba del Juez | 🟢 |
 | Cerebro | **Conocimiento** | Patrones encontrados (llega con el bloque de machine learning) | ⏸ |
 | Cerebro | **Agentes** | Sala 3D con los 10 agentes. Vigía, Flujo, Rastreador, Programador, Juez, Etiquetador, Ejecutor y Guardián trabajan de verdad | 🟢 (8 de 10) |
-| Dinero | **Paper Trading** | Bots en Paper sobre el precio en vivo, con el Guardián, libro de operaciones y apagado de emergencia | 🟢 |
+| Dinero | **Terminal** (antes Paper Trading) | Mesa de operaciones en Paper: barra de cuenta, cinta, gráfico con las operaciones encima, ticket a mano (riesgo % o lotaje, stop, objetivo, gestión fija/BE/escalonada), posiciones, libro, **Diario estilo ATAS** (calendario día/semana/mes/año y métricas) y los bots con el Guardián. Los bots corren 24/7 en el VPS si la grabadora está conectada | 🟢 |
 | Dinero | **Decisiones** | Bitácora real: pruebas del Juez, avisos y registro del motor | 🟢 |
 | Sistema | **Máquinas** | Telemetría real del navegador (memoria, núcleos, workers) | 🟢 |
 | Sistema | **Datos (Centro de datos)** | Fuentes y activos, grabación, almacenamiento, calendario de eventos fuertes, notificaciones y diagnóstico de Binance | 🟢 |
@@ -37,7 +37,7 @@ Barra lateral: números y estados reales. 🟢
 |---|---|---|
 | Fuente **Binance USD-M Futures** | Trades, libro de órdenes, Open Interest, liquidaciones y funding. Gratis, sin clave. Rutas /public y /market (abril de 2026); se reconecta sola y sigue funcionando aunque falle el REST | 🟢 |
 | Fuente **Rithmic** (puente) | Futuros CME (NQ, ES, GC…) a través de un puente | 🟢 código listo, pendiente de cuenta |
-| **Grabadora 24/7 (VPS)** | Graba en tu VPS las 24 h con los mismos motores; la plataforma descarga lo grabado (carpeta «athenai-grabadora») | 🟢 |
+| **Grabadora 24/7 (VPS)** | Graba en tu VPS las 24 h con los mismos motores; la plataforma descarga lo grabado (carpeta «athenai-grabadora»). También corre los bots de Paper 24/7 con Python incluido | 🟢 |
 | **Vigía** | Marca los cortes de conexión como «hueco»: no se aprende de datos rotos | 🟢 |
 | **Barras** | Dollar bars (canónicas), 1m / 5m / 15m y por volumen | 🟢 |
 | **Almacén** | Una «carpeta» por fuente (IndexedDB del navegador), con exportación a CSV y borrado | 🟢 |
