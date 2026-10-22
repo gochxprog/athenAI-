@@ -49,6 +49,29 @@ cp "$AQUI/grabadora.mjs" "$APP/grabadora.mjs"
 if [ -d "$AQUI/web" ]; then rm -rf "$APP/web"; cp -r "$AQUI/web" "$APP/web"; fi
 # Python (Pyodide) para las señales de los bots de Paper 24/7.
 if [ -d "$AQUI/pyodide" ]; then rm -rf "$APP/pyodide"; cp -r "$AQUI/pyodide" "$APP/pyodide"; fi
+# numpy y pandas para Python (motor de código libre): se bajan del sitio oficial de Pyodide y se comprueban con la
+# huella (sha256) de su lista. Si no hay internet, el resto funciona igual y solo el código con pandas avisa.
+if [ -f "$APP/pyodide/pyodide-lock.json" ]; then
+  echo "== Bajando numpy y pandas para Python…"
+  (cd "$APP/pyodide" && node -e '
+    const fs = require("fs"), crypto = require("crypto");
+    const lock = JSON.parse(fs.readFileSync("pyodide-lock.json", "utf8")).packages;
+    const v = JSON.parse(fs.readFileSync("package.json", "utf8")).version;
+    const quiero = new Set(["numpy", "pandas"]);
+    for (const k of [...quiero]) for (const d of lock[k]?.depends ?? []) quiero.add(d);
+    (async () => {
+      for (const k of quiero) {
+        const { file_name: f, sha256 } = lock[k];
+        if (fs.existsSync(f) && crypto.createHash("sha256").update(fs.readFileSync(f)).digest("hex") === sha256) continue;
+        const r = await fetch(`https://cdn.jsdelivr.net/pyodide/v${v}/full/${f}`);
+        const b = Buffer.from(await r.arrayBuffer());
+        if (!r.ok || crypto.createHash("sha256").update(b).digest("hex") !== sha256) { console.log(`   !! ${k}: no se pudo bajar bien (${r.status})`); continue; }
+        fs.writeFileSync(f, b);
+        console.log(`   ${k} listo (${(b.length / 1e6).toFixed(1)} MB)`);
+      }
+    })();
+  ') || echo "   !! No se pudieron bajar: el código con pandas/numpy avisará hasta que vuelvas a instalar."
+fi
 chown -R athenai:athenai "$DATOS"
 
 # 4) Servicio de systemd: arranca solo con el VPS y se reinicia si falla.

@@ -43,7 +43,12 @@ fila de uno en uno. `GET /api/agentes` · `POST /api/agentes/{pausar|reanudar|co
 | Avisos (Discord, Telegram, ntfy, WhatsApp) | |
 | Biblioteca (cada intento cuenta) | |
 | Orquestador de los agentes (estado, radio, fila) | |
-| **Desde A2/A3:** Rastreador, Etiquetador, Lector (Python real) y Sintetizador | |
+| Rastreador (cada 15 min) y Etiquetador (cada noche), en proceso aparte y en fila con el Juez | |
+| **Desde A3:** Lector (Python real) y Sintetizador | |
+
+**Motor de código libre:** el Laboratorio acepta cualquier forma de estrategia en Python (función con todas las
+velas, función por vela, clase estilo backtesting.py, script con pandas); `src/motores/laboratorio/arnes.ts`.
+numpy y pandas los baja instalar.sh al VPS (comprobados con su huella sha256).
 
 ## 3. El Lector: cómo aprende la máquina (por etapas)
 
@@ -73,7 +78,7 @@ fila de uno en uno. `GET /api/agentes` · `POST /api/agentes/{pausar|reanudar|co
 | Fase | Qué | Resultado |
 |---|---|---|
 | **A1** ✓ | Orquestador + estado de los 10 agentes + pantalla **Agentes** | Ves a los agentes trabajar de verdad |
-| **A2** | Rastreador y Etiquetador viviendo en el VPS | Régimen y etiquetas cada noche, con historia |
+| **A2** ✓ | Rastreador y Etiquetador viviendo en el VPS | Régimen cada 15 min; etiquetas de toda la historia cada noche (`{datos}/ml/etiquetas/{mercado}/{mes}.csv`) |
 | **A3** | Dataset + bóveda + Python real + Lector (ML clásico) + pantalla **Red neuronal** | Primeros modelos y Features útiles |
 | **A4** | Buscador de edge → Juez · Sintetizador + **Investigación** | La máquina propone ideas y el Juez las juzga |
 | **A5** | Red neuronal (PyTorch) comparada con el ML | Solo se queda si gana |

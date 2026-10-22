@@ -22,6 +22,7 @@
 // Un evento cuyo recorrido cruza un hueco de datos se descarta (no se aprende de datos rotos).
 import type { MercadoId } from '@/motores/mercado/mercadoId';
 import type { FilaFeatures } from '../nucleo/features';
+import { atrSerie } from '../juez/salidas';
 
 export interface ConfigEtiquetador {
   /** Multiplicador de σ para la barrera superior (take profit). */
@@ -34,6 +35,8 @@ export interface ConfigEtiquetador {
   cusumMult?: number;
   /** Lapso de la media y la desviación exponenciales (barras). */
   span?: number;
+  /** En qué se miden pt y sl: σ de los retornos (por defecto) o ATR(14) relativo al precio (lo acordado para el ML). */
+  medida?: 'sigma' | 'atr';
 }
 
 export const ETIQUETADOR_POR_DEFECTO = { pt: 2, sl: 2, tMax: 50, cusumMult: 1, span: 100 };
@@ -176,11 +179,14 @@ export function etiquetar(filas: readonly Fila[], config: ConfigEtiquetador = {}
   const cierres = filas.map((f) => f.close);
   const { sigma, mediaPrevia } = volatilidadEwm(cierres, c.span);
   const eventos = filtroCusum(cierres, sigma, mediaPrevia, c.cusumMult, huecos);
+  // Barreras en ATR: ATR(14) causal / precio de la barra (si aún no hay ATR, se usa σ).
+  const atr = config.medida === 'atr' ? atrSerie(filas.map((f) => ({ high: f.high ?? f.close, low: f.low ?? f.close, close: f.close }))) : null;
+  const ancho = atr ? atr.map((a, i) => (a !== null && cierres[i] > 0 ? a / cierres[i] : sigma[i])) : sigma;
   const etiquetas: Etiqueta[] = [];
   let descartadosHueco = 0;
   let sinFuturo = 0;
   for (const e of eventos) {
-    const x = tripleBarrera(filas, e.t, e.lado, sigma[e.t], c, huecos);
+    const x = tripleBarrera(filas, e.t, e.lado, ancho[e.t], c, huecos);
     if (x === 'hueco') descartadosHueco += 1;
     else if (x === null) sinFuturo += 1;
     else etiquetas.push(x);

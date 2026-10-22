@@ -23,6 +23,7 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { AlmacenDisco } from './almacenDisco';
 import type { ApiPaper } from './botsVps';
@@ -115,9 +116,19 @@ export function crearServidor(o: OpcionesServidor): http.Server {
       res.writeHead(codigo, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', ...extra });
       res.end(cuerpo);
     };
+    const gzip = /\bgzip\b/.test(String(req.headers['accept-encoding'] ?? ''));
     const json = (codigo: number, cuerpo: unknown) => {
-      res.writeHead(codigo, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify(cuerpo));
+      const texto = JSON.stringify(cuerpo);
+      const cab = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store', Vary: 'Accept-Encoding' };
+      // Las respuestas grandes (filas, velas, operaciones) van comprimidas: 5–10 veces menos datos al celular.
+      if (gzip && texto.length > 2_048) {
+        const gz = zlib.gzipSync(texto, { level: 5 });
+        res.writeHead(codigo, { ...cab, 'Content-Encoding': 'gzip', 'Content-Length': String(gz.length) });
+        res.end(gz);
+        return;
+      }
+      res.writeHead(codigo, cab);
+      res.end(texto);
     };
     if (req.method === 'OPTIONS') {
       res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Max-Age': '86400' });
@@ -244,15 +255,38 @@ export function crearServidor(o: OpcionesServidor): http.Server {
       // Carpeta con su propio index.html (p. ej. /v2/, la versión nueva): se sirve ese.
       if (archivo.startsWith(path.resolve(o.web)) && fs.existsSync(archivo) && fs.statSync(archivo).isDirectory()) archivo = path.join(archivo, 'index.html');
       if (!archivo.startsWith(path.resolve(o.web)) || !fs.existsSync(archivo) || fs.statSync(archivo).isDirectory()) archivo = path.join(o.web, 'index.html');
-      if (fs.existsSync(archivo)) {
-        res.writeHead(200, { 'Content-Type': TIPOS[path.extname(archivo)] ?? 'application/octet-stream' });
-        fs.createReadStream(archivo).pipe(res);
-        return;
-      }
+      if (fs.existsSync(archivo)) return servirArchivo(archivo, req, res);
     }
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Grabadora de athenAI funcionando. Conéctala desde la plataforma: Datos → Grabadora 24/7.');
   });
+}
+
+/** Archivos con hash en el nombre (assets/…-abc123.js): no cambian nunca, el navegador los guarda un año. */
+const CON_HASH = /[\\/]assets[\\/][^\\/]+-[\w-]{6,}\.\w+$/;
+const TEXTO = new Set(['.html', '.js', '.mjs', '.css', '.json', '.svg', '.txt', '.wasm']);
+const comprimidos = new Map<string, { mtime: number; gz: Buffer }>();
+
+/**
+ * Sirve un archivo de la plataforma: comprimido con gzip (una vez, guardado en memoria) y con caché larga si tiene
+ * hash. Sin esto el celular bajaba varios MB sin comprimir cada vez que abría una pantalla.
+ */
+function servirArchivo(archivo: string, req: http.IncomingMessage, res: http.ServerResponse): void {
+  const ext = path.extname(archivo);
+  const cabeceras: Record<string, string> = { 'Content-Type': TIPOS[ext] ?? 'application/octet-stream', 'Cache-Control': CON_HASH.test(archivo) ? 'public, max-age=31536000, immutable' : 'no-cache', Vary: 'Accept-Encoding' };
+  if (TEXTO.has(ext) && /\bgzip\b/.test(String(req.headers['accept-encoding'] ?? ''))) {
+    const mtime = fs.statSync(archivo).mtimeMs;
+    let c = comprimidos.get(archivo);
+    if (!c || c.mtime !== mtime) {
+      c = { mtime, gz: zlib.gzipSync(fs.readFileSync(archivo), { level: 9 }) };
+      comprimidos.set(archivo, c);
+    }
+    res.writeHead(200, { ...cabeceras, 'Content-Encoding': 'gzip', 'Content-Length': String(c.gz.length) });
+    res.end(c.gz);
+    return;
+  }
+  res.writeHead(200, cabeceras);
+  fs.createReadStream(archivo).pipe(res);
 }
 
 /** Símbolo pedido por `mercado=binance:X` o `simbolo=X`. Un mercado de otro proveedor o mal escrito no da datos (''). */

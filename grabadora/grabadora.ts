@@ -20,8 +20,9 @@ import { resumenHistoria } from './importador';
 import { atenderJuez, cargarVelas, crearLaboratorio } from './laboratorioVps';
 import { crearAvisos } from './avisosVps';
 import { crearBiblioteca } from './bibliotecaVps';
-import { crearSala, type Lectura } from './agentesVps';
-import { MS_SERIE } from '../src/motores/laboratorio/velas';
+import { crearSala } from './agentesVps';
+import { atenderTrabajo, correrTrabajo } from './trabajosVps';
+import { MS_SERIE, type Serie } from '../src/motores/laboratorio/velas';
 import { crearServidor, type EstadoSimbolo } from './servidor';
 import { almacenLocalDisco, cargadorPython, crearApiPaper, feedDe, LibroPaperDisco, senalesDisco } from './botsVps';
 import { MotorPaper } from '../src/motores/paper/motorPaper';
@@ -52,6 +53,19 @@ export interface OpcionesGrabadora {
   ws?: string;
   /** Mensajes al registro (journald en el VPS). */
   log?: (texto: string) => void;
+}
+
+/** Recuerda el resultado de `f` por clave durante `ms`: lo que se lee del disco no se relee en cada sondeo. */
+export function recordar<A extends unknown[], R>(f: (...a: A) => R, ms: number, reloj = Date.now): (...a: A) => R {
+  const memo = new Map<string, { t: number; r: R }>();
+  return (...a) => {
+    const k = JSON.stringify(a);
+    const x = memo.get(k);
+    if (x && reloj() - x.t < ms) return x.r;
+    const r = f(...a);
+    memo.set(k, { t: reloj(), r });
+    return r;
+  };
 }
 
 /** Clave de acceso: se crea una vez (aleatoria) y se guarda en la carpeta de datos. */
@@ -196,11 +210,19 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
       } else sala.notar(/Error en tu código/.test(t.error ?? '') ? 'programador' : 'juez', `${quien}: ${t.error}`, true);
     },
   });
-  let historia: Lectura['historia'] = [];
-  let latidos = 0;
+  // La historia (lee todos los días importados) y las velas, recordadas: los sondeos de cada pantalla no releen el disco.
+  const historiaDisco = recordar(() => resumenHistoria(o.datos), 20_000);
+  const velasDisco = recordar((s: string, serie: Serie, n: number) => (serie === 'dollar' ? [] : cargarVelas(o.datos, s, serie, 'todo', Date.now() - 3 * (n + 2) * MS_SERIE[serie]).slice(-n)), 15_000);
+  // Trabajos propios de los agentes (A2), en proceso aparte. Esperan a que el Juez termine: un trabajo pesado a la vez.
+  const mercadosTrabajo = () => [...new Set([...o.simbolos, ...historiaDisco().map((h) => h.carpeta.replace(/^binance_/, '').toUpperCase())])];
+  const turno = async () => {
+    while (laboratorio.enCurso()) await new Promise((r) => setTimeout(r, 5_000));
+  };
+  sala.tarea({ id: 'rastreador', nombre: 'Régimen y gemelos de cada mercado', cadaMs: 15 * 60_000, primeraMs: 60_000, correr: async () => (await turno(), correrTrabajo('rastreador', o.datos, mercadosTrabajo())) });
+  sala.tarea({ id: 'etiquetador', nombre: 'Etiquetar la historia para el ML', cadaMs: 24 * 3_600_000, primeraMs: 10 * 60_000, correr: async () => (await turno(), correrTrabajo('etiquetador', o.datos, mercadosTrabajo())) });
   const vigilaSala = setInterval(() => {
     try {
-      if (latidos++ % 6 === 0) historia = resumenHistoria(o.datos).map((h) => ({ carpeta: h.carpeta, importando: h.importando, dia: h.progreso?.dia ?? null, hechos: h.progreso?.hechos ?? 0, total: h.progreso?.total ?? 0 }));
+      const historia = historiaDisco().map((h) => ({ carpeta: h.carpeta, importando: h.importando, dia: h.progreso?.dia ?? null, hechos: h.progreso?.hechos ?? 0, total: h.progreso?.total ?? 0 }));
       const enCurso = laboratorio.enCurso();
       const bots = motorBots?.bots.filter((b) => b.origen !== 'manual') ?? [];
       sala.latir({
@@ -213,7 +235,7 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
       log(`Agentes: ${e instanceof Error ? e.message : e}`);
     }
   }, 5_000);
-  const servidor = crearServidor({ almacen, clave, estado, web: o.web, paper: motorBots ? crearApiPaper(motorBots) : null, historia: () => resumenHistoria(o.datos), laboratorio, avisos, biblioteca, agentes: sala, velas: (s, serie, n) => (serie === 'dollar' ? [] : cargarVelas(o.datos, s, serie, 'todo', Date.now() - 3 * (n + 2) * MS_SERIE[serie]).slice(-n)) });
+  const servidor = crearServidor({ almacen, clave, estado, web: o.web, paper: motorBots ? crearApiPaper(motorBots) : null, historia: historiaDisco, laboratorio, avisos, biblioteca, agentes: sala, velas: velasDisco });
   const alEscuchar = () => log(`Grabadora ${VERSION} escuchando en ${o.host ?? 'todas las interfaces'}, puerto ${o.puerto} · símbolos: ${o.simbolos.join(', ')} · datos en ${o.datos}`);
   if (o.host) servidor.listen(o.puerto, o.host, alEscuchar);
   else servidor.listen(o.puerto, alEscuchar);
@@ -236,6 +258,7 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
 // Arranque como programa (no al importarlo desde las pruebas).
 // Proceso hijo del Laboratorio: solo corre una prueba del Juez y termina (no graba).
 if (process.argv.includes('--juez')) atenderJuez();
+else if (process.argv.includes('--trabajo')) atenderTrabajo();
 else if (process.argv[1] && /grabadora\.(m?js|ts)$/.test(process.argv[1])) {
   const simbolos = (process.env.SIMBOLOS ?? 'BTCUSDT').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
   const g = iniciarGrabadora({

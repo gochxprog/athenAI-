@@ -13,7 +13,7 @@ import type { LibroPaper } from '../src/motores/paper/almacenPaper';
 import type { EstadoFeed } from '../src/motores/worker/protocolo';
 import type { Pipeline } from '../src/motores/nucleo/pipeline';
 import type { EstrategiaEnVivo, SenalEstrategia } from '../src/motores/laboratorio/protocolo';
-import { ejecutarEstrategia, mensajeError, type PyodideMinimo } from '../src/motores/laboratorio/python';
+import { ejecutarEstrategia, mensajeError, prepararPython, type PyodideMinimo } from '../src/motores/laboratorio/python';
 import { armarVelas, MS_SERIE, type Serie, type VelaLab } from '../src/motores/laboratorio/velas';
 import { atrSerie } from '../src/motores/juez/salidas';
 import type { AlmacenDisco } from './almacenDisco';
@@ -148,7 +148,8 @@ export function senalesDisco(almacen: Pick<AlmacenDisco, 'leerUltimas'>, python:
           continue;
         }
         const fijo = `${x.codigo}\nPARAMETROS = ${JSON.stringify(Object.fromEntries(Object.entries(x.combo).map(([k, v]) => [k, [v]])))}\n`;
-        const ejec = ejecutarEstrategia(py, fijo, velas);
+        await prepararPython(py, x.codigo);
+        const ejec = ejecutarEstrategia(py, fijo, velas, undefined, { antiFuturo: false });
         const pos = ejec.posiciones[0];
         const senal: SenalEstrategia = { id: x.id, posicion: pos[pos.length - 1] ?? 0, t: velas[velas.length - 1].cierre, ...(ejec.gestion ? { atr: atrSerie(velas, ejec.gestion.periodoAtr ?? 14).at(-1) ?? null } : {}) };
         if (ms) cache.set(x.id, { balde, senal });

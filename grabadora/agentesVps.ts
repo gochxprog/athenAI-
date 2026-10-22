@@ -19,7 +19,14 @@ export interface Lectura {
   historia: { carpeta: string; importando: boolean; dia: string | null; hechos: number; total: number }[];
 }
 /** Un trabajo propio de un agente: corre cada `cadaMs` (o cuando lo pides) y devuelve una frase con lo que hizo. */
-export interface Tarea { id: AgenteId; nombre: string; cadaMs: number; correr: () => Promise<string> }
+export interface Tarea {
+  id: AgenteId;
+  nombre: string;
+  cadaMs: number;
+  /** Cuánto esperar para la primera vez después de arrancar (por defecto, un ciclo entero). */
+  primeraMs?: number;
+  correr: () => Promise<string | { texto: string; grave?: boolean }>;
+}
 export interface ApiAgentes {
   estado(): EstadoSala;
   accion(nombre: string, cuerpo: Record<string, unknown>): Promise<unknown>;
@@ -96,7 +103,7 @@ export function crearSala(o: { datos: string; reloj?: () => number; recursos?: (
     fila.actual = { id, desde: ahora() };
     t.ultima = ahora();
     t.correr()
-      .then((texto) => notar(id, texto))
+      .then((r) => (typeof r === 'string' ? notar(id, r) : notar(id, r.texto, r.grave)))
       .catch((e) => notar(id, `${t.nombre}: falló · ${e instanceof Error ? e.message : e}`, true))
       .finally(() => {
         fila.actual = null;
@@ -195,7 +202,7 @@ export function crearSala(o: { datos: string; reloj?: () => number; recursos?: (
     latir,
     notar: (id, texto, grave) => notar(id, texto, grave),
     tarea(t) {
-      tareas.set(t.id, { ...t, ultima: ahora() });
+      tareas.set(t.id, { ...t, ultima: ahora() - t.cadaMs + (t.primeraMs ?? t.cadaMs) });
     },
     guardar,
     estado(): EstadoSala {

@@ -3,7 +3,7 @@
 // Va en su propio worker para que un bucle infinito en el código del usuario se pueda cancelar sin tocar el motor.
 import { AlmacenFeatures, type FilaGuardada } from '../almacen/almacen';
 import { juzgar } from '../juez/juez';
-import { ejecutarEstrategia, mensajeError, type PyodideMinimo } from './python';
+import { ejecutarEstrategia, mensajeError, prepararPython, type PyodideMinimo } from './python';
 import type { MensajeEtiquetas, MensajeLaboratorio, MensajeSenales, PeticionEtiquetar, PeticionLaboratorio, PeticionSenales, SenalEstrategia } from './protocolo';
 import { horasJuez } from './protocolo';
 import { datasetCsv, etiquetar } from '../etiquetador/etiquetador';
@@ -54,6 +54,7 @@ async function senales(p: PeticionSenales): Promise<void> {
         continue;
       }
       const fijo = `${x.codigo}\nPARAMETROS = ${JSON.stringify(Object.fromEntries(Object.entries(x.combo).map(([k, v]) => [k, [v]])))}\n`;
+      await prepararPython(py, x.codigo);
       const pos = ejecutarEstrategia(py, fijo, filas).posiciones[0];
       salida.push({ id: x.id, posicion: pos[pos.length - 1] ?? 0, t: filas[filas.length - 1].cierre });
     } catch (err) {
@@ -90,6 +91,7 @@ ctx.onmessage = async (e) => {
     if (filas.length < 100) throw new Error(`Solo hay ${filas.length} filas guardadas de ${p.simbolo} en athenai-${p.proveedor}. Deja grabando el mercado (Centro de datos) y vuelve a probar.`);
     let ejec;
     try {
+      await prepararPython(py, p.codigo);
       ejec = ejecutarEstrategia(py, p.codigo, filas, progreso);
     } catch (err) {
       throw new Error(`Error en tu código:\n${mensajeError(err)}`);

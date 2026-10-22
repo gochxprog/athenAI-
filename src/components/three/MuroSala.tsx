@@ -16,8 +16,9 @@ export default function MuroSala({ datos, posicion }: { datos: DatosMuro; posici
   ref.current = datos;
   const { lienzo, textura } = useMemo(() => {
     const c = document.createElement('canvas');
-    c.width = W;
-    c.height = H;
+    // Media resolución: la pantalla se ve igual de nítida en la sala y pesa 4 veces menos en la tarjeta de video.
+    c.width = W / 2;
+    c.height = H / 2;
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 4;
@@ -26,11 +27,12 @@ export default function MuroSala({ datos, posicion }: { datos: DatosMuro; posici
   useEffect(() => () => textura.dispose(), [textura]);
   const ultimo = useRef(-1);
   useFrame(({ clock }) => {
-    // Dos cuadros por segundo bastan (el reloj y el punto EN VIVO).
-    if (clock.elapsedTime - ultimo.current < 0.5) return;
+    // Un cuadro por segundo basta (el reloj y el punto EN VIVO).
+    if (clock.elapsedTime - ultimo.current < 1) return;
     ultimo.current = clock.elapsedTime;
     const g = lienzo.getContext('2d');
     if (!g) return;
+    g.setTransform(0.5, 0, 0, 0.5, 0, 0);
     pintarMuro(g, ref.current, Date.now());
     textura.needsUpdate = true;
   });
@@ -50,8 +52,7 @@ export default function MuroSala({ datos, posicion }: { datos: DatosMuro; posici
         <meshBasicMaterial color="#ffffff" transparent opacity={0.7} toneMapped={false} />
       </mesh>
       {/* La pantalla ilumina la sala: luz de área del tamaño de la pantalla mirando hacia los puestos. */}
-      <rectAreaLight width={w} height={h} intensity={9} color="#c9d4ff" position={[0, 0, 0.05]} rotation={[0, Math.PI, 0]} />
-      <pointLight position={[0, -0.6, 2.2]} intensity={2.5} distance={9} color="#b9c6ff" />
+      <rectAreaLight width={w} height={h} intensity={2.5} color="#c9d4ff" position={[0, 0, 0.05]} rotation={[0, Math.PI, 0]} />
     </group>
   );
 }

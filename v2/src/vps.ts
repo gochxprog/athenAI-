@@ -32,6 +32,11 @@ export interface Vps {
 }
 
 const CADA_MS = 5_000;
+/** Lo que cambia poco (historia importada, operaciones cerradas) se pide 1 de cada 6 vueltas (cada 30 s). */
+const LENTO = 6;
+const VENTANA_MS = 1_800_000;
+let vuelta = 0;
+let forzar = true;
 let actual: Vps = { listo: false, sinSesion: false, caido: false, inicio: null, version: '', mercados: [], almacen: [], historia: [], bots: [], apagado: false, reglas: null, bitacora: [], ops: [], filas: {}, agentes: null };
 const oyentes = new Set<(v: Vps) => void>();
 let reloj: ReturnType<typeof setTimeout> | null = null;
@@ -48,22 +53,32 @@ async function pedir<T>(ruta: string): Promise<T | null> {
 
 async function sondear(): Promise<void> {
   try {
+    const lento = forzar || vuelta++ % LENTO === 0;
+    forzar = false;
     const [e, h, p, o, ag] = await Promise.all([
       pedir<{ inicio: number; version: string; simbolos: Mercado[]; almacen: Vps['almacen'] }>('/api/estado'),
-      pedir<{ mercados: Historia[] }>('/api/historia').catch(() => null),
+      lento ? pedir<{ mercados: Historia[] }>('/api/historia').catch(() => null) : null,
       pedir<{ bots: Bot[]; bitacora: EventoPaper[]; apagado: boolean; reglas: ReglasGuardian }>('/api/paper').catch(() => null),
-      pedir<{ operaciones: OperacionPaper[] }>('/api/paper/operaciones').catch(() => null),
+      lento ? pedir<{ operaciones: OperacionPaper[] }>('/api/paper/operaciones').catch(() => null) : null,
       pedir<EstadoSala>('/api/agentes').catch(() => null),
     ]);
     if (!e) throw new Error('caido');
+    // Filas: solo las nuevas desde la última que ya tenemos (antes se bajaba media hora entera cada 5 s).
     const filas = Object.fromEntries(
       await Promise.all(
-        e.simbolos.filter((m) => m.ultimoCierre).map(async (m) => [m.simbolo, (await pedir<{ filas: Fila[] }>(`/api/filas?simbolo=${m.simbolo}&desde=${m.ultimoCierre! - 1_800_000}&limite=400`).catch(() => null))?.filas ?? actual.filas[m.simbolo] ?? []] as const),
+        e.simbolos.filter((m) => m.ultimoCierre).map(async (m) => {
+          const previas = actual.filas[m.simbolo] ?? [];
+          const ultima = previas.at(-1)?.cierre ?? 0;
+          if (ultima >= m.ultimoCierre!) return [m.simbolo, previas] as const;
+          const desde = Math.max(ultima, m.ultimoCierre! - VENTANA_MS);
+          const nuevas = (await pedir<{ filas: Fila[] }>(`/api/filas?simbolo=${m.simbolo}&desde=${desde}&limite=400`).catch(() => null))?.filas ?? [];
+          return [m.simbolo, [...previas, ...nuevas].filter((f) => f.cierre > m.ultimoCierre! - VENTANA_MS)] as const;
+        }),
       ),
     );
-    actual = { listo: true, sinSesion: false, caido: false, inicio: e.inicio, version: e.version, mercados: e.simbolos, almacen: e.almacen, historia: h?.mercados ?? [],
+    actual = { listo: true, sinSesion: false, caido: false, inicio: e.inicio, version: e.version, mercados: e.simbolos, almacen: e.almacen, historia: h?.mercados ?? actual.historia,
       // Tu cuenta a mano (Terminal) no es un bot: va aparte.
-      bots: (p?.bots ?? []).filter((b) => b.origen !== 'manual'), apagado: p?.apagado ?? false, reglas: p?.reglas ?? null, bitacora: p?.bitacora ?? [], ops: o?.operaciones ?? [], filas, agentes: ag };
+      bots: (p?.bots ?? []).filter((b) => b.origen !== 'manual'), apagado: p?.apagado ?? false, reglas: p?.reglas ?? null, bitacora: p?.bitacora ?? [], ops: o?.operaciones ?? actual.ops, filas, agentes: ag };
   } catch (err) {
     actual = { ...actual, listo: true, sinSesion: (err as Error).message === 'sin-sesion', caido: (err as Error).message !== 'sin-sesion' };
   }
@@ -75,6 +90,7 @@ async function sondear(): Promise<void> {
 
 /** Pide el estado ya (tras una acción), sin esperar al siguiente sondeo. */
 export function refrescar(): void {
+  forzar = true;
   if (reloj) clearTimeout(reloj);
   void sondear();
 }

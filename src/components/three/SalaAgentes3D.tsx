@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { ContactShadows, Grid, Html, MeshReflectorMaterial, OrbitControls, RoundedBox } from '@react-three/drei';
+import { ContactShadows, Grid, Html, OrbitControls, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { AGENTES, ESTILO_AGENTE, type Accesorio, type AgenteId } from '@/data/agentes';
 import { ALTO, ANCHO, PANTALLAS } from './pantallas';
@@ -11,22 +11,24 @@ import type { DatosMuro } from './muro';
 const MURO: [number, number, number] = [0, 3.0, -7.0];
 /** Núcleo de datos: flota delante de la pantalla y manda paquetes a cada puesto. */
 const NUCLEO: [number, number, number] = [0, 0, -5.1];
-/** Dos filas en arco (la de atrás más abierta), cada puesto girado hacia el centro de la pantalla. */
-const ARCOS = [
-  { z: -2.9, paso: 2.2, curva: 0.09 },
-  { z: -0.2, paso: 2.4, curva: 0.07 },
-];
+/** Dos columnas frente a frente a lo largo del pasillo central (izquierda: los que leen los datos; derecha: los que
+ *  deciden y operan), cada puesto girado un poco hacia la pantalla. El Juez, en el medio, de cara a todos. */
+const IZQUIERDA: AgenteId[] = ['vigia', 'flujo', 'rastreador', 'etiquetador', 'lector'];
+const DERECHA: AgenteId[] = ['programador', 'sintetizador', 'guardian', 'ejecutor'];
+const COLUMNA_X = 3.6;
+const HACIA_PANTALLA = 0.35;
 
 const PUESTOS = (() => {
   const out = {} as Record<AgenteId, { pos: [number, number, number]; rot: number }>;
-  ARCOS.forEach(({ z, paso, curva }, fila) => {
-    const lista = AGENTES.slice(fila * 5, fila * 5 + 5);
-    lista.forEach((a, i) => {
-      const x = (i - (lista.length - 1) / 2) * paso;
-      const zz = z + curva * x * x;
-      out[a.id] = { pos: [x, 0, zz], rot: Math.atan2(x, zz - MURO[2]) };
+  const columna = (ids: AgenteId[], lado: -1 | 1) =>
+    ids.forEach((id, i) => {
+      const z = -4.4 + (i * 6) / (ids.length - 1);
+      // El agente mira al pasillo (hacia el otro lado) y un poco hacia la pantalla.
+      out[id] = { pos: [lado * COLUMNA_X, 0, z], rot: Math.atan2(lado * Math.cos(HACIA_PANTALLA), Math.sin(HACIA_PANTALLA)) };
     });
-  });
+  columna(IZQUIERDA, -1);
+  columna(DERECHA, 1);
+  out.juez = { pos: [0, 0, -1.4], rot: Math.PI };
   return out;
 })();
 
@@ -268,9 +270,9 @@ function Monitor({ id, color, activo, apagado }: { id: AgenteId; color: string; 
   useEffect(() => () => textura.dispose(), [textura]);
   const ultimo = useRef(-1);
   useFrame(({ clock }) => {
-    // Sin motor: un solo cuadro quieto. Con motor: ~10 cuadros por segundo (más rápido si está seleccionado).
+    // Sin motor: un solo cuadro quieto. Con motor: ~5 cuadros por segundo (más rápido si está seleccionado).
     const t = apagado ? 0 : clock.elapsedTime * (activo ? 1.6 : 1);
-    if (apagado ? ultimo.current === 0 : clock.elapsedTime - ultimo.current < 0.1) return;
+    if (apagado ? ultimo.current === 0 : clock.elapsedTime - ultimo.current < 0.2) return;
     ultimo.current = apagado ? 0 : clock.elapsedTime;
     const g = lienzo.getContext('2d');
     if (!g) return;
@@ -392,7 +394,7 @@ function Puesto({ id, seleccionado, onSeleccion, estado, vivo }: { id: AgenteId;
         </mesh>
         <mesh position={[0, 0.78, 0]} castShadow>
           <capsuleGeometry args={[0.17, 0.36, 8, 20]} />
-          <meshStandardMaterial color={vivo ? '#3b3f47' : GRIS} metalness={0.85} roughness={0.25} />
+          <meshStandardMaterial color={vivo ? '#6a707b' : GRIS} metalness={0.7} roughness={0.3} />
         </mesh>
         {/* LED en la espalda y en el pecho, del color del agente (lo que se ve desde atrás de la sala). */}
         {[0.172, -0.172].map((z) => (
@@ -404,7 +406,7 @@ function Puesto({ id, seleccionado, onSeleccion, estado, vivo }: { id: AgenteId;
         <group ref={cabeza} position={[0, 1.22, 0]}>
           <mesh castShadow>
             <sphereGeometry args={[0.15, 32, 32]} />
-            <meshStandardMaterial color={vivo ? '#5a5e67' : '#34363b'} metalness={0.9} roughness={0.18} />
+            <meshStandardMaterial color={vivo ? '#9aa0aa' : '#3a3c42'} metalness={0.75} roughness={0.22} />
           </mesh>
           {/* Visor */}
           <mesh position={[0, 0.01, -0.12]} rotation={[0, Math.PI, 0]}>
@@ -432,15 +434,14 @@ function Puesto({ id, seleccionado, onSeleccion, estado, vivo }: { id: AgenteId;
   );
 }
 
-/** La sala a oscuras: piso negro que refleja la pantalla, la pared del fondo y las aristas del cuarto. */
+/** La sala a oscuras: piso negro satinado (refleja la luz de la pantalla), la pared del fondo y las aristas del cuarto. */
 function Sala() {
   const geo = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(18, 5.2, 15)), []);
-  const compacto = useThree((st) => st.size.width) < 700;
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.001, -0.5]}>
         <planeGeometry args={[18, 15]} />
-        <MeshReflectorMaterial resolution={compacto ? 256 : 512} blur={[300, 80]} mixBlur={1} mixStrength={18} roughness={0.9} depthScale={1} minDepthThreshold={0.4} maxDepthThreshold={1.4} color="#070708" metalness={0.6} mirror={0.4} />
+        <meshStandardMaterial color="#08080a" metalness={0.5} roughness={0.5} />
       </mesh>
       <mesh position={[0, 2.6, -7.5]}>
         <planeGeometry args={[18, 5.2]} />
@@ -453,14 +454,14 @@ function Sala() {
   );
 }
 
-/** Cámara detrás de los puestos, mirando a la pantalla (más lejos en pantallas estrechas para que quepa todo). */
-const MIRA: [number, number, number] = [0, 1.3, -3.2];
+/** Cámara de frente y arriba, sobre el pasillo: las dos columnas, el Juez y la pantalla al fondo (más lejos en pantallas estrechas para que quepa todo). */
+const MIRA: [number, number, number] = [0, 0.9, -1.8];
 function AjusteCamara() {
   const { camera, size } = useThree();
   useEffect(() => {
     // En el celular se acerca más de la cuenta: se ven el centro y la pantalla; los lados, girando con el dedo.
     const factor = Math.max(1, 1.75 / (size.width / size.height)) ** 0.55;
-    camera.position.set(0, 1.3 + 4.3 * factor, -3.2 + 12.7 * factor);
+    camera.position.set(0, 0.9 + 7.6 * factor, -1.8 + 12.3 * factor);
     camera.lookAt(...MIRA);
   }, [camera, size.width, size.height]);
   return null;
@@ -469,14 +470,14 @@ function AjusteCamara() {
 export default function SalaAgentes3D({ seleccion, onSeleccion, estados, muro, activos }: Props) {
   const vivo = (a: (typeof AGENTES)[number]) => activos?.[a.id] ?? a.real;
   return (
-    <Canvas shadows camera={{ position: [0, 5.6, 9.5], fov: 46 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }}>
+    <Canvas camera={{ position: [0, 8.5, 10.5], fov: 46 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }}>
       <AjusteCamara />
       <fog attach="fog" args={['#000000', 18, 40]} />
-      <ambientLight intensity={0.1} />
-      <directionalLight position={[3, 7, 6]} intensity={0.35} castShadow shadow-mapSize={[1024, 1024]} />
+      <ambientLight intensity={0.3} />
+      <directionalLight position={[0, 8, 9]} intensity={1} />
       <Sala />
       <Grid position={[0, 0.002, 0]} args={[20, 20]} cellSize={0.5} cellThickness={0.4} cellColor="#16171a" sectionSize={2} sectionThickness={0.7} sectionColor="#26282d" fadeDistance={16} fadeStrength={1.5} infiniteGrid />
-      <ContactShadows position={[0, 0.005, 0]} opacity={0.7} scale={16} blur={2.4} far={3} />
+      <ContactShadows position={[0, 0.005, 0]} opacity={0.7} scale={16} blur={2.4} far={3} frames={1} />
       <NucleoDatos />
       <FlujoPaquetes vivo={vivo} />
       {muro && <MuroSala datos={muro} posicion={MURO} />}

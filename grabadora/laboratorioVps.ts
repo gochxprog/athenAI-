@@ -8,7 +8,7 @@ import { AlmacenDisco } from './almacenDisco';
 import { cargadorPython } from './botsVps';
 import { armarVelas, SERIES, type Serie, type VelaLab } from '../src/motores/laboratorio/velas';
 export type { Fuente, PedidoPrueba, ResultadoPrueba, Trabajo };
-import { ejecutarEstrategia, mensajeError, type PyodideMinimo } from '../src/motores/laboratorio/python';
+import { ejecutarEstrategia, mensajeError, prepararPython, type PyodideMinimo } from '../src/motores/laboratorio/python';
 import { entradaJuez } from '../src/motores/laboratorio/entradaJuez';
 import { juzgar } from '../src/motores/juez/juez';
 import { FUENTES, type Fuente, type PedidoPrueba, type ResultadoPrueba, type Trabajo } from '../src/motores/laboratorio/prueba';
@@ -81,6 +81,7 @@ export function atenderJuez(): void {
     try {
       enviar({ tipo: 'paso', texto: 'Cargando Python…' });
       const py = await cargadorPython(m.pyodide)();
+      await prepararPython(py, m.pedido.codigo);
       // El resultado es grande: se desconecta recién cuando terminó de enviarse.
       enviar({ tipo: 'listo', resultado: correrPrueba(m.pedido, m.datos, py, (texto) => enviar({ tipo: 'paso', texto })) }, true);
     } catch (e) {

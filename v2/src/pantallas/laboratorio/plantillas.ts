@@ -57,4 +57,42 @@ def estrategia(velas, p):
     return pos
 `,
   },
+  {
+    nombre: 'Estilo backtesting.py',
+    codigo: `# Una clase como en backtesting.py: init() prepara los indicadores, next() decide en cada vela.
+from backtesting import Strategy
+from backtesting.lib import crossover
+
+def SMA(valores, n):
+    v = list(valores)
+    return [sum(v[i - n + 1:i + 1]) / n if i >= n - 1 else float("nan") for i in range(len(v))]
+
+class CruceMedias(Strategy):
+    rapida = 10
+    lenta = 30
+
+    def init(self):
+        self.r = self.I(SMA, self.data.Close, self.rapida)
+        self.l = self.I(SMA, self.data.Close, self.lenta)
+
+    def next(self):
+        if crossover(self.r, self.l):
+            self.buy()
+        elif crossover(self.l, self.r):
+            self.sell()
+
+PARAMETROS = {"rapida": [10, 20], "lenta": [30, 50]}
+`,
+  },
+  {
+    nombre: 'Script con pandas',
+    codigo: `# Un script suelto con pandas: df ya trae Open, High, Low, Close, Volume y las 39 Features.
+import pandas as pd
+
+df["media"] = df["Close"].rolling(50).mean()
+df["signal"] = 0
+df.loc[df["Close"] > df["media"], "signal"] = 1
+df.loc[df["Close"] < df["media"], "signal"] = -1
+`,
+  },
 ];

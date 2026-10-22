@@ -1,6 +1,7 @@
 // Ejecuta estrategias escritas en Python (Pyodide) sobre las Features guardadas.
 //
-// Contrato de la estrategia (lo que escribe el usuario):
+// Motor de código libre (arnes.ts): acepta cualquier forma de estrategia (función con todas las velas, función por
+// vela, clase estilo backtesting.py o script suelto). La forma de siempre:
 //
 //   PARAMETROS = {"umbral": [40, 60, 80]}      # opcional: rejilla que el Juez usa en el Walk-Forward
 //
@@ -18,52 +19,30 @@ import type { FilaFeatures } from '../nucleo/features';
 import { normalizarPosiciones } from '../juez/backtest';
 import type { Combo } from '../juez/juez';
 import { MODOS_GESTION, type ReglasSalida } from '../juez/salidas';
+import { ARNES, FORMAS } from './arnes';
 import { alterarDesde, analizarCodigo, CORTES_ANTIFUTURO, primeraDiferencia, type ResultadoAntiFuturo } from './antiFuturo';
 
 /** Interfaz mínima de Pyodide que se usa (permite probar con Pyodide en Node). */
 export interface PyodideMinimo {
   runPython(codigo: string): unknown;
   globals: { set(nombre: string, valor: unknown): void; get(nombre: string): unknown };
+  /** Paquetes extra (numpy, pandas) que vienen junto a Pyodide en el VPS. */
+  loadPackage?(nombres: string[]): Promise<unknown>;
+}
+
+/** Antes de correr: si el código usa numpy o pandas, los carga (una vez). Sin ellos, el error lo explica. */
+export async function prepararPython(py: PyodideMinimo, codigo: string): Promise<void> {
+  const paquetes = [/\b(numpy|np\.)/.test(codigo) || /pandas|pd\./.test(codigo) ? 'numpy' : '', /pandas|pd\./.test(codigo) ? 'pandas' : ''].filter(Boolean);
+  if (!paquetes.length || !py.loadPackage) return;
+  try {
+    await py.loadPackage(paquetes);
+  } catch {
+    throw new Error(`Tu código usa ${paquetes.join(' y ')} y no están en este Python. En el VPS: vuelve a correr instalar.sh (los descarga).`);
+  }
 }
 
 export const MAX_COMBOS = 48;
 
-const ARNES = `
-import json, itertools, traceback
-
-def _athenai_cargar(codigo, filas_json):
-    global _ns, _filas
-    _ns = {"__name__": "estrategia_usuario"}
-    exec(compile(codigo, "estrategia.py", "exec"), _ns)
-    if "estrategia" not in _ns or not callable(_ns["estrategia"]):
-        raise ValueError("Falta la función estrategia(filas, p)")
-    _filas = json.loads(filas_json)
-    params = _ns.get("PARAMETROS", {}) or {}
-    if not isinstance(params, dict):
-        raise ValueError("PARAMETROS debe ser un diccionario {nombre: [valores]}")
-    claves = list(params.keys())
-    valores = [v if isinstance(v, (list, tuple)) else [v] for v in params.values()]
-    combos = [dict(zip(claves, c)) for c in itertools.product(*valores)] if claves else [{}]
-    return json.dumps({"combos": combos, "gestion": _ns.get("GESTION")})
-
-def _athenai_correr_filas(p_json, filas_json):
-    filas = json.loads(filas_json)
-    pos = list(_ns["estrategia"]([dict(f) for f in filas], dict(json.loads(p_json))))
-    if len(pos) != len(filas):
-        raise ValueError(f"estrategia() devolvió {len(pos)} posiciones para {len(filas)} filas")
-    return json.dumps([float(x) if isinstance(x, (int, float, bool)) else 0 for x in pos])
-
-def _athenai_correr(p_json, hasta):
-    p = json.loads(p_json)
-    filas = _filas if hasta < 0 else _filas[:hasta]
-    pos = _ns["estrategia"]([dict(f) for f in filas], dict(p))
-    if pos is None:
-        raise ValueError("estrategia() no devolvió nada: debe devolver una lista de posiciones")
-    pos = list(pos)
-    if len(pos) != len(filas):
-        raise ValueError(f"estrategia() devolvió {len(pos)} posiciones para {len(filas)} filas")
-    return json.dumps([float(x) if isinstance(x, (int, float, bool)) else 0 for x in pos])
-`;
 
 export interface ResultadoEjecucion {
   combos: Combo[];
@@ -95,11 +74,13 @@ export function mensajeError(e: unknown): string {
   return (propias.length ? propias : lineas.slice(-3)).join('\n').trim();
 }
 
-export function ejecutarEstrategia(py: PyodideMinimo, codigo: string, filas: readonly FilaFeatures[], aviso?: (texto: string) => void): ResultadoEjecucion {
+/** `antiFuturo: false` solo para la señal en vivo de un bot: su código ya pasó esa prueba en el Juez. */
+export function ejecutarEstrategia(py: PyodideMinimo, codigo: string, filas: readonly FilaFeatures[], aviso?: (texto: string) => void, o: { antiFuturo?: boolean } = {}): ResultadoEjecucion {
   py.runPython(ARNES);
   py.globals.set('_athenai_codigo', codigo);
   py.globals.set('_athenai_filas', JSON.stringify(filasParaPython(filas)));
-  const cargado = JSON.parse(String(py.runPython('_athenai_cargar(_athenai_codigo, _athenai_filas)'))) as { combos: Combo[]; gestion: unknown };
+  const cargado = JSON.parse(String(py.runPython('_athenai_cargar(_athenai_codigo, _athenai_filas)'))) as { combos: Combo[]; gestion: unknown; forma: string };
+  aviso?.(`El motor reconoció tu código como: ${FORMAS[cargado.forma] ?? cargado.forma}.`);
   const { combos } = cargado;
   const gestion = leerGestion(cargado.gestion);
   if (combos.length > MAX_COMBOS) throw new Error(`PARAMETROS genera ${combos.length} combinaciones; el máximo es ${MAX_COMBOS} (más variantes = más riesgo de sobreajuste)`);
@@ -112,6 +93,7 @@ export function ejecutarEstrategia(py: PyodideMinimo, codigo: string, filas: rea
     return normalizarPosiciones(correr(c), filas.length);
   });
 
+  if (o.antiFuturo === false) return { combos, gestion, posiciones, antiFuturo: { ok: true, detalle: 'ya probado en el Juez', estatico: { violaciones: [], alertas: [] }, dinamico: { cortes: 0, recorte: true, alteracion: true, fila: null, prueba: null } } };
   // Motor 9 · Anti-futuro: análisis del código y prueba de causalidad (recorte y alteración en 8 cortes).
   aviso?.('Anti-futuro: revisando el código y probando con datos recortados y alterados…');
   const estatico = analizarCodigo(codigo);

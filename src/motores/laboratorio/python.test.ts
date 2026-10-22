@@ -84,8 +84,8 @@ def estrategia(filas, p):
   });
 
   it('explica los errores del código', () => {
-    expect(() => ejecutarEstrategia(py, 'x = 1', filas)).toThrow(/Falta la función estrategia/);
-    expect(() => ejecutarEstrategia(py, 'def estrategia(filas, p):\n    return [1]', filas)).toThrow(/devolvió 1 posiciones para 200 filas/);
+    expect(() => ejecutarEstrategia(py, 'x = 1', filas)).toThrow(/No encontré tus señales/);
+    expect(() => ejecutarEstrategia(py, 'def estrategia(filas, p):\n    return [1]', filas)).toThrow(/devolvió 1 señales para 200 velas/);
     expect(() => ejecutarEstrategia(py, 'def estrategia(filas, p):\n    return [f["no_existe"] for f in filas]', filas)).toThrow(/KeyError/);
   });
 

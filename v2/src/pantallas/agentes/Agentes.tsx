@@ -82,7 +82,7 @@ export default function Agentes() {
           <Sala seleccion={sel} onSeleccion={elegir} estados={estados} activos={activos} muro={muroDe(v, sala, velas)} />
         </Suspense>
       </section>
-      {sel && <DetalleAgente ficha={ficha(sel)} notas={sala.notas.filter((n) => n.id === sel)} />}
+      {sel && <DetalleAgente ficha={ficha(sel)} notas={sala.notas.filter((n) => n.id === sel)} cerrar={() => setSel(null)} />}
       <div className="fichas-ag">
         {sala.agentes.map((x) => (
           <button key={x.id} className={`caja ficha-ag ${sel === x.id ? 'sel' : ''} ${x.estado}`} style={{ ['--c' as string]: color(x.id) }} onClick={() => elegir(x.id)}>
