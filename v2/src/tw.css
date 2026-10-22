@@ -1,0 +1,5 @@
+/* Solo las utilidades de Tailwind (sin su reinicio): las usan las vistas del Juez de la plataforma vieja. */
+@tailwind utilities;
+.etiqueta { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: .16em; color: #8e929a; }
+/* El reinicio de bordes de Tailwind, solo dentro de las vistas reutilizadas (la v2 no carga su reinicio global). */
+:where(.vista-v1) *, :where(.vista-v1) ::before, :where(.vista-v1) ::after { border-width: 0; border-style: solid; }

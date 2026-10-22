@@ -1,18 +1,33 @@
 // Resultado del Juez (v2): veredicto, puntuación y cada prueba en su pestaña. Nada se pierde de la versión anterior:
 // puertas, métricas fuera de muestra, Walk-Forward, Monte Carlo, Luck test, robustez, DSR/PBO, anti-futuro y operaciones.
 import { useMemo, useState, type ReactNode } from 'react';
-import type { AlignedData } from 'uplot';
 import Pildora from '@/components/ui/Pildora';
 import type { Trabajo } from '@/motores/laboratorio/prueba';
+import { horasJuez, type RespuestaLaboratorio } from '@/motores/laboratorio/protocolo';
 import type { OperacionGestionada } from '@/motores/juez/salidas';
-import { Anillo, BarrasWf, Curvas, Histograma } from './Graficos';
+// Las vistas animadas del Juez de la primera plataforma, sin cambios: mismo código, mismo aspecto.
+import CurvaEquityJuez from '@/components/laboratorio/vista/CurvaEquityJuez';
+import WalkForwardJuez from '@/components/laboratorio/vista/WalkForwardJuez';
+import MonteCarloJuez from '@/components/laboratorio/vista/MonteCarloJuez';
+import LuckTestJuez from '@/components/laboratorio/vista/LuckTestJuez';
 
 const PESTANAS = ['Resumen', 'Walk-Forward', 'Monte Carlo', 'Suerte', 'Robustez', 'Sobreajuste', 'Operaciones'] as const;
 const pct = (v: number | null | undefined, d = 1) => (v === null || v === undefined || !Number.isFinite(v) ? '—' : `${(v * 100).toLocaleString('es-ES', { maximumFractionDigits: d })} %`);
 const num = (v: number | null | undefined, d = 2) => (v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toLocaleString('es-ES', { maximumFractionDigits: d }));
 const fecha = (t: number) => new Date(t).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-/** Como mucho `n` puntos para dibujar (el detalle sobra en pantalla). */
-const reducir = <T,>(xs: T[], n = 2_000) => (xs.length <= n ? xs : xs.filter((_, i) => i % Math.ceil(xs.length / n) === 0));
+
+/** Anillo de puntuación 0–100. */
+function Anillo({ valor }: { valor: number | null }) {
+  const largo = 2 * Math.PI * 44;
+  return (
+    <svg viewBox="0 0 110 110" className="anillo">
+      <circle cx="55" cy="55" r="44" className="fondo" />
+      <circle cx="55" cy="55" r="44" className="lleno" strokeDasharray={largo} strokeDashoffset={largo * (1 - (valor ?? 0) / 100)} />
+      <text x="55" y="54" className="cifra">{valor === null ? '—' : Math.round(valor)}</text>
+      <text x="55" y="72" className="sub">de 100</text>
+    </svg>
+  );
+}
 
 const Dato = ({ k, v, sub }: { k: string; v: ReactNode; sub?: string }) => (
   <div className="dato"><span className="et">{k}</span><b className="cifra">{v}</b>{sub && <small>{sub}</small>}</div>
@@ -23,23 +38,16 @@ export default function Resultado({ t }: { t: Trabajo }) {
   const r = t.resultado!;
   const j = r.juez;
   const oos = j.oos;
-  const equity = useMemo((): AlignedData => {
-    const tiempos = r.tiempos.slice(j.inicioOos);
-    const eq = j.equityOos.length === r.tiempos.length ? j.equityOos.slice(j.inicioOos) : j.equityOos;
-    const idx = reducir(tiempos.map((_, i) => i));
-    return [idx.map((i) => tiempos[i] / 1000), idx.map((i) => eq[i] ?? 1)];
-  }, [r, j]);
-  const mc = useMemo((): AlignedData | null => {
-    if (!j.monteCarlo) return null;
-    const { bandas, caminos } = j.monteCarlo;
-    const base = bandas.p50[0] || 1;
-    return [bandas.p50.map((_, i) => i), ...caminos.map((c) => c.map((v) => v / base)), bandas.p5.map((v) => v / base), bandas.p50.map((v) => v / base), bandas.p95.map((v) => v / base)];
-  }, [j]);
+  // Lo que las vistas de la primera plataforma leen (los costos no los usan).
+  const resp = useMemo(
+    () => ({ resultado: j, combos: r.combos, filas: r.velas.total, desde: r.velas.desde, hasta: r.velas.hasta, ...horasJuez(j, r.tiempos) }) as unknown as RespuestaLaboratorio,
+    [r, j],
+  );
 
   return (
     <section className="resultado">
       <div className="veredicto caja">
-        <Anillo valor={j.score?.total ?? null} texto="de 100" />
+        <Anillo valor={j.score?.total ?? null} />
         <div className="texto">
           <span className="et">Veredicto del Juez · {j.mercado} · velas de {r.velas.serie}</span>
           <h2 className={j.veredicto.startsWith('APROBADA') ? 'si' : ''}>{j.veredicto}</h2>
@@ -63,7 +71,7 @@ export default function Resultado({ t }: { t: Trabajo }) {
         ))}
       </div>
 
-      <div className="caja hoja-lab" key={pestana}>
+      <div className="caja hoja-lab vista-v1" key={pestana}>
         {pestana === 'Resumen' && (
           <>
             <div className="puertas">
@@ -83,47 +91,12 @@ export default function Resultado({ t }: { t: Trabajo }) {
               <Dato k="Por operación" v={pct(oos.retornoMedioOperacion, 2)} />
               <Dato k="Exposición" v={pct(oos.exposicion, 0)} />
             </div>
-            <span className="et">Capital fuera de muestra (lo que cuenta)</span>
-            <Curvas datos={equity} series={[{}, { stroke: '#fff', width: 1.5, fill: 'rgba(255,255,255,.05)' }]} />
+            <CurvaEquityJuez r={resp} />
           </>
         )}
-        {pestana === 'Walk-Forward' && (
-          <>
-            <div className="datos">
-              <Dato k="Eficiencia (WFE)" v={pct(j.wfo.wfe, 0)} sub={j.wfo.clase ?? ''} />
-              <Dato k="Ventanas" v={j.tramos.length} />
-              <Dato k="Entrena / prueba" v={`${j.wfo.lIs} / ${j.wfo.lOos}`} sub="velas" />
-              <Dato k="Embargo" v={j.wfo.embargo} sub="velas" />
-            </div>
-            <span className="et">Rendimiento anual fuera de muestra de cada ventana</span>
-            <BarrasWf valores={j.tramos.map((x) => x.anualOos)} />
-          </>
-        )}
-        {pestana === 'Monte Carlo' &&
-          (j.monteCarlo && mc ? (
-            <>
-              <div className="datos">
-                <Dato k="Retorno P5 · P50 · P95" v={`${pct(j.monteCarlo.p5, 0)} · ${pct(j.monteCarlo.p50, 0)} · ${pct(j.monteCarlo.p95, 0)}`} />
-                <Dato k="Caída P95" v={pct(j.monteCarlo.ddP95)} sub={`la real fue ${pct(j.monteCarlo.ddOriginal)}`} />
-                <Dato k="Prob. de ruina" v={pct(j.monteCarlo.probRuina)} sub={`caer ${pct(j.monteCarlo.umbralRuina, 0)}`} />
-                <Dato k="Simulaciones" v={num(j.monteCarlo.simulaciones, 0)} />
-              </div>
-              <span className="et">{j.monteCarlo.caminos.length} futuros posibles barajando tus operaciones · bandas P5 / P50 / P95</span>
-              <Curvas x="paso" datos={mc} series={[{}, ...j.monteCarlo.caminos.map(() => ({ stroke: 'rgba(255,255,255,.08)', width: 1 })), { stroke: '#8e929a', width: 1, dash: [4, 4] }, { stroke: '#fff', width: 2 }, { stroke: '#8e929a', width: 1, dash: [4, 4] }]} />
-            </>
-          ) : <p className="vacio">Pocas operaciones para el Monte Carlo.</p>)}
-        {pestana === 'Suerte' &&
-          (j.suerte ? (
-            <>
-              <div className="datos">
-                <Dato k="p (suerte)" v={num(j.suerte.p, 3)} sub={j.suerte.p < 0.05 ? 'no parece suerte' : 'puede ser suerte'} />
-                <Dato k="Escenarios mejores" v={`${j.suerte.superiores} / ${j.suerte.permutaciones}`} />
-                <Dato k="Métrica" v={j.suerte.metrica} />
-              </div>
-              <span className="et">Tu estrategia contra el mismo mercado barajado al azar</span>
-              <Histograma muestra={j.suerte.simulaciones} real={j.suerte.real} />
-            </>
-          ) : <p className="vacio">Pocas operaciones para el Luck test.</p>)}
+        {pestana === 'Walk-Forward' && <WalkForwardJuez r={resp} />}
+        {pestana === 'Monte Carlo' && <MonteCarloJuez r={resp} />}
+        {pestana === 'Suerte' && <LuckTestJuez r={resp} />}
         {pestana === 'Robustez' && (
           <div className="datos">
             <Dato k="Estado" v={j.robustez.estado} sub={`${j.robustez.fallas} fallas`} />

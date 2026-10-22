@@ -7,6 +7,7 @@ import { useVps } from '../../vps';
 import { cancelar, probar, trabajo } from './api';
 import { PLANTILLAS } from './plantillas';
 import Resultado from './Resultado';
+import '../../tw.css';
 import './lab.css';
 
 // CodeMirror y uPlot se bajan solo al abrir el Laboratorio.

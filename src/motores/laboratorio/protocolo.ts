@@ -94,3 +94,12 @@ export interface PeticionEtiquetar {
 }
 
 export type MensajeEtiquetas = { tipo: 'etiquetas'; id: number; resultado: ResultadoEtiquetador | null; csv: string; error?: string };
+
+/** Horas de las ventanas del Walk-Forward y de las operaciones, a partir del cierre (ms) de cada barra juzgada. */
+export function horasJuez(resultado: ResultadoJuez, cierres: readonly number[]): Pick<RespuestaLaboratorio, 'ventanasT' | 'operaciones'> {
+  const hora = (i: number) => cierres[Math.max(0, Math.min(cierres.length - 1, i))];
+  return {
+    ventanasT: resultado.tramos.map((t) => ({ isDesdeT: hora(t.isDesde), isHastaT: hora(t.isHasta - 1), oosDesdeT: hora(t.oosDesde), oosHastaT: hora(t.oosHasta - 1) })),
+    operaciones: resultado.operacionesOos.map((o) => ({ entradaT: hora(o.entrada), salidaT: hora(o.salida), lado: o.lado, retorno: o.retorno, barras: o.barras })),
+  };
+}

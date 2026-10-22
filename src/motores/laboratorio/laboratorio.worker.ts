@@ -5,6 +5,7 @@ import { AlmacenFeatures, type FilaGuardada } from '../almacen/almacen';
 import { juzgar } from '../juez/juez';
 import { ejecutarEstrategia, mensajeError, type PyodideMinimo } from './python';
 import type { MensajeEtiquetas, MensajeLaboratorio, MensajeSenales, PeticionEtiquetar, PeticionLaboratorio, PeticionSenales, SenalEstrategia } from './protocolo';
+import { horasJuez } from './protocolo';
 import { datasetCsv, etiquetar } from '../etiquetador/etiquetador';
 import { mercadoId } from '../mercado/mercadoId';
 import { huecosDe } from './entradaJuez';
@@ -125,11 +126,7 @@ ctx.onmessage = async (e) => {
         resultado,
         costos: p.costos,
         fundingIncluido,
-        ventanasT: resultado.tramos.map((t) => {
-          const hora = (i: number) => filas[Math.max(0, Math.min(filas.length - 1, i))].cierre;
-          return { isDesdeT: hora(t.isDesde), isHastaT: hora(t.isHasta - 1), oosDesdeT: hora(t.oosDesde), oosHastaT: hora(t.oosHasta - 1) };
-        }),
-        operaciones: resultado.operacionesOos.map((o) => ({ entradaT: filas[o.entrada].cierre, salidaT: filas[o.salida].cierre, lado: o.lado, retorno: o.retorno, barras: o.barras })),
+        ...horasJuez(resultado, filas.map((f) => f.cierre)),
         combos: ejec.combos, filas: filas.length, desde: filas[0].cierre, hasta: filas[filas.length - 1].cierre, inicioOosT: filas[resultado.inicioOos]?.cierre ?? 0, segundos: (performance.now() - t0) / 1000 },
     });
   } catch (err) {
