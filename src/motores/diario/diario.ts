@@ -55,20 +55,6 @@ export interface FichaOperacion {
   explicacion?: string;
 }
 
-export type TipoEvento = 'juez' | 'bot' | 'guardian' | 'datos' | 'manual' | 'aviso';
-
-/** Bitácora: todo lo que se decide o pasa, en un solo lugar (Decisiones y el Sintetizador la leen). */
-export interface EventoBitacora {
-  id: string;
-  t: number;
-  tipo: TipoEvento;
-  mercado?: MercadoId;
-  titulo: string;
-  detalle: string;
-  /** Referencia (id de ficha, paper o bot). */
-  ref?: string;
-}
-
 export const pnlNeto = (f: FichaOperacion) => f.pnlPrecio - f.comisiones - f.funding;
 export const resultadoR = (f: FichaOperacion) => (f.riesgoUsd > 0 ? f.pnlPrecio / f.riesgoUsd : null);
 export const resultadoPct = (f: FichaOperacion) => (f.capitalEntrada > 0 ? pnlNeto(f) / f.capitalEntrada : null);

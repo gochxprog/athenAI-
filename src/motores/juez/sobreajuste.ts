@@ -152,7 +152,8 @@ export function pboCscv(retornos: readonly (readonly number[])[], bloques = BLOQ
     const oos = total.map((t, v) => t - is[v]);
     const rango = oos.filter((x) => x < oos[mejor]).length + 1;
     const w = rango / (nv + 1);
-    if (w < 0.5) malas += 1;
+    // PBO = P(λ ≤ 0): la mejor dentro de muestra cae en la mitad de abajo (o justo en la mediana) fuera de muestra.
+    if (w <= 0.5) malas += 1;
     if (ci % paso === 0) lambdas.push(Math.log(w / (1 - w)));
   });
   return { pbo: malas / combos.length, bloques, combinaciones: combos.length, malas, lambdas, variantes: nv };

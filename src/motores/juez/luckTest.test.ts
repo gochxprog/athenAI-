@@ -100,3 +100,4 @@ describe('Motor 5 · Luck test', () => {
     expect(aprobadas / 20).toBeLessThanOrEqual(0.2);
   });
 });
+

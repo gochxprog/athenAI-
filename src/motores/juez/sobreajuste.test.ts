@@ -68,7 +68,7 @@ describe('Motor 8 · PBO (CSCV)', () => {
       const mejor = is.indexOf(Math.max(...is));
       const oos = vs.map((v) => acum(v, fuera));
       const w = (oos.filter((x) => x < oos[mejor]).length + 1) / (vs.length + 1);
-      if (w < 0.5) malas += 1;
+      if (w <= 0.5) malas += 1;
     }
     expect(rapido.pbo).toBeCloseTo(malas / 6, 12);
     expect(rapido.malas).toBe(malas);

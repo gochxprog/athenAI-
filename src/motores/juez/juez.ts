@@ -1,7 +1,7 @@
 // El Juez: decide si una estrategia sirve, con pruebas que castigan la suerte y el sobreajuste.
 //
-//   1. Walk-Forward purgado con embargo: el 30 % inicial solo sirve para elegir parámetros; el 70 % restante se
-//      reparte en 5 tramos. En cada tramo se eligen los parámetros con lo ANTERIOR (dejando 20 barras de
+//   1. Walk-Forward purgado con embargo: las primeras 4/9 partes solo sirven para elegir parámetros; las 5/9
+//      restantes se reparten en 5 tramos. En cada tramo se eligen los parámetros con lo ANTERIOR (dejando 20 barras de
 //      embargo) y se prueba en el tramo, que nunca se vio. Todas las métricas finales son de esos tramos.
 //   2. Monte Carlo: remuestrea las operaciones fuera de muestra 2.000 veces → peor escenario razonable.
 //   3. Luck test: 1.000 versiones de la misma estrategia desplazada al azar en el tiempo (misma exposición,
@@ -121,6 +121,9 @@ const dec = (v: number, d: number) => v.toLocaleString('es-ES', { minimumFractio
 
 export function juzgar(e: EntradaJuez): ResultadoJuez {
   const n = e.cierres.length;
+  if (!e.posiciones.length) throw new Error('La estrategia no devolvió ninguna variante para juzgar.');
+  const roto = e.cierres.findIndex((c) => !(c > 0) || !Number.isFinite(c));
+  if (roto >= 0) throw new Error(`La vela ${roto} tiene un precio no válido (${e.cierres[roto]}): el Juez no juzga con datos rotos.`);
   const costos = e.costos ?? COSTOS_POR_DEFECTO;
   // Regla de huecos (motor Backtest): sin posición en la barra anterior a un corte de datos.
   const posiciones = e.posiciones.map((p) => aplicarHuecos(p, e.huecos));

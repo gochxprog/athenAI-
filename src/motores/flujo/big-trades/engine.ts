@@ -77,8 +77,6 @@ export interface BigTradeEvent {
 }
 
 /** Evento + metadatos de transporte/persistencia (no forman parte del esquema estricto). */
-export type BigTradeRecord = BigTradeEvent & { id: number };
-
 // ───────────────────────────── Defaults ─────────────────────────────
 
 /** Umbrales nocionales por defecto (USD) según el instrumento del catálogo. */

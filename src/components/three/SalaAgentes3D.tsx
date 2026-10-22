@@ -168,6 +168,8 @@ function AccesorioCabeza({ tipo, vivo }: { tipo: Accesorio; vivo: boolean }) {
   }
 }
 
+/** Celular o pantalla táctil: sin suavizado y a resolución normal. */
+const MOVIL = typeof window !== 'undefined' && window.matchMedia('(max-width: 760px), (pointer: coarse)').matches;
 const GRIS_OSCURO = '#1a1b1e';
 const GRIS = '#2c2e33';
 
@@ -270,9 +272,9 @@ function Monitor({ id, color, activo, apagado }: { id: AgenteId; color: string; 
   useEffect(() => () => textura.dispose(), [textura]);
   const ultimo = useRef(-1);
   useFrame(({ clock }) => {
-    // Sin motor: un solo cuadro quieto. Con motor: ~5 cuadros por segundo (más rápido si está seleccionado).
+    // Sin motor: un solo cuadro quieto. Con motor: ~2 cuadros por segundo (más rápido si está seleccionado).
     const t = apagado ? 0 : clock.elapsedTime * (activo ? 1.6 : 1);
-    if (apagado ? ultimo.current === 0 : clock.elapsedTime - ultimo.current < 0.2) return;
+    if (apagado ? ultimo.current === 0 : clock.elapsedTime - ultimo.current < 0.5) return;
     ultimo.current = apagado ? 0 : clock.elapsedTime;
     const g = lienzo.getContext('2d');
     if (!g) return;
@@ -421,7 +423,7 @@ function Puesto({ id, seleccionado, onSeleccion, estado, vivo }: { id: AgenteId;
         <button
           type="button"
           onClick={() => onSeleccion(id)}
-          className={`block cursor-pointer whitespace-nowrap rounded-md border text-center ${compacto ? 'px-1.5 py-1' : 'px-2.5 py-1.5'} backdrop-blur transition-colors ${seleccionado ? 'border-white bg-white text-black' : vivo ? 'border-borde bg-black/70 text-white hover:border-plata-300' : 'border-borde-suave bg-black/60 text-plata-400 hover:border-plata-500'}`}
+          className={`block cursor-pointer whitespace-nowrap rounded-md border text-center ${compacto ? 'px-1.5 py-1' : 'px-2.5 py-1.5'} transition-colors ${seleccionado ? 'border-white bg-white text-black' : vivo ? 'border-borde bg-black/70 text-white hover:border-plata-300' : 'border-borde-suave bg-black/60 text-plata-400 hover:border-plata-500'}`}
         >
           <p className={`${compacto ? 'text-[9px]' : 'text-[11px]'} flex items-center justify-center gap-1.5 font-medium leading-none`}>
             <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: estilo.color, opacity: vivo ? 1 : 0.45 }} />
@@ -469,8 +471,17 @@ function AjusteCamara() {
 
 export default function SalaAgentes3D({ seleccion, onSeleccion, estados, muro, activos }: Props) {
   const vivo = (a: (typeof AGENTES)[number]) => activos?.[a.id] ?? a.real;
+  // Fuera de la vista (scroll u otra pestaña), la sala no se dibuja: cero GPU.
+  const [lienzo, setLienzo] = useState<HTMLCanvasElement | null>(null);
+  const [enVista, setEnVista] = useState(true);
+  useEffect(() => {
+    if (!lienzo) return;
+    const o = new IntersectionObserver(([e]) => setEnVista(e.isIntersecting));
+    o.observe(lienzo);
+    return () => o.disconnect();
+  }, [lienzo]);
   return (
-    <Canvas camera={{ position: [0, 8.5, 10.5], fov: 46 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }}>
+    <Canvas frameloop={enVista ? 'always' : 'never'} onCreated={({ gl }) => setLienzo(gl.domElement)} camera={{ position: [0, 8.5, 10.5], fov: 46 }} dpr={[1, MOVIL ? 1 : 1.5]} gl={{ antialias: !MOVIL, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }}>
       <AjusteCamara />
       <fog attach="fog" args={['#000000', 18, 40]} />
       <ambientLight intensity={0.3} />

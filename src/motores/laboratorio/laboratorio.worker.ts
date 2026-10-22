@@ -8,7 +8,8 @@ import type { MensajeEtiquetas, MensajeLaboratorio, MensajeSenales, PeticionEtiq
 import { horasJuez } from './protocolo';
 import { datasetCsv, etiquetar } from '../etiquetador/etiquetador';
 import { mercadoId } from '../mercado/mercadoId';
-import { huecosDe } from './entradaJuez';
+import { entradaJuez, huecosDe } from './entradaJuez';
+import { armarVelas } from './velas';
 
 const ctx = self as unknown as { postMessage: (m: MensajeLaboratorio | MensajeSenales | MensajeEtiquetas) => void; onmessage: ((e: MessageEvent<PeticionLaboratorio | PeticionSenales | PeticionEtiquetar>) => void) | null };
 
@@ -96,25 +97,11 @@ ctx.onmessage = async (e) => {
     } catch (err) {
       throw new Error(`Error en tu código:\n${mensajeError(err)}`);
     }
-    // Funding grabado por la fuente (perpetuos de Binance). Datos antiguos no lo tienen: se avisa en pantalla.
-    const funding = filas.map((f) => f.valores.funding_tasa ?? null);
-    const fundingIncluido = funding.some((x) => x !== null);
     progreso('El Juez está probando: Walk-Forward, Monte Carlo, Luck test, robustez…');
-    const entrada = {
-      mercado: mercadoId(p.proveedor, p.simbolo),
-      cierres: filas.map((f) => f.close),
-      tiempos: filas.map((f) => f.cierre),
-      huecos: huecosDe(filas),
-      funding: fundingIncluido ? funding : undefined,
-      wfo: p.wfo,
-      monteCarlo: p.monteCarlo,
-      luck: p.luck,
-      combos: ejec.combos,
-      posiciones: ejec.posiciones,
-      costos: p.costos,
-      ensayos: p.ensayosPrevios + ejec.combos.length,
-      antiFuturo: ejec.antiFuturo,
-    };
+    // La misma entrada que en el VPS (entradaJuez): con GESTION, el Juez prueba los stops y objetivos que opera Paper.
+    const entrada = entradaJuez(armarVelas(filas, 'dollar'), mercadoId(p.proveedor, p.simbolo), ejec, { wfo: p.wfo, monteCarlo: p.monteCarlo, luck: p.luck, costos: p.costos, ensayos: p.ensayosPrevios + ejec.combos.length });
+    // Funding grabado por la fuente (perpetuos de Binance). Datos antiguos no lo tienen: se avisa en pantalla.
+    const fundingIncluido = entrada.funding !== undefined;
     // Un mercado, un juicio: el Juez solo ve las filas de este market_id.
     const resultado = juzgar(entrada);
     ctx.postMessage({

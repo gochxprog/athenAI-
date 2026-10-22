@@ -100,8 +100,10 @@ export function backtest(cierres: readonly number[], posiciones: readonly number
       // (8) Funding cobrado mientras la posición estuvo abierta (tasa conocida al cierre de i−1).
       const tasa = funding?.tasas[i - 1];
       const ff = funding && tasa !== null && tasa !== undefined ? factorFunding(previa, tasa, cobrosFunding(funding.tiempos[i - 1], funding.tiempos[i])) : 1;
-      factor *= (1 + rp) * ff;
-      abierta.factor *= (1 + rp) * ff;
+      // Un movimiento en contra de más del 100 % (corto que se triplica) liquida la cuenta: el capital no baja de 0.
+      const bruto = Math.max(0, 1 + rp) * ff;
+      factor *= bruto;
+      abierta.factor *= bruto;
     }
     // (2) Decisión al cierre de i y su costo.
     const p = posicionEn(posiciones, huecos, i, hasta);

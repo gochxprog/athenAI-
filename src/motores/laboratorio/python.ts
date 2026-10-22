@@ -74,54 +74,58 @@ export function mensajeError(e: unknown): string {
   return (propias.length ? propias : lineas.slice(-3)).join('\n').trim();
 }
 
-/** `antiFuturo: false` solo para la señal en vivo de un bot: su código ya pasó esa prueba en el Juez. */
+/** Cortes del anti-futuro para la variante k: la primera con todos, las demás con 4 repartidos. */
+const cortesDe = (k: number) => (k === 0 ? CORTES_ANTIFUTURO : CORTES_ANTIFUTURO.filter((_, i) => i % 3 === 1));
+
+/**
+ * Corre la estrategia (todas sus variantes) y la prueba anti-futuro. Orden a propósito: PRIMERO los recortes y las
+ * alteraciones (de menor a mayor corte) y AL FINAL las corridas completas, cada una en un Python limpio: ninguna
+ * corrida de prueba puede haber visto datos posteriores a su corte. `antiFuturo: false` solo para la señal en vivo
+ * de un bot (su código ya pasó esta prueba en el Juez).
+ */
 export function ejecutarEstrategia(py: PyodideMinimo, codigo: string, filas: readonly FilaFeatures[], aviso?: (texto: string) => void, o: { antiFuturo?: boolean } = {}): ResultadoEjecucion {
+  const n = filas.length;
+  const prueba = o.antiFuturo !== false;
   py.runPython(ARNES);
   py.globals.set('_athenai_codigo', codigo);
   py.globals.set('_athenai_filas', JSON.stringify(filasParaPython(filas)));
-  const cargado = JSON.parse(String(py.runPython('_athenai_cargar(_athenai_codigo, _athenai_filas)'))) as { combos: Combo[]; gestion: unknown; forma: string };
+  const nCarga = prueba ? Math.max(1, Math.floor(n * CORTES_ANTIFUTURO[0]) - 1) : n;
+  const cargado = JSON.parse(String(py.runPython(`_athenai_cargar(_athenai_codigo, _athenai_filas, ${nCarga})`))) as { combos: Combo[]; gestion: unknown; forma: string };
   aviso?.(`El motor reconoció tu código como: ${FORMAS[cargado.forma] ?? cargado.forma}.`);
   const { combos } = cargado;
   const gestion = leerGestion(cargado.gestion);
   if (combos.length > MAX_COMBOS) throw new Error(`PARAMETROS genera ${combos.length} combinaciones; el máximo es ${MAX_COMBOS} (más variantes = más riesgo de sobreajuste)`);
-  const correr = (p: Combo, hasta = -1) => {
+  const correr = (p: Combo, hasta: number, alterada?: readonly FilaFeatures[]) => {
     py.globals.set('_athenai_p', JSON.stringify(p));
-    return JSON.parse(String(py.runPython(`_athenai_correr(_athenai_p, ${hasta})`))) as unknown[];
+    if (alterada) py.globals.set('_athenai_alt', JSON.stringify(filasParaPython(alterada)));
+    const r = alterada ? py.runPython('_athenai_correr_filas(_athenai_p, _athenai_alt)') : py.runPython(`_athenai_correr(_athenai_p, ${hasta})`);
+    return normalizarPosiciones(JSON.parse(String(r)) as unknown[], hasta < 0 ? n : hasta);
   };
-  const posiciones = combos.map((c, i) => {
-    aviso?.(`Ejecutando variante ${i + 1}/${combos.length} ${JSON.stringify(c)}`);
-    return normalizarPosiciones(correr(c), filas.length);
-  });
 
-  if (o.antiFuturo === false) return { combos, gestion, posiciones, antiFuturo: { ok: true, detalle: 'ya probado en el Juez', estatico: { violaciones: [], alertas: [] }, dinamico: { cortes: 0, recorte: true, alteracion: true, fila: null, prueba: null } } };
-  // Motor 9 · Anti-futuro: análisis del código y prueba de causalidad (recorte y alteración en 8 cortes).
-  aviso?.('Anti-futuro: revisando el código y probando con datos recortados y alterados…');
-  const estatico = analizarCodigo(codigo);
-  let dinamico: ResultadoAntiFuturo['dinamico'] = { cortes: CORTES_ANTIFUTURO.length, recorte: true, alteracion: true, fila: null, prueba: null };
-  for (const frac of CORTES_ANTIFUTURO) {
-    const hasta = Math.floor(filas.length * frac);
-    if (hasta < 10) continue;
-    const recortada = normalizarPosiciones(correr(combos[0], hasta), hasta);
-    let d = primeraDiferencia(recortada, posiciones[0], hasta);
-    if (d >= 0) {
-      dinamico = { ...dinamico, recorte: false, fila: d, prueba: 'recorte' };
-      break;
-    }
-    py.globals.set('_athenai_p', JSON.stringify(combos[0]));
-    py.globals.set('_athenai_alt', JSON.stringify(filasParaPython(alterarDesde(filas, hasta, 1_000 + hasta))));
-    const alterada = normalizarPosiciones(JSON.parse(String(py.runPython('_athenai_correr_filas(_athenai_p, _athenai_alt)'))) as unknown[], filas.length);
-    d = primeraDiferencia(alterada, posiciones[0], hasta);
-    if (d >= 0) {
-      dinamico = { ...dinamico, alteracion: false, fila: d, prueba: 'alteración' };
-      break;
+  // Motor 9 · Anti-futuro: recorte y alteración en cada corte, para TODAS las variantes, antes de la corrida completa.
+  const pruebas: { k: number; hasta: number; tipo: 'recorte' | 'alteración'; pos: number[] }[] = [];
+  if (prueba) {
+    aviso?.('Anti-futuro: probando cada variante con datos recortados y alterados…');
+    const cortes = [...new Set(combos.flatMap((_, k) => cortesDe(k)))].sort((a, b) => a - b);
+    for (const frac of cortes) {
+      const hasta = Math.floor(n * frac);
+      if (hasta < 10) continue;
+      combos.forEach((c, k) => {
+        if (!cortesDe(k).includes(frac)) return;
+        pruebas.push({ k, hasta, tipo: 'recorte', pos: correr(c, hasta) });
+        pruebas.push({ k, hasta, tipo: 'alteración', pos: correr(c, n, alterarDesde(filas, hasta, 1_000 + hasta)).slice(0, hasta) });
+      });
     }
   }
-  const ok = !estatico.violaciones.length && dinamico.recorte && dinamico.alteracion;
-  const detalle = estatico.violaciones.length
-    ? `el código lee datos del futuro: ${estatico.violaciones[0]}`
-    : dinamico.prueba
-      ? `la posición de la fila ${dinamico.fila} cambia al ${dinamico.prueba === 'recorte' ? 'quitar' : 'alterar'} filas posteriores`
-      : `posiciones idénticas con los datos recortados y alterados en ${CORTES_ANTIFUTURO.length} puntos`;
-  const antiFuturo: ResultadoAntiFuturo = { ok, detalle, estatico, dinamico };
-  return { combos, gestion, posiciones, antiFuturo };
+  const posiciones = combos.map((c, i) => {
+    aviso?.(`Ejecutando variante ${i + 1}/${combos.length} ${JSON.stringify(c)}`);
+    return correr(c, -1);
+  });
+  const estatico = analizarCodigo(codigo);
+  if (!prueba) return { combos, gestion, posiciones, antiFuturo: { ok: true, detalle: 'ya probado en el Juez', estatico, dinamico: { cortes: 0, recorte: true, alteracion: true, fila: null, prueba: null } } };
+  const falla = pruebas.map((x) => ({ ...x, fila: primeraDiferencia(x.pos, posiciones[x.k], x.hasta) })).find((x) => x.fila >= 0);
+  const dinamico: ResultadoAntiFuturo['dinamico'] = { cortes: CORTES_ANTIFUTURO.length, recorte: falla?.tipo !== 'recorte', alteracion: falla?.tipo !== 'alteración', fila: falla?.fila ?? null, prueba: falla?.tipo ?? null };
+  const variante = falla && combos.length > 1 ? ` (variante ${JSON.stringify(combos[falla.k])})` : '';
+  const detalle = falla ? `la posición de la vela ${falla.fila}${variante} cambia al ${falla.tipo === 'recorte' ? 'quitar' : 'alterar'} velas posteriores` : `posiciones idénticas con los datos recortados y alterados en ${CORTES_ANTIFUTURO.length} puntos, en las ${combos.length} variantes`;
+  return { combos, gestion, posiciones, antiFuturo: { ok: !falla, detalle, estatico, dinamico } };
 }

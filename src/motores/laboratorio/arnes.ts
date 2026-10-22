@@ -223,15 +223,23 @@ def _clase(cls, filas, p):
         out.append(st._pos)
     return out
 
-def _script(filas, p):
-    ns = {"__name__": "estrategia_usuario", "velas": _velas(filas), "p": dict(p), **p}
-    if _PANDAS: ns["df"] = _df(filas)
-    exec(compile(_CODIGO, "estrategia.py", "exec"), ns)
+def _script(ns, filas):
     for k in _SALIDAS:
         if k in ns and ns[k] is not None and not callable(ns[k]): return ns[k]
     df = ns.get("df")
     if df is not None and hasattr(df, "columns"): return df
     raise ValueError("No encontré tus señales: deja el resultado en una variable «senales» (o signals/posiciones), una por vela")
+
+def _espacio(filas, p=None):
+    """Un espacio NUEVO por corrida: el código solo ve las velas de esa corrida (ni la serie completa ni nada de
+    corridas anteriores). Así el anti-futuro no se puede engañar con variables globales o cachés."""
+    Backtest.ultima = None
+    _parchar_cargas(filas)
+    ns = {"__name__": "estrategia_usuario", "velas": _velas(filas)}
+    if p: ns.update({"p": dict(p), **p})
+    if _PANDAS: ns["df"] = _df(filas)
+    exec(compile(_CODIGO, "estrategia.py", "exec"), ns)
+    return ns
 
 def _detectar(ns):
     clases = [v for v in ns.values() if inspect.isclass(v) and issubclass(v, Strategy) and v is not Strategy]
@@ -245,8 +253,10 @@ def _detectar(ns):
     if len(propias) == 1: return ("lista", propias[0])
     return ("script", None)
 
-def _athenai_cargar(codigo, filas_json):
-    global _ns, _filas, _CODIGO, _PANDAS, _forma
+def _athenai_cargar(codigo, filas_json, n_carga):
+    """Lee el código con solo las primeras n_carga velas (menos que el primer corte del anti-futuro): ni al cargar
+    puede guardar el futuro en algún rincón de Python."""
+    global _filas, _CODIGO, _PANDAS
     _CODIGO = codigo
     _filas = json.loads(filas_json)
     _modulos()
@@ -254,21 +264,19 @@ def _athenai_cargar(codigo, filas_json):
     if _PANDAS:
         try: import pandas
         except ImportError: raise ValueError("Tu código usa pandas y no está instalado en el VPS: vuelve a correr instalar.sh")
-    _parchar_cargas(_filas)
-    _ns = {"__name__": "estrategia_usuario", "velas": _velas(_filas)}
-    if _PANDAS: _ns["df"] = _df(_filas)
-    exec(compile(codigo, "estrategia.py", "exec"), _ns)
-    _forma = _detectar(_ns)
-    params = _ns.get("PARAMETROS", _ns.get("PARAMS", {})) or {}
+    ns = _espacio(_filas[:n_carga])
+    forma = _detectar(ns)[0]
+    params = ns.get("PARAMETROS", ns.get("PARAMS", {})) or {}
     if not isinstance(params, dict): raise ValueError("PARAMETROS debe ser un diccionario {nombre: [valores]}")
     claves = list(params.keys())
     valores = [v if isinstance(v, (list, tuple)) else [v] for v in params.values()]
     combos = [dict(zip(claves, c)) for c in itertools.product(*valores)] if claves else [{}]
-    return json.dumps({"combos": combos, "gestion": _ns.get("GESTION"), "forma": _forma[0]})
+    return json.dumps({"combos": combos, "gestion": ns.get("GESTION"), "forma": forma})
 
 def _correr(filas, p):
-    tipo, f = _forma
-    salida = _llamar(f, filas, p) if tipo == "lista" else _por_vela(f, filas, p) if tipo == "vela" else _clase(f, filas, p) if tipo == "clase" else _script(filas, p)
+    ns = _espacio(filas, p)
+    tipo, f = _detectar(ns)
+    salida = _llamar(f, filas, p) if tipo == "lista" else _por_vela(f, filas, p) if tipo == "vela" else _clase(f, filas, p) if tipo == "clase" else _script(ns, filas)
     return json.dumps(_posiciones(salida, len(filas)))
 
 def _athenai_correr_filas(p_json, filas_json): return _correr(json.loads(filas_json), dict(json.loads(p_json)))

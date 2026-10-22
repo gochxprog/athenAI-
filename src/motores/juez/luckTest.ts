@@ -119,7 +119,8 @@ export function luckTest(e: {
         ? correr(permutarRetornos(e.cierres, e.desde, e.hasta, e.azar, e.opciones?.huecos), e.posiciones)
         : correr(e.cierres, entradasAleatorias(n, e.operaciones, e.desde, e.hasta, e.azar));
     sims.push(v);
-    if (v >= real) superiores += 1;
+    // Una simulación que no da número (datos rotos) cuenta en contra de la estrategia, nunca a favor.
+    if (!(v < real)) superiores += 1;
   }
   sims.sort((a, b) => a - b);
   const paso = Math.max(1, Math.floor(sims.length / 200));

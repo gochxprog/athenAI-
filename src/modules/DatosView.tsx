@@ -68,12 +68,18 @@ export default function DatosView() {
   const agregar = (s: string) => {
     const x = s.trim().toUpperCase().replace(/[^A-Z0-9._-]/g, '');
     if (!x || borrador.activos.some((a) => a.simbolo === x) || borrador.activos.length >= MAX_ACTIVOS) return;
-    set('activos', [...borrador.activos, { simbolo: x, proveedor: fuente }]);
+    cambiarActivos([...borrador.activos, { simbolo: x, proveedor: fuente }]);
     setNuevoActivo('');
   };
-  const aplicar = () => {
-    motorOrderFlow.aplicar(borrador, recordar);
-    setAplicado(borrador);
+  const aplicar = (c = borrador) => {
+    motorOrderFlow.aplicar(c, recordar);
+    setAplicado(c);
+  };
+  /** Añadir o quitar un activo se aplica solo: el libro y el feed del activo nuevo arrancan sin tocar «Aplicar». */
+  const cambiarActivos = (activos: ConfigCentro['activos']) => {
+    const c = { ...borrador, activos };
+    setBorrador(c);
+    aplicar(c);
   };
 
   return (
@@ -159,7 +165,7 @@ export default function DatosView() {
               <span key={a.simbolo} data-activo={a.simbolo} className="flex items-center gap-1.5 rounded-md border border-plata-400 px-2 py-1 font-mono text-[11px] text-white">
                 {a.simbolo}
                 <span className="font-sans text-[9.5px] text-plata-400">{NOMBRE_PROVEEDOR[a.proveedor]}</span>
-                <button onClick={() => set('activos', borrador.activos.filter((x) => x.simbolo !== a.simbolo))} aria-label={`Quitar ${a.simbolo}`} className="text-plata-400 hover:text-white">
+                <button onClick={() => cambiarActivos(borrador.activos.filter((x) => x.simbolo !== a.simbolo))} aria-label={`Quitar ${a.simbolo}`} className="text-plata-400 hover:text-white">
                   <X size={11} />
                 </button>
               </span>
@@ -206,7 +212,7 @@ export default function DatosView() {
           </label>
 
           <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-borde-suave pt-4">
-            <button onClick={aplicar} disabled={!borrador.activos.length} className="flex items-center gap-2 rounded-lg bg-white px-3.5 py-2 text-xs font-medium text-black disabled:opacity-40">
+            <button onClick={() => aplicar()} disabled={!borrador.activos.length} className="flex items-center gap-2 rounded-lg bg-white px-3.5 py-2 text-xs font-medium text-black disabled:opacity-40">
               <Play size={13} /> Aplicar y empezar a aprender
             </button>
             <button onClick={() => motorOrderFlow.detener()} className="flex items-center gap-1.5 rounded-lg border border-borde px-3 py-2 text-xs text-plata-200 hover:border-plata-400">

@@ -195,6 +195,9 @@ async function aplicar(c: ConfigCentro): Promise<void> {
   const gen = generacion;
   // Cerrar el chorro anterior: escribir lo pendiente y soltar sus carpetas.
   await vaciarAlmacenes();
+  // Otro «aplicar» llegó mientras se vaciaba (p. ej. el arranque automático y tu clic): gana el último, este no
+  // arranca fuentes (si arrancara, quedaría una conexión huérfana a Binance gastando el límite de peticiones).
+  if (gen !== generacion) return;
   for (const al of almacenes.values()) al.cerrar();
   config = c;
   const lista: { simbolo: string; proveedor: Proveedor }[] = [];

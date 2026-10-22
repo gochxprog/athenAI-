@@ -88,3 +88,14 @@ describe('Juez', () => {
   });
 
 });
+
+describe('Auditoría: entradas que el Juez no acepta', () => {
+  it('sin variantes o con precios rotos (NaN, ≤ 0) da un error claro en vez de un veredicto falso', () => {
+    const cierres = Array.from({ length: 50 }, (_, i) => 100 + i);
+    const tiempos = cierres.map((_, i) => i * 60_000);
+    expect(() => juzgar({ cierres, tiempos, combos: [], posiciones: [] })).toThrow(/ninguna variante/);
+    const rotos = [...cierres];
+    rotos[20] = NaN;
+    expect(() => juzgar({ cierres: rotos, tiempos, combos: [{}], posiciones: [cierres.map(() => 1)] })).toThrow(/precio no válido/);
+  });
+});

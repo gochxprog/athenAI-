@@ -17,6 +17,8 @@ const CINTA_ICEBERG_MAX = 40_000;
 const MAX_EVENTOS = 600;
 const MAX_IDS_VISTOS = 4_000;
 const MARGEN_INICIO_MS = 60_000;
+/** Una foto del libro vale para una barra si es de hasta 2 s antes de su cierre (si no: libro viejo o resincronizando). */
+const LIBRO_VIGENTE_MS = 2_000;
 
 export interface MetricasFlujo {
   tradesPorSeg: number;
@@ -36,6 +38,10 @@ export class MotorMercado {
   readonly configPools: PoolConfig = { ...DEFAULT_POOL_CONFIG, group: 5, minPersistence: 3 };
   readonly eventos = new Anillo<EventoMotor>(MAX_EVENTOS);
   readonly oi = new Anillo<OpenInterestSnapshot>(5_000);
+  /** Últimas fotos del libro con sus pools y las últimas tasas de funding, con su hora: cada barra toma las vigentes
+   *  a su cierre y nunca una posterior (el libro se publica cada 250 ms y los trades cada 100 ms). */
+  private readonly fotos = new Anillo<{ t: number; vista: OrderBookView; pools: Pool[] }>(16);
+  private readonly fundings = new Anillo<{ t: number; tasa: number }>(8);
 
   libro: OrderBookView | null = null;
   ahora = 0;
@@ -53,6 +59,8 @@ export class MotorMercado {
    */
   cvdCompleto = false;
   vwapCompleto = false;
+  /** La sesión del CVD está abierta (entre 21:00 y 22:00 UTC no hay ninguna: el CVD queda congelado). */
+  cvdActivo = false;
   /** Última tasa de funding conocida (perpetuos; null si la fuente no la da). */
   fundingTasa: number | null = null;
 
@@ -78,7 +86,9 @@ export class MotorMercado {
     this.cvdSesion = r.cvd;
     const sesion = this.cvd.getState(r.session);
     this.cvdVolumenSesion = sesion.buyVolume + sesion.sellVolume;
-    if (r.isReset) this.cvdCompleto = t.timestamp - pickAutoSession(t.timestamp).startMs <= MARGEN_INICIO_MS;
+    const auto = pickAutoSession(t.timestamp);
+    this.cvdActivo = auto.active;
+    if (r.isReset) this.cvdCompleto = t.timestamp - auto.startMs <= MARGEN_INICIO_MS;
 
     const dia = Math.floor(t.timestamp / 86_400_000);
     if (dia !== this.sesionUtc) {
@@ -146,6 +156,26 @@ export class MotorMercado {
 
   /** Nueva foto del libro (vista agregada del libro). */
   libroNuevo(vista: OrderBookView, velas: readonly PoolCandle[]): void {
+    this.procesarLibro(vista, velas);
+    this.fotos.push({ t: vista.updatedAt, vista, pools: [...this.pools.list()] });
+  }
+
+  /** La foto del libro (y sus pools) vigente en t: la última con hora ≤ t y de hace menos de 2 s; si no, null. */
+  libroEn(t: number): { vista: OrderBookView; pools: Pool[] } | null {
+    for (let i = this.fotos.tamaño - 1; i >= 0; i -= 1) {
+      const f = this.fotos.get(i)!;
+      if (f.t <= t) return t - f.t <= LIBRO_VIGENTE_MS ? f : null;
+    }
+    return null;
+  }
+
+  /** Tasa de funding publicada hasta t (la última con hora ≤ t). */
+  fundingEn(t: number): number | null {
+    for (let i = this.fundings.tamaño - 1; i >= 0; i -= 1) if (this.fundings.get(i)!.t <= t) return this.fundings.get(i)!.tasa;
+    return null;
+  }
+
+  private procesarLibro(vista: OrderBookView, velas: readonly PoolCandle[]): void {
     this.libro = vista;
     const t = Math.max(this.ahora, vista.updatedAt);
     if (t > this.ahora) this.ahora = t;
@@ -223,12 +253,14 @@ export class MotorMercado {
     };
   }
 
+  /** Eventos conocidos en (desde, hasta]: cada evento cae en UNA sola barra (sin contar dos veces ni perder los que
+   *  llegan entre el cierre de una barra y el primer trade de la siguiente). `disponibleEn` no siempre crece en el
+   *  anillo (liquidaciones y big trades), así que se recorre entero (está acotado a MAX_EVENTOS). */
   eventosDisponibles(hasta: number, desde: number): EventoMotor[] {
     const out: EventoMotor[] = [];
     for (let i = this.eventos.tamaño - 1; i >= 0; i -= 1) {
       const e = this.eventos.get(i) as EventoMotor;
-      if (e.disponibleEn < desde) break;
-      if (e.disponibleEn <= hasta) out.push(e);
+      if (e.disponibleEn > desde && e.disponibleEn <= hasta) out.push(e);
     }
     return out;
   }
@@ -240,8 +272,10 @@ export class MotorMercado {
   }
 
   /** Tasa de funding vigente publicada por el exchange (Binance markPrice). */
-  funding(tasa: number): void {
-    if (Number.isFinite(tasa)) this.fundingTasa = tasa;
+  funding(tasa: number, t = this.ahora): void {
+    if (!Number.isFinite(tasa)) return;
+    this.fundingTasa = tasa;
+    this.fundings.push({ t, tasa });
   }
 
   /** Liquidación forzada publicada por el exchange (Binance forceOrder). */

@@ -137,3 +137,26 @@ describe('Blindaje del Etiquetador contra el futuro', () => {
     expect(corto.sinFuturo).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe('Etiquetador: cortos y huecos (auditoría)', () => {
+  const barra = (close: number, high = close, low = close) => ({ cierre: 0, close, high, low });
+  it('en un corto el objetivo es la barrera de abajo y el stop la de arriba; si toca las dos, gana el stop', () => {
+    const c = { pt: 2, sl: 1, tMax: 5 };
+    // P₀ = 100, σ = 1 %: corto → objetivo 98, stop 101.
+    const sube = tripleBarrera([barra(100), barra(101.5, 101.5, 100)], 0, -1, 0.01, c)!;
+    expect(sube).toMatchObject({ barrera: 'superior', etiqueta: -1, meta: 0, superior: 101, inferior: 98 });
+    const ambas = tripleBarrera([barra(100), barra(100, 103, 97)], 0, -1, 0.01, c)!;
+    expect(ambas).toMatchObject({ barrera: 'superior', etiqueta: -1 });
+    const baja = tripleBarrera([barra(100), barra(97.9, 100, 97.9)], 0, -1, 0.01, c)!;
+    expect(baja).toMatchObject({ barrera: 'inferior', etiqueta: 1, meta: 1 });
+  });
+
+  it('el salto a través de un hueco no infla la volatilidad', () => {
+    const cierres = Array.from({ length: 80 }, (_, i) => 100 * (1 + 0.002 * Math.sin(i)) * (i >= 40 ? 1.2 : 1));
+    const huecos = cierres.map((_, i) => i === 40);
+    const con = volatilidadEwm(cierres, 20, huecos).sigma;
+    const sin = volatilidadEwm(cierres, 20).sigma;
+    expect(con[41] / con[39]).toBeLessThan(1.5);
+    expect(sin[41] / sin[39]).toBeGreaterThan(10);
+  });
+});

@@ -1,8 +1,6 @@
 const pad = (n: number) => String(n).padStart(2, '0');
 
 export const hora = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-export const horaCorta = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-
 export const fechaLarga = (d: Date) =>
   d.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -25,13 +23,6 @@ export function conSigno(v: number, decimales = 0, sufijo = '') {
 
 export const pct = (v: number, decimales = 1) => `${num(v * 100, decimales)}%`;
 
-export function haceTiempo(min: number) {
-  if (min < 1) return 'hace segundos';
-  if (min < 60) return `hace ${Math.round(min)} min`;
-  const h = Math.floor(min / 60);
-  const m = Math.round(min % 60);
-  return m ? `hace ${h} h ${m} min` : `hace ${h} h`;
-}
 
 /** Decimales necesarios para mostrar un paso de precio (0,1 → 1 · 0,25 → 2 · 1 → 0). */
 export function decimalesDe(paso: number): number {

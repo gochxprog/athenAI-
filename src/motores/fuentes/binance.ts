@@ -20,6 +20,9 @@
 // diff siguiente debe encadenar (pu === u anterior). Si se rompe la cadena se resincroniza.
 import { OrderBookEngine } from '../flujo/order-flow/order-book';
 import { Backoff } from '../flujo/realtime/backoff';
+
+/** Tope de espera de cada pedido REST (exchangeInfo, snapshot, OI). */
+const REST_MS = 10_000;
 import type { AggTrade, Liquidacion, MensajeMercado } from '../nucleo/tipos';
 import { grupoParaPrecio, inferirTick } from '../nucleo/parametros';
 
@@ -126,6 +129,11 @@ interface EstadoLibro {
   /** lastUpdateId del snapshot mientras aún no se aplicó ningún diff (el primero se valida con U ≤ id ≤ u). */
   snapshotId: number | null;
   pidiendoSnapshot: boolean;
+  /** Reintento pendiente del snapshot (uno por libro: se cancela al pedir otro) y su espera creciente. */
+  reintento: ReturnType<typeof setTimeout> | null;
+  backoff: Backoff;
+  /** Cuándo empezó el último pedido de snapshot (el vigilante repide si el libro lleva mucho sin sincronizar). */
+  pedidoEn: number;
   resincronizaciones: number;
 }
 
@@ -220,6 +228,7 @@ export class FuenteBinance {
       x.sock = null;
       so?.close();
     }
+    for (const l of this.libros.values()) if (l.reintento) clearTimeout(l.reintento);
     for (const s of this.simbolos) this.anunciar(s, 'detenido', '');
   }
 
@@ -244,7 +253,8 @@ export class FuenteBinance {
   }
 
   private async json<T>(ruta: string): Promise<T> {
-    const r = await this.fetchImpl(`${this.rest}${ruta}`);
+    // Con tope de 10 s: un pedido colgado no deja el libro (ni el arranque) esperando para siempre.
+    const r = await this.fetchImpl(`${this.rest}${ruta}`, { signal: AbortSignal.timeout(REST_MS) });
     if (!r.ok) throw new Error(`HTTP ${r.status} en ${ruta.split('?')[0]}`);
     return (await r.json()) as T;
   }
@@ -275,6 +285,9 @@ export class FuenteBinance {
         ultimoU: null,
         snapshotId: null,
         pidiendoSnapshot: false,
+        reintento: null,
+        backoff: new Backoff({ baseMs: 500, maxMs: 8_000, jitter: 'equal', floorMs: 500 }),
+        pedidoEn: 0,
         resincronizaciones: 0,
       });
       this.lotes.set(s, []);
@@ -294,6 +307,9 @@ export class FuenteBinance {
         ultimoU: null,
         snapshotId: null,
         pidiendoSnapshot: false,
+        reintento: null,
+        backoff: new Backoff({ baseMs: 500, maxMs: 8_000, jitter: 'equal', floorMs: 500 }),
+        pedidoEn: 0,
         resincronizaciones: 0,
       });
       this.lotes.set(s, []);
@@ -369,6 +385,8 @@ export class FuenteBinance {
       const limite = c === 'libro' ? 20_000 : 90_000;
       if (x.mensajes > 0 && ahora - x.ultimo > limite) this.reconectar(c, `Sin mensajes ${c === 'libro' ? 'del libro' : 'de trades'} desde hace ${Math.round((ahora - x.ultimo) / 1000)} s`);
     }
+    // Un libro que lleva más de 30 s sin sincronizar y sin pedido en curso: se vuelve a pedir el snapshot.
+    for (const [s, l] of this.libros) if (!l.listo && !l.pidiendoSnapshot && !l.reintento && this.conexiones.libro.mensajes > 0 && ahora - l.pedidoEn > 30_000) void this.pedirSnapshot(s);
     this.actualizarEstado();
   }
 
@@ -445,46 +463,60 @@ export class FuenteBinance {
     void this.pedirSnapshot(s);
   }
 
+  /** Programa el próximo intento del snapshot de un libro (uno solo a la vez por libro). */
+  private reintentarSnapshot(s: string, l: EstadoLibro): void {
+    if (this.detenida) return;
+    if (l.reintento) clearTimeout(l.reintento);
+    l.reintento = setTimeout(() => {
+      l.reintento = null;
+      void this.pedirSnapshot(s);
+    }, l.backoff.next());
+  }
+
   private async pedirSnapshot(s: string): Promise<void> {
     const l = this.libros.get(s);
     if (!l || l.pidiendoSnapshot || this.detenida) return;
+    if (l.reintento) clearTimeout(l.reintento);
+    l.reintento = null;
     l.pidiendoSnapshot = true;
+    l.pedidoEn = Date.now();
+    let snap: { lastUpdateId: number; E?: number; T?: number; bids: [string, string][]; asks: [string, string][] };
     try {
-      const snap = await this.json<{ lastUpdateId: number; E?: number; T?: number; bids: [string, string][]; asks: [string, string][] }>(`/fapi/v1/depth?symbol=${s}&limit=1000`);
-      l.motor.applySnapshot({ lastUpdateId: snap.lastUpdateId, bids: aTuplas(snap.bids), asks: aTuplas(snap.asks), timestamp: snap.T ?? snap.E ?? Date.now() });
-      // Diffs guardados: descartar los viejos; el primero válido debe contener lastUpdateId.
-      const validos = l.pendientes.filter((x) => x.u >= snap.lastUpdateId);
-      l.pendientes = [];
-      if (validos.length && !(validos[0].U <= snap.lastUpdateId && validos[0].u >= snap.lastUpdateId)) {
-        l.pidiendoSnapshot = false;
-        // El snapshot llegó antes que los diffs que lo cubren: esperar más diffs y reintentar.
-        l.pendientes = validos;
-        setTimeout(() => void this.pedirSnapshot(s), 500);
-        return;
-      }
-      l.listo = true;
-      l.ultimoU = null;
-      this.sinRest = false;
-      this.backoffInfo.reset();
-      for (const x of validos) {
-        if (l.ultimoU !== null && x.pu !== l.ultimoU) {
-          l.pidiendoSnapshot = false;
-          this.resincronizar(s, 'Hueco al aplicar los diffs guardados');
-          return;
-        }
-        l.motor.applyDiff({ bids: aTuplas(x.b), asks: aTuplas(x.a), finalUpdateId: x.u, timestamp: x.T || x.E });
-        l.ultimoU = x.u;
-      }
-      if (l.ultimoU === null) l.snapshotId = snap.lastUpdateId;
-      this.anunciado.delete(s);
-      this.actualizarEstado();
+      snap = await this.json(`/fapi/v1/depth?symbol=${s}&limit=1000`);
     } catch {
       // El libro queda pendiente pero los trades siguen: no es una caída. Se reintenta con espera creciente.
-      this.sinRest = true;
-      if (!this.detenida) setTimeout(() => void this.pedirSnapshot(s), this.backoffInfo.next());
-    } finally {
       l.pidiendoSnapshot = false;
+      this.sinRest = true;
+      this.reintentarSnapshot(s, l);
+      return;
     }
+    l.pidiendoSnapshot = false;
+    // Otro pedido (reconexión o resincronización) ya dejó el libro vivo: este snapshot viejo no lo pisa.
+    if (this.detenida || l.listo) return;
+    l.motor.applySnapshot({ lastUpdateId: snap.lastUpdateId, bids: aTuplas(snap.bids), asks: aTuplas(snap.asks), timestamp: snap.T ?? snap.E ?? Date.now() });
+    // Diffs guardados: descartar los viejos; el primero válido debe contener lastUpdateId.
+    const validos = l.pendientes.filter((x) => x.u >= snap.lastUpdateId);
+    l.pendientes = validos;
+    if (validos.length && !(validos[0].U <= snap.lastUpdateId && validos[0].u >= snap.lastUpdateId)) {
+      // El snapshot llegó antes que los diffs que lo cubren: esperar más diffs y reintentar (con espera creciente:
+      // cada snapshot pesa 20 en el límite de Binance).
+      this.reintentarSnapshot(s, l);
+      return;
+    }
+    l.pendientes = [];
+    l.listo = true;
+    l.ultimoU = null;
+    l.backoff.reset();
+    this.sinRest = false;
+    this.backoffInfo.reset();
+    for (const x of validos) {
+      if (l.ultimoU !== null && x.pu !== l.ultimoU) return this.resincronizar(s, 'Hueco al aplicar los diffs guardados');
+      l.motor.applyDiff({ bids: aTuplas(x.b), asks: aTuplas(x.a), finalUpdateId: x.u, timestamp: x.T || x.E });
+      l.ultimoU = x.u;
+    }
+    if (l.ultimoU === null) l.snapshotId = snap.lastUpdateId;
+    this.anunciado.delete(s);
+    this.actualizarEstado();
   }
 
   private vaciarLotes(): void {

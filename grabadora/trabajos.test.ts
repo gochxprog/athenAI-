@@ -39,9 +39,12 @@ describe('Etiquetador con barreras en ATR', () => {
     const xs = filas(0, 3_000);
     const r = etiquetar(xs, { pt: 2, sl: 1.5, tMax: 60, medida: 'atr' });
     expect(r.etiquetas.length).toBeGreaterThan(10);
-    const e = r.etiquetas[5];
-    // superior − precio = 2 × ATR; precio − inferior = 1,5 × ATR (el mismo ATR relativo).
-    expect((e.superior / e.precio - 1) / (1 - e.inferior / e.precio)).toBeCloseTo(2 / 1.5, 6);
+    // Objetivo a 2 ATR a favor del lado y stop a 1,5 ATR en contra (en largos y en cortos).
+    for (const e of r.etiquetas.slice(0, 20)) {
+      const [arriba, abajo] = [e.superior / e.precio - 1, 1 - e.inferior / e.precio];
+      expect(e.lado === 1 ? arriba / abajo : abajo / arriba).toBeCloseTo(2 / 1.5, 6);
+    }
+    expect(new Set(r.etiquetas.map((e) => e.lado)).size).toBe(2);
   });
 });
 

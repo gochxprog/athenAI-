@@ -95,3 +95,26 @@ Aquí no hay ningún modelo: solo las reglas que el dataset debe cumplir y cómo
 
 Lo que ya estaba (secciones 2 a 5) sigue igual: Features point-in-time, Etiquetador causal, Juez fuera de muestra y
 Anti-futuro de las estrategias en Python.
+
+## Auditoría integral (22-oct-2026): lo encontrado y lo corregido
+
+Cinco revisiones en paralelo (Juez, Features y Order Flow, libro y feeds, ML y Laboratorio, rendimiento). Cada falla
+se reprodujo con una prueba antes de arreglarla; las pruebas quedaron en el repositorio.
+
+| Área | Falla | Arreglo |
+|---|---|---|
+| Anti-futuro | La estrategia podía leer la serie completa desde la variable global `velas` (o `pd.read_csv`), guardar la corrida completa en una caché, o mirar el futuro solo en la 2.ª variante | Python limpio en cada corrida, solo con las velas de esa corrida; recortes y alteraciones ANTES de la corrida completa; todas las variantes; se alteran OHLC, volumen y delta; 12 cortes |
+| Anti-futuro | El análisis del texto rechazaba código honesto (`historia[-1]`) | Solo avisa; decide la prueba dinámica |
+| Juez | Un stop movido por encima del cierre se llenaba a un precio que nunca se negoció | Sale al precio de apertura si ya estaba del otro lado del stop |
+| Juez | El Laboratorio del navegador juzgaba sin `GESTION` | Usa la misma entrada que el VPS (`entradaJuez`) |
+| Juez | PBO no contaba la mediana exacta (λ = 0) | `ω ≤ 0,5` cuenta como sobreajuste |
+| Juez | Luck test con NaN, sin variantes, corto con pérdida > 100 % | NaN cuenta en contra; precios rotos y sin variantes dan error claro; el capital no baja de 0 |
+| Etiquetador | En los cortos el objetivo y el stop estaban intercambiados | Objetivo a favor del lado, stop en contra; empate → stop |
+| Etiquetador | El salto a través de un hueco inflaba σ y ATR | Ese retorno no cuenta |
+| Features | Libro, pools y funding podían ser de DESPUÉS del cierre (o viejos) | Foto vigente al cierre (≤ cierre y de hace < 2 s) |
+| Features | Eventos contados dos veces o perdidos entre barras | Ventana (cierre previo, cierre] |
+| Features | OI viejo daba ΔOI = 0 y luego todo de golpe | Nulo si el dato está viejo o tras un hueco |
+| Features | `poc_pos` sesgado y fuera de [0, 1]; CVD de sesión congelado 21–22 UTC | Centro del nivel y acotado; nulo sin sesión abierta |
+| Libro | Pedidos REST sin límite de tiempo, reintentos sin freno (límite de Binance), un snapshot viejo pisaba el libro vivo, doble «Aplicar» dejaba una conexión huérfana | 10 s por pedido, espera creciente, un reintento por libro, se descarta el snapshot viejo, gana el último «Aplicar»; añadir/quitar un activo se aplica solo |
+| Lag | El VPS releía y procesaba el archivo del día entero (decenas de MB) en cada consulta de filas, velas y señales de bots | Memoria con las últimas ~2,5 h de filas por mercado; primera carga con `ultimas=N` |
+| Lag | Sala 3D, cerebro y líneas dibujando sin parar; re-render de todas las pantallas cada 5 s; sondeo con la pestaña oculta | Se pausan fuera de vista; celular con menos resolución y 30 cuadros/s; referencias estables; sin sondeo en segundo plano |

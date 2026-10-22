@@ -9,6 +9,8 @@ import { crearOjo } from './ojo';
 // Three.js puro: un único render loop, sin re-renders de React.
 // -----------------------------------------------------------------------------
 
+/** Celular o pantalla táctil: menos resolución, sin suavizado y a 30 cuadros por segundo. */
+const MOVIL = typeof window !== 'undefined' && window.matchMedia('(max-width: 760px), (pointer: coarse)').matches;
 const RADIO = 1.6;
 const NODOS_SUPERFICIE = 2600;
 const NODOS_NUCLEO = 700;
@@ -419,7 +421,7 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      renderer = new THREE.WebGLRenderer({ antialias: !MOVIL, powerPreference: MOVIL ? 'low-power' : 'high-performance' });
     } catch {
       cont.dataset.sinWebgl = 'true';
       return;
@@ -428,7 +430,7 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
     const movimiento = reducido ? 0.3 : 1;
 
     renderer.setClearColor(0x000000, 0);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, MOVIL ? 1 : 1.5));
     const canvas = renderer.domElement;
     canvas.style.display = 'block';
     canvas.style.width = '100%';
@@ -808,12 +810,17 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
     });
     vista.observe(cont);
 
+    let ultimoCuadro = 0;
     const tick = () => {
       frame = requestAnimationFrame(tick);
       if (!enVista) {
         reloj.getDelta();
         return;
       }
+      // En el celular, 30 cuadros por segundo bastan (la mitad de GPU y batería).
+      const ahoraMs = performance.now();
+      if (MOVIL && ahoraMs - ultimoCuadro < 32) return;
+      ultimoCuadro = ahoraMs;
       const dt = Math.min(reloj.getDelta(), 0.05);
       const t = reloj.elapsedTime;
       const act = actividadRef.current * movimiento;

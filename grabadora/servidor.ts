@@ -238,6 +238,9 @@ export function crearServidor(o: OpcionesServidor): http.Server {
         }
         if (url.pathname === '/api/filas') {
           const simbolo = simboloPedido(url) ?? '';
+          // `ultimas=N`: las N filas más recientes (primera carga de una pantalla), de la memoria de la grabadora.
+          const ultimas = Number(url.searchParams.get('ultimas'));
+          if (ultimas > 0) return json(200, { filas: o.almacen.leerUltimas(simbolo, Math.min(LIMITE_FILAS, ultimas)), mas: false });
           const desde = Number(url.searchParams.get('desde') ?? 0);
           const limite = Math.min(LIMITE_FILAS, Math.max(1, Number(url.searchParams.get('limite') ?? LIMITE_FILAS) || LIMITE_FILAS));
           return json(200, o.almacen.leer(simbolo, Number.isFinite(desde) ? desde : 0, limite));
@@ -254,7 +257,10 @@ export function crearServidor(o: OpcionesServidor): http.Server {
       let archivo = path.resolve(o.web, `.${rel === '/' || rel === '\\' ? '/index.html' : rel}`);
       // Carpeta con su propio index.html (p. ej. /v2/, la versión nueva): se sirve ese.
       if (archivo.startsWith(path.resolve(o.web)) && fs.existsSync(archivo) && fs.statSync(archivo).isDirectory()) archivo = path.join(archivo, 'index.html');
-      if (!archivo.startsWith(path.resolve(o.web)) || !fs.existsSync(archivo) || fs.statSync(archivo).isDirectory()) archivo = path.join(o.web, 'index.html');
+      const falta = !archivo.startsWith(path.resolve(o.web)) || !fs.existsSync(archivo) || fs.statSync(archivo).isDirectory();
+      // Un archivo con hash que ya no existe (otra versión): 404, no la página (el navegador recarga la nueva).
+      if (falta && CON_HASH.test(rel)) return json(404, { error: 'No existe' });
+      if (falta) archivo = path.join(o.web, 'index.html');
       if (fs.existsSync(archivo)) return servirArchivo(archivo, req, res);
     }
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });

@@ -206,29 +206,3 @@ export class LiquidityHistory {
     return true;
   }
 }
-
-/* ------------------------------------------------------------------ */
-/* Registro por símbolo: el historial sobrevive al cambio                */
-/* FinancialChart <-> FootprintChart (se desmonta uno, se monta otro).   */
-/* Acotado a MAX_SYMBOLS (LRU) para no acumular memoria.                 */
-/* ------------------------------------------------------------------ */
-
-const MAX_SYMBOLS = 4;
-const registry = new Map<string, LiquidityHistory>();
-
-export function getLiquidityHistory(symbol: string): LiquidityHistory {
-  const key = symbol.toUpperCase();
-  let history = registry.get(key);
-  if (history) {
-    registry.delete(key); // refresca el orden LRU
-  } else {
-    history = new LiquidityHistory();
-    while (registry.size >= MAX_SYMBOLS) {
-      const oldest = registry.keys().next().value as string | undefined;
-      if (oldest === undefined) break;
-      registry.delete(oldest);
-    }
-  }
-  registry.set(key, history);
-  return history;
-}

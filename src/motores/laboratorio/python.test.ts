@@ -43,7 +43,7 @@ def estrategia(filas, p):
 `;
     const r = ejecutarEstrategia(py, tramposa, filas);
     expect(r.antiFuturo.ok).toBe(false);
-    expect(r.antiFuturo.estatico.violaciones[0]).toMatch(/filas\[i \+ 1\]/);
+    expect(r.antiFuturo.estatico.alertas[0]).toMatch(/filas\[i \+ 1\]/);
     // Escondido en otra variable: el análisis del código no lo ve, la prueba de causalidad sí.
     const escondida = `
 def estrategia(filas, p):
@@ -85,7 +85,7 @@ def estrategia(filas, p):
 
   it('explica los errores del código', () => {
     expect(() => ejecutarEstrategia(py, 'x = 1', filas)).toThrow(/No encontré tus señales/);
-    expect(() => ejecutarEstrategia(py, 'def estrategia(filas, p):\n    return [1]', filas)).toThrow(/devolvió 1 señales para 200 velas/);
+    expect(() => ejecutarEstrategia(py, 'def estrategia(filas, p):\n    return [1]', filas)).toThrow(/devolvió 1 señales para \d+ velas/);
     expect(() => ejecutarEstrategia(py, 'def estrategia(filas, p):\n    return [f["no_existe"] for f in filas]', filas)).toThrow(/KeyError/);
   });
 

@@ -19,8 +19,6 @@
  *                          detached (el servidor lo soltó por un error no recuperable)
  */
 
-export type TopicKind = "kline" | "trades" | "book" | "bigtrades";
-
 export type ParsedTopic =
   | { kind: "kline"; symbol: string; interval: string }
   | { kind: "trades"; symbol: string }
@@ -39,11 +37,6 @@ export interface HelloPayload {
   serverTime: number;
 }
 
-export interface SubscriptionRequest {
-  sessionId: string;
-  rev: number;
-  topics: string[];
-}
 
 export const SYMBOL_PATTERN = /^[A-Z0-9]{5,20}$/;
 const INTERVAL_PATTERN = /^[0-9]{1,2}[smhdwM]$/;
@@ -51,7 +44,6 @@ const INTERVAL_PATTERN = /^[0-9]{1,2}[smhdwM]$/;
 export const BOOK_MIN_DEPTH = 5;
 export const BOOK_MAX_DEPTH = 300;
 export const BOOK_MAX_GROUP = 1_000;
-export const MAX_TOPICS_PER_SESSION = 32;
 
 export function klineTopic(symbol: string, interval: string): string {
   return `kline:${symbol.toUpperCase()}:${interval}`;

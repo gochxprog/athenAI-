@@ -172,3 +172,11 @@ describe('Motor 2 · Métricas', () => {
     expect(m.duracionDrawdown.horas).toBeCloseTo(3, 10);
   });
 });
+
+describe('Auditoría: un corto que pierde más del 100 % liquida la cuenta', () => {
+  it('el capital no baja de 0 ni «mejora» después', () => {
+    const r = backtest([100, 100, 250, 125, 125], [0, -1, -1, -1, 0], { comisionPb: 0, deslizamientoPb: 0 });
+    expect(Math.min(...r.equity)).toBe(0);
+    expect(r.equity.at(-1)).toBe(0);
+  });
+});

@@ -108,3 +108,17 @@ describe('Gestión de salidas (stop, objetivo, break-even, escalonada)', () => {
     expect(s.operaciones[0].motivo).toBe('fin');
   });
 });
+
+describe('Auditoría: el stop nunca se llena a un precio que no se negoció', () => {
+  it('break-even movido por encima del cierre: sale al precio de apertura de la vela siguiente, no al stop', () => {
+    const v = (high: number, low: number, close: number): Vela => ({ high, low, close });
+    const velas = [v(100, 100, 100), v(101, 99, 100), v(102.5, 99.5, 99), v(99.5, 98.5, 99), v(99, 99, 99)];
+    const r = backtestConSalidas(velas, [0, 1, 1, 1, 1], { stopAtr: 1, rr: 5, gestion: 'be1R', periodoAtr: 1 }, { comisionPb: 0, deslizamientoPb: 0 });
+    const op = r.operaciones[0];
+    expect(op.motivo).toBe('break-even');
+    // Antes: salía a 100 (el stop) con retorno 0 y la barra ganaba +1 %. Ahora sale a 99 (donde abrió la vela).
+    expect(op.precioSalida).toBe(99);
+    expect(op.retorno).toBeCloseTo(-0.01, 10);
+    expect(r.retornos[3]).toBeCloseTo(0, 10);
+  });
+});

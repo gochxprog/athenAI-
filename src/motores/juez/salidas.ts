@@ -93,9 +93,9 @@ export interface ResultadoSalidas {
   operaciones: OperacionGestionada[];
 }
 
-/** ATR causal por barra: en i solo usa barras ≤ i (null hasta tener 2 barras). */
-export function atrSerie(velas: readonly Vela[], periodo = 14): (number | null)[] {
-  const tr: number[] = velas.map((v, i) => (i === 0 ? v.high - v.low : Math.max(v.high - v.low, Math.abs(v.high - velas[i - 1].close), Math.abs(v.low - velas[i - 1].close))));
+/** ATR causal por barra: en i solo usa barras ≤ i (null hasta tener 2 barras). Tras un hueco, el rango de la barra sola. */
+export function atrSerie(velas: readonly Vela[], periodo = 14, huecos?: readonly boolean[]): (number | null)[] {
+  const tr: number[] = velas.map((v, i) => (i === 0 || huecos?.[i] ? v.high - v.low : Math.max(v.high - v.low, Math.abs(v.high - velas[i - 1].close), Math.abs(v.low - velas[i - 1].close))));
   const out: (number | null)[] = new Array(velas.length).fill(null);
   let suma = 0;
   for (let i = 0; i < velas.length; i += 1) {
@@ -115,12 +115,17 @@ export function abrirGestionada(lado: 1 | -1, barra: number, precio: number, atr
   return { lado, entrada: barra, precioEntrada: precio, stopInicial: stop, stop, objetivo: precio + lado * reglas.rr * riesgo, riesgo, mfe: 0, mae: 0, movimientos: [] };
 }
 
-/** ¿La vela toca el stop o el objetivo? Si toca los dos, el stop (lo peor). */
-export function revisarSalida(p: PosicionGestionada, v: Vela): { precio: number; motivo: MotivoSalida } | null {
+/**
+ * ¿La vela toca el stop o el objetivo? Si toca los dos, el stop (lo peor). `apertura`: precio con que empezó la
+ * vela (el cierre anterior). Si ya estaba del otro lado del stop (un salto, o un stop que se movió por encima del
+ * precio), se sale a ese precio y no al del stop, que nunca se negoció.
+ */
+export function revisarSalida(p: PosicionGestionada, v: Vela, apertura?: number): { precio: number; motivo: MotivoSalida } | null {
   const tocaStop = p.lado === 1 ? v.low <= p.stop : v.high >= p.stop;
   if (tocaStop) {
     const ultimo = p.movimientos[p.movimientos.length - 1];
-    return { precio: p.stop, motivo: !ultimo ? 'stop' : ultimo.r > 0 ? 'stop-en-ganancia' : 'break-even' };
+    const precio = apertura === undefined ? p.stop : p.lado === 1 ? Math.min(p.stop, apertura) : Math.max(p.stop, apertura);
+    return { precio, motivo: !ultimo ? 'stop' : ultimo.r > 0 ? 'stop-en-ganancia' : 'break-even' };
   }
   const tocaObjetivo = p.lado === 1 ? v.high >= p.objetivo : v.low <= p.objetivo;
   return tocaObjetivo ? { precio: p.objetivo, motivo: 'objetivo' } : null;
@@ -170,15 +175,15 @@ export function backtestConSalidas(velas: readonly Vela[], posiciones: readonly 
     let r = 1;
     if (pos && i > desde) {
       const previo = velas[i - 1].close;
-      const s = revisarSalida(pos, v);
+      const s = revisarSalida(pos, v, previo);
       if (s) {
-        const rp = pos.lado * (s.precio / previo - 1);
+        const rp = Math.max(-1, pos.lado * (s.precio / previo - 1));
         factor *= 1 + rp;
         r *= (1 + rp) * (1 - c);
         senalUsada = pos.lado;
         cerrar(i, s.precio, s.motivo);
       } else {
-        const rp = pos.lado * (v.close / previo - 1);
+        const rp = Math.max(-1, pos.lado * (v.close / previo - 1));
         factor *= 1 + rp;
         r *= 1 + rp;
       }

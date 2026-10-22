@@ -15,14 +15,14 @@ import { Pipeline } from '../src/motores/nucleo/pipeline';
 import { inferirTick, parametrosParaSimbolo, parametrosPorDefecto, type ParametrosSimbolo } from '../src/motores/nucleo/parametros';
 import { EVENTOS_PREDEFINIDOS } from '../src/motores/nucleo/calendario';
 import type { MensajeMercado } from '../src/motores/nucleo/tipos';
-import { AlmacenDisco } from './almacenDisco';
+import { AlmacenDisco, RECIENTES } from './almacenDisco';
 import { resumenHistoria } from './importador';
 import { atenderJuez, cargarVelas, crearLaboratorio } from './laboratorioVps';
 import { crearAvisos } from './avisosVps';
 import { crearBiblioteca } from './bibliotecaVps';
 import { crearSala } from './agentesVps';
 import { atenderTrabajo, correrTrabajo } from './trabajosVps';
-import { MS_SERIE, type Serie } from '../src/motores/laboratorio/velas';
+import { armarVelas, MS_SERIE, type Serie } from '../src/motores/laboratorio/velas';
 import { crearServidor, type EstadoSimbolo } from './servidor';
 import { almacenLocalDisco, cargadorPython, crearApiPaper, feedDe, LibroPaperDisco, senalesDisco } from './botsVps';
 import { MotorPaper } from '../src/motores/paper/motorPaper';
@@ -63,6 +63,7 @@ export function recordar<A extends unknown[], R>(f: (...a: A) => R, ms: number, 
     const x = memo.get(k);
     if (x && reloj() - x.t < ms) return x.r;
     const r = f(...a);
+    if (memo.size > 100) memo.clear();
     memo.set(k, { t: reloj(), r });
     return r;
   };
@@ -212,7 +213,15 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
   });
   // La historia (lee todos los días importados) y las velas, recordadas: los sondeos de cada pantalla no releen el disco.
   const historiaDisco = recordar(() => resumenHistoria(o.datos), 20_000);
-  const velasDisco = recordar((s: string, serie: Serie, n: number) => (serie === 'dollar' ? [] : cargarVelas(o.datos, s, serie, 'todo', Date.now() - 3 * (n + 2) * MS_SERIE[serie]).slice(-n)), 15_000);
+  // Velas del gráfico: si la ventana cabe en la memoria de filas recientes, se arman de ahí (sin tocar el disco).
+  const velasDisco = recordar((s: string, serie: Serie, n: number) => {
+    if (serie === 'dollar') return [];
+    const ms = MS_SERIE[serie];
+    const desde = Math.floor((Date.now() - (n + 1) * ms) / ms) * ms;
+    const m = almacen.leerUltimas(s, RECIENTES);
+    const velas = m.length && m[0].cierre <= desde ? armarVelas(m.filter((f) => f.cierre > desde), serie) : cargarVelas(o.datos, s, serie, 'todo', Date.now() - 3 * (n + 2) * ms);
+    return velas.slice(-n);
+  }, 20_000);
   // Trabajos propios de los agentes (A2), en proceso aparte. Esperan a que el Juez termine: un trabajo pesado a la vez.
   const mercadosTrabajo = () => [...new Set([...o.simbolos, ...historiaDisco().map((h) => h.carpeta.replace(/^binance_/, '').toUpperCase())])];
   const turno = async () => {

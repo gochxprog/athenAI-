@@ -219,7 +219,9 @@ export class Pipeline {
           this.alimentarVista(t);
         }
         this.mercado.finLote();
-        const vencida = this.vista.cerrarSiVencida(this.mercado.ahora);
+        // Con 1 s de margen: el reloj también avanza con el libro (que llega antes que algunos trades); sin margen, un
+        // trade atrasado de la vela ya cerrada abría una vela duplicada en el gráfico.
+        const vencida = this.vista.cerrarSiVencida(this.mercado.ahora - 1_000);
         if (vencida) this.registrarCvdVista(vencida);
         break;
       }
@@ -235,7 +237,7 @@ export class Pipeline {
         this.mercado.liquidacion(m.liq);
         break;
       case 'funding':
-        this.mercado.funding(m.tasa);
+        this.mercado.funding(m.tasa, m.t);
         break;
       case 'conexion':
         if (this.conexion === 'en-vivo' && m.estado !== 'en-vivo') {

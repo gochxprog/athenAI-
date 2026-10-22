@@ -72,7 +72,9 @@ function velasDias(datos: string, simbolo: string, dias: string[]): VelaLab[] {
 export function etiquetarHistoria(datos: string, simbolos: string[]): Resultado {
   const frases: string[] = [];
   const hoy = new Date().toISOString().slice(0, 7);
-  const antes = new Date(Date.now() - 32 * 86_400_000).toISOString().slice(0, 7);
+  // El mes anterior (calendario, no «hace 32 días»): sus últimos eventos se cierran con velas de este mes.
+  const d = new Date();
+  const antes = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
   for (const s of simbolos) {
     const dir = path.join(datos, 'ml', 'etiquetas', s.toLowerCase());
     const dias = [...new Set(almacenes(datos).flatMap((a) => a.dias(s)))].sort();

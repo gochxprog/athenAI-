@@ -77,8 +77,11 @@ export interface ResultadoEtiquetador {
 
 type Fila = Pick<FilaFeatures, 'cierre' | 'close' | 'high' | 'low'> & { valores?: Record<string, number | null> };
 
-/** σ_t exponencial de los retornos (solo pasado e incluida la barra t). Devuelve también E[r] hasta t−1. */
-export function volatilidadEwm(cierres: readonly number[], span: number): { sigma: number[]; mediaPrevia: number[] } {
+/**
+ * σ_t exponencial de los retornos (solo pasado e incluida la barra t). Devuelve también E[r] hasta t−1. El retorno
+ * que cruza un hueco de datos no cuenta (no es un movimiento del mercado: inflaría σ durante muchas barras).
+ */
+export function volatilidadEwm(cierres: readonly number[], span: number, huecos?: readonly boolean[]): { sigma: number[]; mediaPrevia: number[] } {
   const a = 2 / (span + 1);
   const sigma = new Array(cierres.length).fill(NaN);
   const mediaPrevia = new Array(cierres.length).fill(0);
@@ -86,8 +89,12 @@ export function volatilidadEwm(cierres: readonly number[], span: number): { sigm
   let varianza = 0;
   let n = 0;
   for (let t = 1; t < cierres.length; t += 1) {
-    const r = cierres[t - 1] > 0 ? cierres[t] / cierres[t - 1] - 1 : 0;
     mediaPrevia[t] = media;
+    if (huecos?.[t]) {
+      sigma[t] = sigma[t - 1];
+      continue;
+    }
+    const r = cierres[t - 1] > 0 ? cierres[t] / cierres[t - 1] - 1 : 0;
     if (n === 0) {
       media = r;
       varianza = 0;
@@ -134,8 +141,9 @@ export function filtroCusum(cierres: readonly number[], sigma: readonly number[]
 /** Triple barrera de un evento. Null si cruza un hueco o no hay barras por delante. */
 export function tripleBarrera(filas: readonly Fila[], t0: number, lado: 1 | -1, sigma: number, c: { pt: number; sl: number; tMax: number }, huecos?: readonly boolean[]): Etiqueta | 'hueco' | null {
   const p0 = filas[t0].close;
-  const superior = p0 * (1 + c.pt * sigma);
-  const inferior = p0 * (1 - c.sl * sigma);
+  // El objetivo (pt) va a favor del lado y el stop (sl) en contra: en un corto, el objetivo es la barrera de abajo.
+  const superior = p0 * (1 + (lado === 1 ? c.pt : c.sl) * sigma);
+  const inferior = p0 * (1 - (lado === 1 ? c.sl : c.pt) * sigma);
   const fin = Math.min(filas.length - 1, t0 + c.tMax);
   if (fin <= t0) return null;
   let barrera: Barrera = 'tiempo';
@@ -148,7 +156,8 @@ export function tripleBarrera(filas: readonly Fila[], t0: number, lado: 1 | -1, 
     const tocaAbajo = bajo <= inferior;
     const tocaArriba = alto >= superior;
     if (tocaAbajo || tocaArriba) {
-      barrera = tocaAbajo ? 'inferior' : 'superior';
+      // Las dos en la misma barra: no se sabe cuál fue primero; gana el stop (caso pesimista).
+      barrera = tocaAbajo && tocaArriba ? (lado === 1 ? 'inferior' : 'superior') : tocaAbajo ? 'inferior' : 'superior';
       t1 = t;
       break;
     }
@@ -177,10 +186,10 @@ export function tripleBarrera(filas: readonly Fila[], t0: number, lado: 1 | -1, 
 export function etiquetar(filas: readonly Fila[], config: ConfigEtiquetador = {}, huecos?: readonly boolean[]): ResultadoEtiquetador {
   const c = { ...ETIQUETADOR_POR_DEFECTO, ...Object.fromEntries(Object.entries(config).filter(([, v]) => v !== undefined && v !== 0)) } as typeof ETIQUETADOR_POR_DEFECTO;
   const cierres = filas.map((f) => f.close);
-  const { sigma, mediaPrevia } = volatilidadEwm(cierres, c.span);
+  const { sigma, mediaPrevia } = volatilidadEwm(cierres, c.span, huecos);
   const eventos = filtroCusum(cierres, sigma, mediaPrevia, c.cusumMult, huecos);
   // Barreras en ATR: ATR(14) causal / precio de la barra (si aún no hay ATR, se usa σ).
-  const atr = config.medida === 'atr' ? atrSerie(filas.map((f) => ({ high: f.high ?? f.close, low: f.low ?? f.close, close: f.close }))) : null;
+  const atr = config.medida === 'atr' ? atrSerie(filas.map((f) => ({ high: f.high ?? f.close, low: f.low ?? f.close, close: f.close })), 14, huecos) : null;
   const ancho = atr ? atr.map((a, i) => (a !== null && cierres[i] > 0 ? a / cierres[i] : sigma[i])) : sigma;
   const etiquetas: Etiqueta[] = [];
   let descartadosHueco = 0;

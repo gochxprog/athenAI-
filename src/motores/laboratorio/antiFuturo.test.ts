@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { alterarDesde, analizarCodigo, primeraDiferencia } from './antiFuturo';
 
 describe('Motor 9 · Anti-futuro (análisis del código)', () => {
-  it('detecta índices hacia adelante y la última fila de todos los datos', () => {
-    const a = analizarCodigo('def estrategia(filas, p):\n    x = filas[i + 1]["close"]\n    y = filas[-1]["close"]\n    z = filas[len(filas) - 1]\n');
-    expect(a.violaciones).toHaveLength(3);
-    expect(a.violaciones[0]).toMatch(/Línea 2/);
+  it('avisa (sin rechazar) de índices hacia adelante, shift negativo y ventanas centradas', () => {
+    const a = analizarCodigo('x = filas[i + 1]["close"]\ny = df.shift(-1)\nz = s.rolling(5, center=True)\nw = historia[-1]\n');
+    expect(a.violaciones).toEqual([]);
+    expect(a.alertas.map((t) => t.slice(0, 8))).toEqual(['Línea 1:', 'Línea 2:', 'Línea 3:']);
   });
 
   it('avisa de estadísticas sobre todas las filas, pero no de ventanas del pasado', () => {
@@ -17,7 +17,7 @@ describe('Motor 9 · Anti-futuro (análisis del código)', () => {
   });
 
   it('ignora comentarios y textos', () => {
-    expect(analizarCodigo('# no usar filas[i + 1]\ns = "filas[-1]"\n').violaciones).toEqual([]);
+    expect(analizarCodigo('# no usar filas[i + 1]\ns = "filas[i + 1]"\n').alertas).toEqual([]);
   });
 
   it('alterar desde una fila no toca las anteriores y cambia las siguientes', () => {

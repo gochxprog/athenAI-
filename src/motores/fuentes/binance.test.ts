@@ -228,3 +228,53 @@ describe('FuenteBinance · rutas /public y /market', () => {
     fuente.detener();
   });
 });
+
+describe('FuenteBinance: el libro se recupera solo (sin tocar nada)', () => {
+  const json = (x: unknown) => ({ ok: true, status: 200, json: async () => x }) as Response;
+  const libroDe = (id: number) => ({ lastUpdateId: id, T: 1, bids: [['99', '1']], asks: [['101', '1']] });
+  function fuenteCon(depth: () => Promise<Response>) {
+    const sockets: SocketFalso[] = [];
+    const pedidos: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      pedidos.push(url);
+      if (url.includes('exchangeInfo')) return json({ symbols: [{ symbol: 'BTCUSDT', status: 'TRADING', filters: [{ filterType: 'PRICE_FILTER', tickSize: '0.10' }] }] });
+      if (url.includes('depth')) return depth();
+      return json({});
+    }) as unknown as typeof fetch;
+    const fuente = new FuenteBinance({ simbolos: ['BTCUSDT'], onMensaje: () => undefined, crearSocket: (u) => (sockets.push(new SocketFalso(u)), sockets.at(-1)!), fetchImpl });
+    return { fuente, sockets, snapshots: () => pedidos.filter((u) => u.includes('depth')).length };
+  }
+  afterEach(() => vi.useRealTimers());
+
+  it('un snapshot más viejo que los diffs se repide con espera creciente (no cada 500 ms: el límite de Binance)', async () => {
+    vi.useFakeTimers();
+    const { fuente, sockets, snapshots } = fuenteCon(async () => json(libroDe(100)));
+    await fuente.iniciar();
+    sockets[0].emitir(diff(150, 160, 149));
+    sockets[0].onopen?.({});
+    await vi.advanceTimersByTimeAsync(10_000);
+    // Antes: ~20 pedidos en 10 s (peso 400). Ahora la espera crece 0,5 → 1 → 2 → 4 → 8 s.
+    expect(snapshots()).toBeLessThanOrEqual(6);
+    fuente.detener();
+  });
+
+  it('un snapshot viejo que llega tarde no pisa el libro que ya está vivo', async () => {
+    const respuestas: ((r: Response) => void)[] = [];
+    const { fuente, sockets } = fuenteCon(() => new Promise((ok) => respuestas.push(ok)));
+    await fuente.iniciar();
+    const so = sockets[0];
+    so.onopen?.({});
+    so.emitir(diff(150, 160, 149));
+    respuestas[0](json(libroDe(155)));
+    await esperar();
+    expect(fuente.estadoLibro('BTCUSDT')).toMatchObject({ listo: true, ultimoU: 160 });
+    so.emitir(diff(161, 170, 160));
+    // Un pedido viejo (de antes de una reconexión) llega ahora con un lastUpdateId atrasado: se descarta.
+    (fuente as unknown as { libros: Map<string, { pidiendoSnapshot: boolean }> }).libros.get('BTCUSDT')!.pidiendoSnapshot = false;
+    void (fuente as unknown as { pedirSnapshot: (s: string) => Promise<void> }).pedirSnapshot('BTCUSDT');
+    respuestas[1]?.(json(libroDe(150)));
+    await esperar();
+    expect(fuente.estadoLibro('BTCUSDT')).toMatchObject({ listo: true, ultimoU: 170, resincronizaciones: 0 });
+    fuente.detener();
+  });
+});

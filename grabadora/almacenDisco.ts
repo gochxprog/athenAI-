@@ -33,7 +33,12 @@ const dia = (t: number) => new Date(t).toISOString().slice(0, 10);
 const valido = (s: string) => /^[A-Z0-9]{2,20}$/.test(s);
 const ARCHIVO_DIA = /^\d{4}-\d{2}-\d{2}\.jsonl$/;
 
+/** Filas recientes de cada mercado que se guardan en memoria (~2,5 h de BTC): los bots y las pantallas las leen
+ *  de ahí en vez de releer y procesar el archivo del día entero (decenas de MB) en cada consulta. */
+export const RECIENTES = 12_000;
+
 export class AlmacenDisco {
+  private readonly recientes = new Map<string, FilaDisco[]>();
   private pendientes = new Map<string, { simbolo: string; lineas: string[] }>();
   private cache: Map<string, ResumenDisco> | null = null;
   /** Resultado de la migración del formato anterior (null si no hizo falta). */
@@ -79,6 +84,9 @@ export class AlmacenDisco {
   guardar(simbolo: string, sesion: number, filas: readonly FilaFeatures[]): void {
     if (!valido(simbolo)) throw new Error(`Símbolo no válido: ${simbolo}`);
     const mercado = mercadoId(PROVEEDOR, simbolo);
+    const memoria = this.memoria(simbolo);
+    for (const f of filas) memoria.push({ ...f, mercado, simbolo, sesion });
+    if (memoria.length > RECIENTES * 1.2) memoria.splice(0, memoria.length - RECIENTES);
     for (const f of filas) {
       const a = this.archivo(simbolo, f.cierre);
       const p = this.pendientes.get(a) ?? { simbolo, lineas: [] };
@@ -130,6 +138,17 @@ export class AlmacenDisco {
   }
 
   leer(simbolo: string, desde: number, limite: number): { filas: FilaDisco[]; mas: boolean } {
+    // Lo reciente sale de la memoria (búsqueda binaria), sin tocar el disco.
+    const m = valido(simbolo) ? this.memoria(simbolo) : [];
+    if (m.length && m[0].cierre <= desde) {
+      let [a, b] = [0, m.length];
+      while (a < b) {
+        const c = (a + b) >> 1;
+        if (m[c].cierre > desde) b = c;
+        else a = c + 1;
+      }
+      return { filas: m.slice(a, a + limite), mas: a + limite < m.length };
+    }
     const salida: FilaDisco[] = [];
     const dir = this.dirMercado(simbolo);
     if (!dir) return { filas: salida, mas: false };
@@ -147,8 +166,22 @@ export class AlmacenDisco {
     return { filas: salida, mas: false };
   }
 
-  /** Las últimas `n` filas (en orden), leyendo los días desde el final. Para la señal en vivo de los bots. */
+  /** Las últimas `n` filas (en orden). Para la señal en vivo de los bots y la primera carga de las pantallas. */
   leerUltimas(simbolo: string, n: number): FilaDisco[] {
+    return n <= RECIENTES && valido(simbolo) ? this.memoria(simbolo).slice(-n) : this.ultimasDelDisco(simbolo, n);
+  }
+
+  /** La memoria de un mercado: se llena una vez desde el disco y después crece con cada `guardar`. */
+  private memoria(simbolo: string): FilaDisco[] {
+    let m = this.recientes.get(simbolo);
+    if (!m) {
+      m = this.ultimasDelDisco(simbolo, RECIENTES);
+      this.recientes.set(simbolo, m);
+    }
+    return m;
+  }
+
+  private ultimasDelDisco(simbolo: string, n: number): FilaDisco[] {
     const dir = this.dirMercado(simbolo);
     if (!dir) return [];
     const mercado = mercadoId(PROVEEDOR, simbolo);

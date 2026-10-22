@@ -43,8 +43,9 @@ const Tarjeta = ({ titulo, valor, nota, barra, lado, children }: { titulo: strin
 function useDespues() {
   const [ya, setYa] = useState(false);
   useEffect(() => {
-    const id = requestAnimationFrame(() => setTimeout(() => setYa(true), 60));
-    return () => cancelAnimationFrame(id);
+    let t = 0;
+    const id = requestAnimationFrame(() => (t = window.setTimeout(() => setYa(true), 60)));
+    return () => (cancelAnimationFrame(id), clearTimeout(t));
   }, []);
   return ya;
 }

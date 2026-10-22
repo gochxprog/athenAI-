@@ -75,7 +75,24 @@ stats = bt.run()
   });
 
   it('mensajes claros cuando no se entiende la salida', () => {
-    expect(() => ejecutarEstrategia(py, `def estrategia(velas, p):\n    return [1, 0]\n`, filas)).toThrow(/2 señales para 160 velas/);
+    expect(() => ejecutarEstrategia(py, `def estrategia(velas, p):\n    return [1, 0]\n`, filas)).toThrow(/2 señales para \d+ velas/);
     expect(() => ejecutarEstrategia(py, `x = 1\n`, filas)).toThrow(/No encontré tus señales/);
+  });
+});
+
+describe('Anti-futuro: las trampas de la auditoría ya no pasan', () => {
+  const trampas: [string, string][] = [
+    ['lee la serie completa desde la variable global «velas»', `def estrategia(filas, p):\n    todo = velas\n    return [1 if i + 1 < len(todo) and todo[i + 1]["close"] > todo[i]["close"] else -1 for i in range(len(filas))]\n`],
+    ['guarda la corrida completa en una caché y la devuelve recortada', `_c = {}\ndef estrategia(filas, p):\n    if "x" not in _c:\n        x = filas\n        _c["x"] = [1 if j + 1 < len(x) and x[j + 1]["close"] > x[j]["close"] else -1 for j in range(len(x))]\n    return _c["x"][:len(filas)]\n`],
+    ['solo la segunda variante mira el futuro', `PARAMETROS = {"modo": [0, 1]}\ndef estrategia(filas, p):\n    n = len(filas)\n    if p["modo"] == 0: return [0] * n\n    return [1 if filas[min(i + 1, n - 1)]["close"] > filas[i]["close"] else -1 for i in range(n)]\n`],
+    ['espía el máximo de la vela siguiente de vez en cuando', `def estrategia(filas, p):\n    x = filas\n    return [1 if i % 10 == 2 and i + 1 < len(x) and x[i + 1]["high"] > x[i]["high"] + 0.6 else 0 for i in range(len(x))]\n`],
+  ];
+  it.each(trampas)('rechaza: %s', (_, codigo) => {
+    expect(ejecutarEstrategia(py, codigo, filas).antiFuturo.ok).toBe(false);
+  });
+
+  it('no rechaza una estrategia honesta que usa historia[-1] (la vela actual)', () => {
+    const r = ejecutarEstrategia(py, `def decide(historia):\n    if len(historia) < 2: return 0\n    return 1 if historia[-1]["close"] > historia[-2]["close"] else -1\n`, filas);
+    expect(r.antiFuturo.ok).toBe(true);
   });
 });

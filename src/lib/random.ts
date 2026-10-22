@@ -22,12 +22,6 @@ export function elegir<T>(rand: () => number, lista: readonly T[]): T {
 }
 
 /** Serie de equity con deriva y volatilidad por paso. */
-export function serieEquity(semilla: number, pasos: number, inicio: number, deriva: number, vol: number) {
-  const rand = crearAleatorio(semilla);
-  const out: number[] = [inicio];
-  for (let i = 1; i < pasos; i++) out.push(out[i - 1] * (1 + deriva + normal(rand) * vol));
-  return out;
-}
 
 export function percentil(ordenados: number[], p: number) {
   const idx = Math.min(ordenados.length - 1, Math.max(0, Math.round((ordenados.length - 1) * p)));

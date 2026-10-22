@@ -70,23 +70,30 @@ async function sondear(): Promise<void> {
           const previas = actual.filas[m.simbolo] ?? [];
           const ultima = previas.at(-1)?.cierre ?? 0;
           if (ultima >= m.ultimoCierre!) return [m.simbolo, previas] as const;
-          const desde = Math.max(ultima, m.ultimoCierre! - VENTANA_MS);
-          const nuevas = (await pedir<{ filas: Fila[] }>(`/api/filas?simbolo=${m.simbolo}&desde=${desde}&limite=400`).catch(() => null))?.filas ?? [];
+          // Primera vez: las últimas 400 (lo de ahora); después, solo las nuevas desde la última que ya tenemos.
+          const ruta = ultima ? `desde=${ultima}&limite=400` : 'ultimas=400';
+          const nuevas = (await pedir<{ filas: Fila[] }>(`/api/filas?simbolo=${m.simbolo}&${ruta}`).catch(() => null))?.filas ?? [];
           return [m.simbolo, [...previas, ...nuevas].filter((f) => f.cierre > m.ultimoCierre! - VENTANA_MS)] as const;
         }),
       ),
     );
-    actual = { listo: true, sinSesion: false, caido: false, inicio: e.inicio, version: e.version, mercados: e.simbolos, almacen: e.almacen, historia: h?.mercados ?? actual.historia,
+    // Lo que no cambió conserva la MISMA referencia: las pantallas no recalculan ni redibujan por nada.
+    const igual = <T,>(nuevo: T, viejo: T): T => (JSON.stringify(nuevo) === JSON.stringify(viejo) ? viejo : nuevo);
+    const mismasFilas = Object.keys(filas).length === Object.keys(actual.filas).length && Object.entries(filas).every(([k, f]) => actual.filas[k] === f);
+    actual = { listo: true, sinSesion: false, caido: false, inicio: e.inicio, version: e.version, mercados: e.simbolos, almacen: e.almacen, historia: h ? igual(h.mercados, actual.historia) : actual.historia,
       // Tu cuenta a mano (Terminal) no es un bot: va aparte.
-      bots: (p?.bots ?? []).filter((b) => b.origen !== 'manual'), apagado: p?.apagado ?? false, reglas: p?.reglas ?? null, bitacora: p?.bitacora ?? [], ops: o?.operaciones ?? actual.ops, filas, agentes: ag };
+      bots: igual((p?.bots ?? []).filter((b) => b.origen !== 'manual'), actual.bots), apagado: p?.apagado ?? false, reglas: igual(p?.reglas ?? null, actual.reglas), bitacora: igual(p?.bitacora ?? [], actual.bitacora), ops: o ? igual(o.operaciones, actual.ops) : actual.ops, filas: mismasFilas ? actual.filas : filas, agentes: ag };
   } catch (err) {
     actual = { ...actual, listo: true, sinSesion: (err as Error).message === 'sin-sesion', caido: (err as Error).message !== 'sin-sesion' };
   }
   oyentes.forEach((f) => f(actual));
   // Un solo temporizador aunque `refrescar` lance un sondeo mientras otro estaba en curso.
   if (reloj) clearTimeout(reloj);
-  reloj = oyentes.size ? setTimeout(sondear, CADA_MS) : null;
+  // Con la pestaña oculta no se consulta al VPS; al volver, se pide todo de una vez.
+  reloj = oyentes.size && !document.hidden ? setTimeout(sondear, CADA_MS) : null;
 }
+
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => !document.hidden && oyentes.size && refrescar());
 
 /** Pide el estado ya (tras una acción), sin esperar al siguiente sondeo. */
 export function refrescar(): void {

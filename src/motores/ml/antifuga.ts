@@ -15,8 +15,6 @@
 export const COLUMNAS_IDENTIDAD = ['market_id', 'evento_inicio', 'evento_precio'] as const;
 /** Columnas de la respuesta: miran al futuro. JAMÁS pueden ser entradas del modelo. */
 export const COLUMNAS_RESPUESTA = ['evento_fin', 'evento_barrera', 'etiqueta', 'meta', 'evento_retorno', 'evento_barras'] as const;
-/** Conocidas en t₀ (lado de la señal y volatilidad pasada): pueden ser entradas. */
-export const COLUMNAS_CONTEXTO = ['evento_lado', 'evento_sigma'] as const;
 
 const NO_ENTRADAS = new Set<string>([...COLUMNAS_IDENTIDAD, ...COLUMNAS_RESPUESTA]);
 export const CORRELACION_FUGA = 0.95;

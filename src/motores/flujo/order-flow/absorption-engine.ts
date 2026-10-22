@@ -1,4 +1,4 @@
-import type { FootprintLevel } from "./footprint";
+import { buildRows, clamp01, summaryOf, toIndex, type LevelInput } from "./resumen-niveles";
 
 /**
  * ABSORPTION ENGINE
@@ -94,7 +94,6 @@ export const DEFAULT_ABSORPTION_CONFIG: AbsorptionConfig = {
   },
 };
 
-type LevelInput = Pick<FootprintLevel, "price" | "bidQty" | "askQty">;
 
 export interface AbsorptionOhlc {
   open: number;
@@ -162,65 +161,6 @@ export interface AbsorptionCandleResult {
   reason?: AbsorptionInsufficientReason;
 }
 
-/* ------------------------------------------------------------------ */
-/* Utilidades internas (autocontenidas a propósito)                     */
-/* ------------------------------------------------------------------ */
-
-const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
-const toIndex = (price: number, step: number) => Math.round(price / step);
-
-interface Row {
-  idx: number;
-  price: number;
-  bid: number;
-  ask: number;
-}
-
-function buildRows(levels: readonly LevelInput[], step: number): Row[] {
-  const byIdx = new Map<number, Row>();
-  for (const level of levels) {
-    if (!Number.isFinite(level.price) || !(level.bidQty >= 0) || !(level.askQty >= 0)) continue;
-    const idx = toIndex(level.price, step);
-    const row = byIdx.get(idx);
-    if (row) {
-      row.bid += level.bidQty;
-      row.ask += level.askQty;
-    } else {
-      byIdx.set(idx, { idx, price: level.price, bid: level.bidQty, ask: level.askQty });
-    }
-  }
-  return [...byIdx.values()].sort((a, b) => a.idx - b.idx);
-}
-
-interface CandleSummary {
-  step: number;
-  askN: number; askSum: number; askSumSq: number;
-  bidN: number; bidSum: number; bidSumSq: number;
-  /** Filas entre el nivel más bajo y el más alto operados (0 = una sola fila). */
-  rangeSteps: number;
-  empty: boolean;
-}
-
-// Cada vela se resume una sola vez (clave: su array de niveles) => la base
-// histórica cuesta O(lookbackCandles) por evaluación, no O(niveles históricos).
-const summaryCache = new WeakMap<object, CandleSummary>();
-
-function summaryOf(candle: AbsorptionCandleInput, step: number): CandleSummary {
-  const cached = summaryCache.get(candle.levels);
-  if (cached && cached.step === step) return cached;
-  const rows = buildRows(candle.levels, step);
-  const s: CandleSummary = {
-    step, askN: 0, askSum: 0, askSumSq: 0, bidN: 0, bidSum: 0, bidSumSq: 0,
-    rangeSteps: rows.length > 0 ? rows[rows.length - 1].idx - rows[0].idx : 0,
-    empty: rows.length === 0,
-  };
-  for (const r of rows) {
-    if (r.ask > 0) { s.askN += 1; s.askSum += r.ask; s.askSumSq += r.ask * r.ask; }
-    if (r.bid > 0) { s.bidN += 1; s.bidSum += r.bid; s.bidSumSq += r.bid * r.bid; }
-  }
-  summaryCache.set(candle.levels, s);
-  return s;
-}
 
 interface Baseline {
   ask: { mean: number; std: number; n: number };
@@ -242,7 +182,7 @@ function computeBaseline(
     if (s.empty) continue;
     aN += s.askN; aS += s.askSum; aQ += s.askSumSq;
     bN += s.bidN; bS += s.bidSum; bQ += s.bidSumSq;
-    rSum += s.rangeSteps; rN += 1;
+    rSum += s.maxIdx - s.minIdx; rN += 1;
   }
   const stats = (n: number, sum: number, sq: number) => {
     if (n === 0) return { mean: 0, std: 0, n: 0 };

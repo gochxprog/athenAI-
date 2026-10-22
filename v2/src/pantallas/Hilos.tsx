@@ -24,9 +24,12 @@ export default function Hilos({ agentes, pulsos }: { agentes: AgenteAnillo[]; pu
 
     const medir = () => {
       const e = escena.getBoundingClientRect();
-      const dpr = Math.min(2, devicePixelRatio);
-      c.width = e.width * dpr;
-      c.height = e.height * dpr;
+      const dpr = Math.min(1.5, devicePixelRatio);
+      // Solo se cambia el tamaño del lienzo si cambió (cambiarlo borra y vuelve a reservar toda la imagen).
+      if (c.width !== Math.round(e.width * dpr) || c.height !== Math.round(e.height * dpr)) {
+        c.width = Math.round(e.width * dpr);
+        c.height = Math.round(e.height * dpr);
+      }
       x.setTransform(dpr, 0, 0, dpr, 0, 0);
       const cer = escena.querySelector('.cerebro')!.getBoundingClientRect();
       centro = { x: cer.left - e.left + cer.width / 2, y: cer.top - e.top + cer.height / 2, r: Math.min(cer.width, cer.height) * 0.36, lim: Math.min(cer.width, cer.height) / 2 - 30 };
@@ -54,6 +57,7 @@ export default function Hilos({ agentes, pulsos }: { agentes: AgenteAnillo[]; pu
       cuadro = requestAnimationFrame(dibujar);
       const dt = Math.min(0.05, (ahora - ultimo) / 1000);
       ultimo = ahora;
+      if (!enVista) return;
       const d = datos.current;
       x.clearRect(0, 0, c.width, c.height);
       // Líneas finas.
@@ -128,6 +132,10 @@ export default function Hilos({ agentes, pulsos }: { agentes: AgenteAnillo[]; pu
       });
     };
 
+    // Fuera de la vista (scroll) no se dibuja.
+    let enVista = true;
+    const vista = new IntersectionObserver(([e]) => (enVista = e.isIntersecting));
+    vista.observe(c);
     medir();
     const ro = new ResizeObserver(medir);
     ro.observe(escena);
@@ -138,6 +146,7 @@ export default function Hilos({ agentes, pulsos }: { agentes: AgenteAnillo[]; pu
       cancelAnimationFrame(cuadro);
       clearInterval(otraVez);
       ro.disconnect();
+      vista.disconnect();
     };
   }, []);
 

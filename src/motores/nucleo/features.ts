@@ -94,6 +94,13 @@ function atr(barras: readonly BarraAnalizada[], periodo = 14): number | null {
 }
 
 const posicion = (precio: number | null, low: number, high: number) => (precio === null || high <= low ? null : (precio - low) / (high - low));
+/** Posición en [0, 1] del CENTRO de un nivel del footprint (el precio del nivel es el borde de abajo de su cubeta). */
+function posicionNivel(precio: number | null, b: BarraAnalizada, low: number, high: number): number | null {
+  const ps = b.footprint.levels.map((l) => l.price).sort((x, y) => x - y);
+  const paso = ps.slice(1).reduce((m, p, i) => Math.min(m, p - ps[i]), Infinity);
+  const x = posicion(precio === null ? null : precio + (Number.isFinite(paso) ? paso / 2 : 0), low, high);
+  return x === null ? null : Math.min(1, Math.max(0, x));
+}
 
 /** División segura: null si el divisor es ~0 o algo no es finito (nunca NaN ni ±∞). */
 export function div(a: number | null | undefined, b: number | null | undefined): number | null {
@@ -141,7 +148,7 @@ export function construirFila(b: BarraAnalizada, previas: readonly BarraAnalizad
   const ult20 = previas.slice(-20);
   v.trades_rel = ult20.length ? div(b.trades, ult20.reduce((s, x) => s + x.trades, 0) / ult20.length) : null;
   v.duracion_z = zMovil(logDuracion(b), ventana.map(logDuracion));
-  v.cvd_sesion_ratio = mercado.cvdCompleto ? div(mercado.cvdSesion, mercado.cvdVolumenSesion) : null;
+  v.cvd_sesion_ratio = mercado.cvdCompleto && mercado.cvdActivo ? div(mercado.cvdSesion, mercado.cvdVolumenSesion) : null;
   // Flujo de 5 barras = Σ delta / Σ volumen (esta y las 4 anteriores).
   const cinco = previas.length >= 4 ? [...previas.slice(-4), b] : null;
   v.flujo_5_ratio = cinco ? div(cinco.reduce((s, x) => s + x.delta, 0), cinco.reduce((s, x) => s + x.volumen, 0)) : null;
@@ -152,8 +159,8 @@ export function construirFila(b: BarraAnalizada, previas: readonly BarraAnalizad
   v.imb_venta_frac = div(sen.levels.filter((l) => l.sellingImbalance).length, niveles);
   v.stacked_compra = sen.stackedImbalances.filter((s) => s.direction === 'buying').length;
   v.stacked_venta = sen.stackedImbalances.filter((s) => s.direction === 'selling').length;
-  v.poc_pos = posicion(b.footprint.pocPrice, low, high);
-  v.delta_poc_pos = posicion(sen.deltaPocPrice, low, high);
+  v.poc_pos = posicionNivel(b.footprint.pocPrice, b, low, high);
+  v.delta_poc_pos = posicionNivel(sen.deltaPocPrice, b, low, high);
 
   const maxScore = (xs: { absorptionScore?: number; exhaustionScore?: number }[]) => (xs.length ? Math.max(...xs.map((x) => x.absorptionScore ?? x.exhaustionScore ?? 0)) : 0);
   v.absorcion_ask = maxScore(b.absorcion.filter((d) => d.side === 'ask'));
@@ -164,8 +171,8 @@ export function construirFila(b: BarraAnalizada, previas: readonly BarraAnalizad
   v.agotamiento_prev_alcista = maxScore(ag.filter((d) => d.side === 'bullish'));
   v.agotamiento_prev_bajista = maxScore(ag.filter((d) => d.side === 'bearish'));
 
-  // Eventos de mercado confirmados durante la barra (disponibleEn dentro de (inicio, cierre]).
-  const eventos: EventoMotor[] = mercado.eventosDisponibles(b.cierre, b.inicio);
+  // Eventos de mercado conocidos desde el cierre de la barra anterior hasta el de ésta: (cierre previo, cierre].
+  const eventos: EventoMotor[] = mercado.eventosDisponibles(b.cierre, prev?.cierre ?? b.inicio - 1);
   const sumar = (tipo: EventoMotor['tipo'], lado: EventoMotor['lado'], campo: 'n' | 'magnitud') =>
     eventos.filter((e) => e.tipo === tipo && e.lado === lado).reduce((s, e) => s + (campo === 'n' ? 1 : e.magnitud), 0);
   // Montos en USD → fracción del nocional de la barra (una barra de 10 M con 2 M de big trades = 0,2).
@@ -178,7 +185,7 @@ export function construirFila(b: BarraAnalizada, previas: readonly BarraAnalizad
   v.pools_barridos = eventos.filter((e) => e.tipo === 'pool-barrido').length;
   v.liq_largos_frac = div(sumar('liquidacion', 'venta', 'magnitud'), b.nocional);
   v.liq_cortos_frac = div(sumar('liquidacion', 'compra', 'magnitud'), b.nocional);
-  v.funding_tasa = mercado.fundingTasa;
+  v.funding_tasa = mercado.fundingEn(b.cierre);
 
   // Open Interest sobre una ventana ACOTADA de barras (no se recalcula toda la historia).
   let puntoOi: OpenInterestCandlePoint | null = null;
@@ -200,12 +207,16 @@ export function construirFila(b: BarraAnalizada, previas: readonly BarraAnalizad
       puntoOi = res.points[res.points.length - 1] ?? null;
     }
   }
+  // OI viejo (el sondeo se cortó) o justo después de un hueco: sin dato, en vez de un ΔOI falso de 0 o de golpe.
+  if (puntoOi?.stale || puntoOi?.gap) puntoOi = null;
   v.oi_delta_pct = puntoOi?.deltaOiPct ?? null;
   v.oi_delta_z = puntoOi?.deltaOiPctZ ?? null;
   v.oi_cuadrante = puntoOi?.quadrant ? CUADRANTE[puntoOi.quadrant] ?? 0 : null;
   v.oi_flush = puntoOi ? (puntoOi.flush ? 1 : 0) : null;
 
-  const libro = mercado.libro;
+  // El libro y los pools vigentes al cierre de la barra (nunca una foto posterior ni una de hace más de 2 s).
+  const foto = mercado.libroEn(b.cierre);
+  const libro = foto?.vista;
   if (libro && libro.bids.length && libro.asks.length) {
     // Los calcula el motor del libro (un solo cálculo): OBI sobre los niveles de la vista, MicroPrice con el
     // mejor bid y ask reales (no con los niveles agrupados, que lo desplazaban hasta un grupo entero).
@@ -217,11 +228,11 @@ export function construirFila(b: BarraAnalizada, previas: readonly BarraAnalizad
     v.microprice_spread = null;
   }
 
-  const pools = mercado.poolsVivos();
+  const pools = foto?.pools ?? [];
   const asks = pools.filter((p) => p.side === 'ask' && p.price > close).map((p) => p.price - close);
   const bids = pools.filter((p) => p.side === 'bid' && p.price < close).map((p) => close - p.price);
-  v.pool_ask_dist_atr = asks.length ? div(Math.min(...asks), a) : null;
-  v.pool_bid_dist_atr = bids.length ? div(Math.min(...bids), a) : null;
+  v.pool_ask_dist_atr = foto && asks.length ? div(Math.min(...asks), a) : null;
+  v.pool_bid_dist_atr = foto && bids.length ? div(Math.min(...bids), a) : null;
 
   for (const k of Object.keys(v)) {
     const x = v[k];
