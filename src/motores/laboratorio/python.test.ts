@@ -88,4 +88,22 @@ def estrategia(filas, p):
     expect(() => ejecutarEstrategia(py, 'def estrategia(filas, p):\n    return [1]', filas)).toThrow(/devolvió 1 posiciones para 200 filas/);
     expect(() => ejecutarEstrategia(py, 'def estrategia(filas, p):\n    return [f["no_existe"] for f in filas]', filas)).toThrow(/KeyError/);
   });
+
+  it('la estrategia ve la vela completa (open/high/low/volumen/delta) y declara GESTION', () => {
+    const velas = filas.map((f) => ({ ...f, open: f.close - 1, high: f.close + 2, low: f.close - 2, volumen: 10, delta: 1 }));
+    const codigo = `
+GESTION = {"stopAtr": 1.5, "rr": 2, "gestion": "be1R"}
+
+def estrategia(filas, p):
+    return [1 if f["high"] - f["low"] == 4 and f["open"] < f["close"] and f["volumen"] == 10 else 0 for f in filas]
+`;
+    const r = ejecutarEstrategia(py, codigo, velas);
+    expect(r.gestion).toEqual({ stopAtr: 1.5, rr: 2, gestion: 'be1R' });
+    expect(r.posiciones[0].every((p) => p === 1)).toBe(true);
+    expect(r.antiFuturo.ok).toBe(true);
+  });
+
+  it('GESTION mal escrita da un error claro', () => {
+    expect(() => ejecutarEstrategia(py, 'GESTION = {"stopAtr": 0, "rr": 2}\ndef estrategia(filas, p):\n    return [0] * len(filas)', filas)).toThrow(/GESTION no válida/);
+  });
 });

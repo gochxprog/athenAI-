@@ -4,8 +4,10 @@
 //
 //   PARAMETROS = {"umbral": [40, 60, 80]}      # opcional: rejilla que el Juez usa en el Walk-Forward
 //
+//   GESTION = {"stopAtr": 1.5, "rr": 2, "gestion": "be1R"}   # opcional: stop, objetivo y manejo (salidas.ts)
+//
 //   def estrategia(filas, p):
-//       # filas: lista de dicts, una por dollar bar (cierre, close y las Features: delta, absorcion_bid…)
+//       # filas: lista de dicts, una por vela (inicio, cierre, open, high, low, close, volumen, delta y las Features)
 //       # p: un juego de parámetros, p. ej. {"umbral": 60}
 //       # devuelve una lista con una posición por fila: 1 largo, -1 corto, 0 fuera
 //
@@ -15,6 +17,7 @@
 import type { FilaFeatures } from '../nucleo/features';
 import { normalizarPosiciones } from '../juez/backtest';
 import type { Combo } from '../juez/juez';
+import { MODOS_GESTION, type ReglasSalida } from '../juez/salidas';
 import { alterarDesde, analizarCodigo, CORTES_ANTIFUTURO, primeraDiferencia, type ResultadoAntiFuturo } from './antiFuturo';
 
 /** Interfaz mínima de Pyodide que se usa (permite probar con Pyodide en Node). */
@@ -41,7 +44,7 @@ def _athenai_cargar(codigo, filas_json):
     claves = list(params.keys())
     valores = [v if isinstance(v, (list, tuple)) else [v] for v in params.values()]
     combos = [dict(zip(claves, c)) for c in itertools.product(*valores)] if claves else [{}]
-    return json.dumps(combos)
+    return json.dumps({"combos": combos, "gestion": _ns.get("GESTION")})
 
 def _athenai_correr_filas(p_json, filas_json):
     filas = json.loads(filas_json)
@@ -64,13 +67,24 @@ def _athenai_correr(p_json, hasta):
 
 export interface ResultadoEjecucion {
   combos: Combo[];
+  /** Stop, objetivo y manejo que declaró la estrategia (GESTION), o null si opera solo con su señal. */
+  gestion: ReglasSalida | null;
   posiciones: number[][];
   antiFuturo: ResultadoAntiFuturo;
 }
 
 /** Filas en el formato que ve la estrategia: cierre, close y cada Feature como clave. */
 export function filasParaPython(filas: readonly FilaFeatures[]): Record<string, number | null>[] {
-  return filas.map((f) => ({ cierre: f.cierre, inicio: f.inicio, close: f.close, ...f.valores }));
+  return filas.map(({ inicio, cierre, open, high, low, close, volumen, delta, valores }) => ({ inicio, cierre, open: open ?? close, high: high ?? close, low: low ?? close, close, volumen: volumen ?? null, delta: delta ?? null, ...valores }));
+}
+
+/** Valida GESTION: stop en ATR > 0, RR > 0 y un modo conocido. Cualquier otra cosa es un error claro. */
+export function leerGestion(g: unknown): ReglasSalida | null {
+  if (g === null || g === undefined) return null;
+  const x = g as Partial<ReglasSalida>;
+  const gestion = x.gestion ?? 'fija';
+  if (!(Number(x.stopAtr) > 0) || !(Number(x.rr) > 0) || !MODOS_GESTION.includes(gestion)) throw new Error(`GESTION no válida: usa {"stopAtr": 1.5, "rr": 2, "gestion": "fija" | "be1R" | "escalonada"}`);
+  return { stopAtr: Number(x.stopAtr), rr: Number(x.rr), gestion, ...(Number(x.maxBarras) > 0 ? { maxBarras: Number(x.maxBarras) } : {}) };
 }
 
 /** Traduce un error de Python a un mensaje legible (solo la parte del código del usuario). */
@@ -85,7 +99,9 @@ export function ejecutarEstrategia(py: PyodideMinimo, codigo: string, filas: rea
   py.runPython(ARNES);
   py.globals.set('_athenai_codigo', codigo);
   py.globals.set('_athenai_filas', JSON.stringify(filasParaPython(filas)));
-  const combos = JSON.parse(String(py.runPython('_athenai_cargar(_athenai_codigo, _athenai_filas)'))) as Combo[];
+  const cargado = JSON.parse(String(py.runPython('_athenai_cargar(_athenai_codigo, _athenai_filas)'))) as { combos: Combo[]; gestion: unknown };
+  const { combos } = cargado;
+  const gestion = leerGestion(cargado.gestion);
   if (combos.length > MAX_COMBOS) throw new Error(`PARAMETROS genera ${combos.length} combinaciones; el máximo es ${MAX_COMBOS} (más variantes = más riesgo de sobreajuste)`);
   const correr = (p: Combo, hasta = -1) => {
     py.globals.set('_athenai_p', JSON.stringify(p));
@@ -125,5 +141,5 @@ export function ejecutarEstrategia(py: PyodideMinimo, codigo: string, filas: rea
       ? `la posición de la fila ${dinamico.fila} cambia al ${dinamico.prueba === 'recorte' ? 'quitar' : 'alterar'} filas posteriores`
       : `posiciones idénticas con los datos recortados y alterados en ${CORTES_ANTIFUTURO.length} puntos`;
   const antiFuturo: ResultadoAntiFuturo = { ok, detalle, estatico, dinamico };
-  return { combos, posiciones, antiFuturo };
+  return { combos, gestion, posiciones, antiFuturo };
 }

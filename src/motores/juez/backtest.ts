@@ -19,6 +19,7 @@
 //      multiplica por (1 − p · tasa). Fórmulas en costos.ts.
 
 import { cobrosFunding, costoPorLado, COSTOS_POR_DEFECTO, factorFunding, type Costos } from './costos';
+import { backtestConSalidas, type ReglasSalida, type Vela } from './salidas';
 
 export { COSTOS_POR_DEFECTO, type Costos };
 
@@ -27,6 +28,11 @@ export interface OpcionesBacktest {
   huecos?: readonly boolean[];
   /** Hora de cierre de cada barra y tasa de funding conocida en ese cierre (null = sin dato). */
   funding?: { tiempos: readonly number[]; tasas: readonly (number | null)[] };
+  /**
+   * Stop, objetivo y gestión que declara la estrategia (GESTION): el Backtest usa entonces el motor de salidas
+   * (salidas.ts, el mismo de la Terminal) con el máximo y el mínimo de cada vela. Sin funding en ese modo.
+   */
+  salidas?: { reglas: ReglasSalida; velas: readonly Vela[] };
 }
 
 export interface Operacion {
@@ -71,7 +77,13 @@ function posicionEn(posiciones: readonly number[], huecos: readonly boolean[] | 
 }
 
 export function backtest(cierres: readonly number[], posiciones: readonly number[], costos: Costos = COSTOS_POR_DEFECTO, desde = 0, hasta = cierres.length, opciones: OpcionesBacktest = {}): ResultadoBacktest {
-  const { huecos, funding } = opciones;
+  const { huecos, funding, salidas } = opciones;
+  if (salidas) {
+    // Series de precios que no son las velas (el Luck test permuta los cierres): velas planas de esos cierres.
+    const propias = salidas.velas.length === cierres.length && salidas.velas.every((v, i) => v.close === cierres[i]);
+    const velas = propias ? salidas.velas : cierres.map((c) => ({ high: c, low: c, close: c }));
+    return backtestConSalidas(velas, posiciones, salidas.reglas, costos, desde, hasta, huecos);
+  }
   const n = cierres.length;
   const c = costoPorLado(costos);
   const retornos = new Array(n).fill(0);

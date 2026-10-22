@@ -19,7 +19,7 @@ import { ALFA_LUCK, luckTest, type ConfigLuck, type ResultadoLuck } from './luck
 import { monteCarlo, RUINA_MAXIMA, type ConfigMc, type ResultadoMc } from './monteCarlo';
 import { elegirVariante, walkForward, type ClaseWfe, type ConfigWfo, type ObjetivoWfo, type VentanaResultado } from './walkForward';
 import type { MercadoId } from '@/motores/mercado/mercadoId';
-import { aplicarHuecos, backtest, COSTOS_POR_DEFECTO, metricas, sharpeBarras, type Costos, type Metricas, type Operacion } from './backtest';
+import { aplicarHuecos, backtest, COSTOS_POR_DEFECTO, metricas, sharpeBarras, type Costos, type Metricas, type OpcionesBacktest, type Operacion } from './backtest';
 
 export type Combo = Record<string, number | string | boolean>;
 
@@ -36,6 +36,8 @@ export interface EntradaJuez {
   /** Posición por barra para cada combo (−1, 0, 1), sobre toda la serie. */
   posiciones: number[][];
   costos?: Costos;
+  /** Stop/objetivo/gestión declarados por la estrategia (GESTION) y las velas para vigilarlos. */
+  salidas?: OpcionesBacktest['salidas'];
   /** Variantes probadas en total (todas las ejecuciones de esta idea): alimenta el Deflated Sharpe. */
   ensayos?: number;
   /** Resultado de la prueba anti-futuro (la estrategia no usa datos de barras posteriores). */
@@ -123,7 +125,7 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
   // Regla de huecos (motor Backtest): sin posición en la barra anterior a un corte de datos.
   const posiciones = e.posiciones.map((p) => aplicarHuecos(p, e.huecos));
   const r = crearAleatorio(e.semilla ?? 12_345);
-  const fx = e.funding ? { funding: { tiempos: e.tiempos, tasas: e.funding } } : {};
+  const fx: OpcionesBacktest = { ...(e.funding ? { funding: { tiempos: e.tiempos, tasas: e.funding } } : {}), ...(e.salidas ? { salidas: e.salidas } : {}) };
 
   // Referencia dentro de muestra (optimista): cada variante sobre toda la serie.
   const completos = posiciones.map((p) => backtest(e.cierres, p, costos, 0, n, fx));
