@@ -7,6 +7,8 @@
 //   GET  /api/paper                    → bots, bitácora, apagado y reglas del Guardián          (con clave)
 //   GET  /api/paper/operaciones?bot=   → operaciones cerradas (de un bot o de todos)          (con clave)
 //   POST /api/paper/{crear|pausar|reanudar|borrar|apagar|rearmar|reglas|orden|cerrar}  cuerpo JSON (con clave)
+//   GET  /api/avisos                   → canales activos de los avisos 24/7 (sin credenciales)  (con clave)
+//   POST /api/avisos/{guardar|probar}  configuración de Discord/Telegram/ntfy en el VPS        (con clave)
 // La clave va en la cabecera «Authorization: Bearer <clave>». CORS abierto: la clave es la que protege los datos.
 // La PLATAFORMA (web) pide contraseña antes de mostrar nada: /entrar (la clave de la grabadora) crea una sesión
 // con cookie HttpOnly + SameSite=Strict (+ Secure detrás de HTTPS), válida 30 días; /salir la cierra. Con
@@ -19,6 +21,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { AlmacenDisco } from './almacenDisco';
 import type { ApiPaper } from './botsVps';
 import type { ApiLaboratorio } from './laboratorioVps';
+import type { ApiAvisos } from './avisosVps';
 import { esMercadoId, partesMercado } from '../src/motores/mercado/mercadoId';
 
 export interface EstadoSimbolo {
@@ -43,6 +46,8 @@ export interface OpcionesServidor {
   historia?: () => unknown;
   /** Pruebas del Juez en el VPS (laboratorioVps.ts). */
   laboratorio?: ApiLaboratorio | null;
+  /** Avisos 24/7 de los bots (avisosVps.ts). */
+  avisos?: ApiAvisos | null;
   /** Reloj (pruebas). */
   reloj?: () => number;
 }
@@ -135,13 +140,13 @@ export function crearServidor(o: OpcionesServidor): http.Server {
       return html(303, '', { Location: '/entrar', 'Set-Cookie': cookie('', 0) });
     }
     if (url.pathname === '/entrar') return conSesion ? html(303, '', { Location: '/' }) : html(200, paginaEntrar());
-    // Acciones (POST, solo JSON): bots de Paper y pruebas del Laboratorio.
-    const modulo = req.method === 'POST' ? (['paper', 'laboratorio'] as const).find((m) => url.pathname.startsWith(`/api/${m}/`)) : undefined;
+    // Acciones (POST, solo JSON): bots de Paper, pruebas del Laboratorio y avisos.
+    const modulo = req.method === 'POST' ? (['paper', 'laboratorio', 'avisos'] as const).find((m) => url.pathname.startsWith(`/api/${m}/`)) : undefined;
     if (modulo) {
       const bearer = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
       if (!conSesion && !claveCorrecta(bearer, o.clave)) return json(401, { error: 'Clave incorrecta' });
       const destino = o[modulo];
-      if (!destino) return json(503, { error: modulo === 'paper' ? 'Los bots no están activos en esta grabadora' : 'El Laboratorio no está activo en esta grabadora' });
+      if (!destino) return json(503, { error: `${{ paper: 'Los bots', laboratorio: 'El Laboratorio', avisos: 'Los avisos' }[modulo]} no están activos en esta grabadora` });
       // Solo JSON: un formulario de otra página no puede disparar acciones con la cookie.
       if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return json(415, { error: 'Solo JSON' });
       const accion = url.pathname.slice(`/api/${modulo}/`.length);
@@ -175,6 +180,7 @@ export function crearServidor(o: OpcionesServidor): http.Server {
           return json(200, { ...e, almacen: o.almacen.resumen() });
         }
         if (url.pathname === '/api/historia') return json(200, { mercados: o.historia?.() ?? [] });
+        if (url.pathname === '/api/avisos') return o.avisos ? json(200, o.avisos.estado()) : json(503, { error: 'Los avisos no están activos en esta grabadora' });
         if (url.pathname === '/api/laboratorio/trabajo') return o.laboratorio ? json(200, o.laboratorio.trabajo(url.searchParams.get('id') ?? '')) : json(503, { error: 'El Laboratorio no está activo en esta grabadora' });
         if (url.pathname === '/api/sesiones') {
           const simbolo = simboloPedido(url);

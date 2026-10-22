@@ -217,7 +217,9 @@ export class MotorPaper {
     anotarOperacion(b, op);
     op.id = await this.deps.almacen.agregarOperacion(op);
     const signo = op.pnl >= 0 ? '+' : '−';
-    this.anotar(b, `Cierra ${op.lado > 0 ? 'largo' : 'corto'} a ${precioTxt(op.precioSalida)}: ${signo}${precioTxt(Math.abs(op.pnl))} USD (${signo}${precioTxt(Math.abs(op.retorno * 100))} %)${op.motivo !== 'senal' ? ` · motivo: ${op.motivo}` : ''}.`);
+    // Formato corto para el teléfono: lado, entrada → salida, puntos a favor o en contra y el resultado en USD.
+    const puntos = (op.precioSalida - op.precioEntrada) * op.lado;
+    this.anotar(b, `Cierra ${op.lado > 0 ? 'largo' : 'corto'} · entró ${precioTxt(op.precioEntrada)} · salió ${precioTxt(op.precioSalida)} · ${puntos >= 0 ? '+' : '−'}${precioTxt(Math.abs(puntos))} puntos · ${signo}${precioTxt(Math.abs(op.pnl))} USD (${signo}${precioTxt(Math.abs(op.retorno * 100))} %)${op.motivo !== 'senal' ? ` · motivo: ${op.motivo}` : ''}.`);
     if (!revisarReglas || b.estado !== 'activo') return;
     const acc = revisarOperacion(b, this.reglas);
     if (acc) {

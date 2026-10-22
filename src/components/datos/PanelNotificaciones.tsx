@@ -40,7 +40,26 @@ export default function PanelNotificaciones() {
   const activos = canalesActivos(n.config);
   const cambios = JSON.stringify(c) !== JSON.stringify(n.config);
 
+  const [vps, setVps] = useState('');
   const set = (x: Partial<ConfigNotificaciones>) => setC((v) => ({ ...v, ...x }));
+  // Copia esta configuración a la grabadora (misma dirección) y manda una prueba: los bots del VPS avisan 24/7.
+  const alVps = async () => {
+    n.guardar(c);
+    setVps('Enviando al VPS…');
+    try {
+      const pedir = async (accion: string, cuerpo: unknown) => {
+        const r = await fetch(`/api/avisos/${accion}`, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+        const x = (await r.json().catch(() => ({}))) as { error?: string; resultados?: { canal: string; ok: boolean; detalle: string }[] };
+        if (!r.ok) throw new Error(x.error ?? `HTTP ${r.status}`);
+        return x;
+      };
+      await pedir('guardar', c);
+      const { resultados = [] } = await pedir('probar', {});
+      setVps(`VPS: ${resultados.map((x) => `${x.canal} ${x.ok ? '✓' : `✗ (${x.detalle})`}`).join(' · ')}`);
+    } catch (e) {
+      setVps(`No se pudo: ${e instanceof Error ? e.message : e}. Abre la plataforma desde la dirección de tu VPS.`);
+    }
+  };
   const probar = async (canal: Canal) => {
     n.guardar(c);
     setProbando(canal);
@@ -113,7 +132,11 @@ export default function PanelNotificaciones() {
               Guardar
             </button>
             {cambios && <span className="text-[10.5px] text-plata-400">Cambios sin guardar</span>}
+            <button onClick={() => void alVps()} className="rounded-lg border border-borde px-3.5 py-2 text-xs text-plata-100 hover:border-plata-400" title="Los bots del VPS avisan aunque cierres la plataforma">
+              Usar también en el VPS (24/7)
+            </button>
           </div>
+          {vps && <p className="text-[10.5px] text-plata-300" data-avisos-vps>{vps}</p>}
         </div>
         <div>
           <p className="etiqueta mb-1.5">Últimos envíos</p>
