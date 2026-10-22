@@ -8,6 +8,7 @@ import { StopRunSeries, type StopRunTrade } from '../flujo/order-flow/stoprun-de
 import { LiquidityHistory } from '../flujo/lhm/liquidity-history';
 import { DEFAULT_POOL_CONFIG, LiquidityPoolEngine, type Pool, type PoolCandle, type PoolConfig } from '../flujo/lhm/liquidity-pools';
 import { Anillo } from './anillo';
+import { grupoParaPrecio } from './parametros';
 import type { AggTrade, EventoMotor, Liquidacion, OpenInterestSnapshot, OrderBookView } from './tipos';
 
 /** 30 min de libro a 1 foto/s (6 h serían hasta ~345 MB por símbolo en el peor caso). */
@@ -116,7 +117,8 @@ export class MotorMercado {
       const antes = this.stopRuns.version;
       // «Tick» del detector = paso del libro (tick × agrupación, ≈ 1 USD en BTC): con el tick crudo
       // (0,1 USD) la ruptura mínima de 2 ticks era de 20 centavos y cualquier ruido contaba como ruptura.
-      const paso = this.libro ? this.libro.tickSize * this.libro.group : this.tickSize;
+      // Sin libro (historia importada) se usa la misma agrupación que tendría el libro a ese precio.
+      const paso = this.libro ? this.libro.tickSize * this.libro.group : this.tickSize * grupoParaPrecio(this.ultimoPrecio ?? 0, this.tickSize);
       this.stopRuns.update(this.loteStopRun, paso);
       this.loteStopRun = [];
       if (this.stopRuns.version !== antes) {

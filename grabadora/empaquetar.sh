@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 P=grabadora/dist/paquete
 rm -rf "$P" grabadora/dist/athenai-grabadora.zip
 mkdir -p "$P"
-cp grabadora/dist/grabadora.mjs grabadora/instalar.sh grabadora/asegurar.sh grabadora/LEEME.txt "$P/"
+cp grabadora/dist/grabadora.mjs grabadora/dist/importar.mjs grabadora/importar.sh grabadora/instalar.sh grabadora/asegurar.sh grabadora/LEEME.txt "$P/"
 [ -d dist ] && cp -r dist "$P/web"
 # Python para las señales de los bots 24/7 (los mismos archivos que usa la plataforma).
 mkdir -p "$P/pyodide"

@@ -1,13 +1,14 @@
 # Mapa del código · AthenAI
 
-Generado por `scripts/mapa.mjs` (218 archivos). Leer esto antes de explorar.
+Generado por `scripts/mapa.mjs` (220 archivos). Leer esto antes de explorar.
 Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 
 ## grabadora
-- `almacenDisco.ts` → mercadoId.ts, features.ts, parametros.ts · ← botsVps.ts, grabadora.ts, servidor.ts · 🧪 bots.test.ts, cliente.test.ts, grabadora.test.ts
+- `almacenDisco.ts` → mercadoId.ts, features.ts, parametros.ts · ← botsVps.ts, grabadora.ts, importador.ts, servidor.ts · 🧪 bots.test.ts, cliente.test.ts, grabadora.test.ts, importador.test.ts
 - `botsVps.ts` → almacenDisco.ts, protocolo.ts, python.ts, pipeline.ts, almacenPaper.ts, ejecutor.ts, motorPaper.ts, protocolo.ts · ← grabadora.ts, servidor.ts · 🧪 bots.test.ts
 - `build.mjs`
 - `grabadora.ts` → almacenDisco.ts, botsVps.ts, servidor.ts, binance.ts, calendario.ts, parametros.ts, pipeline.ts, tipos.ts, motorPaper.ts · 🧪 grabadora.test.ts
+- `importador.ts` → almacenDisco.ts, mercadoId.ts, calendario.ts, parametros.ts, pipeline.ts, tipos.ts · 🧪 importador.test.ts
 - `servidor.ts` → almacenDisco.ts, botsVps.ts, mercadoId.ts · ← grabadora.ts · 🧪 bots.test.ts, cliente.test.ts, grabadora.test.ts
 
 ## src
@@ -202,7 +203,7 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 
 ## motores/mercado
 - `fichas.ts` → mercadoId.ts · ← Ticket.tsx · 🧪 fichas.test.ts
-- `mercadoId.ts` → almacen.ts · ← 15 archivos · 🧪 mercadoId.test.ts
+- `mercadoId.ts` → almacen.ts · ← 16 archivos · 🧪 mercadoId.test.ts
 
 ## motores/ml
 - `antifuga.ts` · 🧪 antifuga.test.ts
@@ -215,13 +216,13 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 ## motores/nucleo
 - `anillo.ts` → tipos.ts · ← motorMercado.ts, pipeline.ts, serieBarras.ts
 - `barras.ts` → footprint.ts, tipos.ts · ← serieBarras.ts · 🧪 barras.test.ts
-- `calendario.ts` · ← 9 archivos
+- `calendario.ts` · ← 10 archivos · 🧪 importador.test.ts
 - `features.ts` → engine.ts, types.ts, motorMercado.ts, serieBarras.ts, tipos.ts · ← 15 archivos · 🧪 almacen.test.ts, extremos.test.ts, python.test.ts, memoria.test.ts, antifuga.test.ts, features.test.ts, pipeline.test.ts, grabadora.test.ts
-- `motorMercado.ts` → engine.ts, liquidity-history.ts, liquidity-pools.ts, iceberg-detector.ts, session-cvd.ts, stoprun-detector.ts, anillo.ts, tipos.ts · ← features.ts, pipeline.ts · 🧪 features.test.ts, motorMercado.test.ts
-- `parametros.ts` → tipos.ts · ← 7 archivos · 🧪 almacen.test.ts, parametros.test.ts, bots.test.ts, cliente.test.ts, grabadora.test.ts
-- `pipeline.ts` → order-book.ts, anillo.ts, calendario.ts, features.ts, motorMercado.ts, parametros.ts, serieBarras.ts, tipos.ts · ← 14 archivos · 🧪 historial.test.ts, features.test.ts, pipeline.test.ts
+- `motorMercado.ts` → engine.ts, liquidity-history.ts, liquidity-pools.ts, iceberg-detector.ts, session-cvd.ts, stoprun-detector.ts, anillo.ts, parametros.ts, tipos.ts · ← features.ts, pipeline.ts · 🧪 features.test.ts, motorMercado.test.ts
+- `parametros.ts` → tipos.ts · ← 9 archivos · 🧪 almacen.test.ts, parametros.test.ts, bots.test.ts, cliente.test.ts, grabadora.test.ts, importador.test.ts
+- `pipeline.ts` → order-book.ts, anillo.ts, calendario.ts, features.ts, motorMercado.ts, parametros.ts, serieBarras.ts, tipos.ts · ← 15 archivos · 🧪 historial.test.ts, features.test.ts, pipeline.test.ts, importador.test.ts
 - `serieBarras.ts` → absorption-engine.ts, exhaustion-engine.ts, microstructure.ts, anillo.ts, barras.ts, tipos.ts · ← features.ts, pipeline.ts
-- `tipos.ts` → types.ts, types.ts, order-book.ts · ← 17 archivos · 🧪 binance.test.ts, barras.test.ts, motorMercado.test.ts, pipeline.test.ts
+- `tipos.ts` → types.ts, types.ts, order-book.ts · ← 18 archivos · 🧪 binance.test.ts, barras.test.ts, motorMercado.test.ts, pipeline.test.ts, importador.test.ts
 
 ## motores/paper
 - `almacenPaper.ts` → ejecutor.ts · ← iniciar.ts, motorPaper.ts, botsVps.ts · 🧪 manual.test.ts, paper.test.ts

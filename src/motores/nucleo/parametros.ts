@@ -78,3 +78,9 @@ export function inferirTick(simbolo: string, precios: readonly number[]): number
   const m = min / base;
   return Number(((m < 2 ? 1 : m < 5 ? 2 : 5) * base).toPrecision(6));
 }
+
+/** Agrupación de la vista del libro: ≈ 1,2 puntos básicos por nivel (BTC a 85.000 → 1 USD). */
+export function grupoParaPrecio(precio: number, tick: number): number {
+  if (!(precio > 0) || !(tick > 0)) return 1;
+  return Math.max(1, Math.round((precio * 0.0000118) / tick));
+}

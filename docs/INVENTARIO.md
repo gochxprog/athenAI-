@@ -38,6 +38,7 @@ Barra lateral: números y estados reales. 🟢
 | Fuente **Binance USD-M Futures** | Trades, libro de órdenes, Open Interest, liquidaciones y funding. Gratis, sin clave. Rutas /public y /market (abril de 2026); se reconecta sola y sigue funcionando aunque falle el REST | 🟢 |
 | Fuente **Rithmic** (puente) | Futuros CME (NQ, ES, GC…) a través de un puente | 🟢 código listo, pendiente de cuenta |
 | **Grabadora 24/7 (VPS)** | Graba en tu VPS las 24 h con los mismos motores; la plataforma descarga lo grabado (carpeta «athenai-grabadora»). También corre los bots de Paper 24/7 con Python incluido | 🟢 |
+| **Importador de historia (VPS)** | Baja gratis de Binance trades, OI y funding de los días que pidas y los pasa por los mismos motores; se guarda aparte en `historia/`. Sin libro: icebergs, OBI, MicroPrice y pools quedan vacíos | 🟢 |
 | **Vigía** | Marca los cortes de conexión como «hueco»: no se aprende de datos rotos | 🟢 |
 | **Barras** | Dollar bars (canónicas), 1m / 5m / 15m y por volumen | 🟢 |
 | **Almacén** | Una «carpeta» por fuente (IndexedDB del navegador), con exportación a CSV y borrado | 🟢 |

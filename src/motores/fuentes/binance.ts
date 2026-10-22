@@ -21,7 +21,7 @@
 import { OrderBookEngine } from '../flujo/order-flow/order-book';
 import { Backoff } from '../flujo/realtime/backoff';
 import type { AggTrade, Liquidacion, MensajeMercado } from '../nucleo/tipos';
-import { inferirTick } from '../nucleo/parametros';
+import { grupoParaPrecio, inferirTick } from '../nucleo/parametros';
 
 export const BINANCE_REST = 'https://fapi.binance.com';
 export const BINANCE_WS = 'wss://fstream.binance.com';
@@ -129,11 +129,7 @@ interface EstadoLibro {
   resincronizaciones: number;
 }
 
-/** Agrupación de la vista del libro: ≈ 1,2 puntos básicos por nivel (BTC a 85.000 → 1 USD). */
-export function grupoParaPrecio(precio: number, tick: number): number {
-  if (!(precio > 0) || !(tick > 0)) return 1;
-  return Math.max(1, Math.round((precio * 0.0000118) / tick));
-}
+export { grupoParaPrecio };
 
 export function convertirAggTrade(d: AggTradeBinance): AggTrade | null {
   const price = Number(d.p);

@@ -69,6 +69,21 @@ Si quieres entrar con un nombre en vez de la IP:
 
 Para volver a como estaba: `sudo bash athenai-grabadora/asegurar.sh --deshacer`
 
+## Paso 6 (opcional) · Bajar la historia gratis de Binance
+Para probar estrategias con meses o años de BTC sin esperar a que la grabadora junte datos. En el VPS:
+
+```
+sudo bash athenai-grabadora/importar.sh BTCUSDT 2026-04-01 2026-10-20
+```
+
+- Cambia las fechas por las que quieras (AAAA-MM-DD). Empieza con unos meses.
+- Corre de fondo: puedes cerrar el SSH. Tarda unos 1-2 minutos por día de BTC.
+- **Ver cómo va:** `sudo bash athenai-grabadora/importar.sh --ver`
+- **Detenerla:** `sudo bash athenai-grabadora/importar.sh --parar`. Si la vuelves a correr, sigue donde quedó.
+- **Dónde queda:** `/var/lib/athenai-grabadora/historia`, aparte de lo que graba la grabadora, que no se toca.
+- **Espacio:** unos 9 MB por día de BTC (≈ 3 GB por año). Si el disco baja de 3 GB libres, se detiene sola.
+- **Lo que no trae:** la historia no tiene el libro de órdenes, así que icebergs, OBI, MicroPrice y pools de liquidez quedan vacíos; tampoco liquidaciones. Las demás Features (30 de 39) sí.
+
 ---
 
 ## Si algo falla

@@ -17,7 +17,7 @@ Las ideas nuevas se anotan aquí, no van directo al código. Se hacen **una a la
 - **Enchufe de órdenes para el broker del usuario:** el stop y el objetivo se mandan como distancia, y el tamaño se traduce a contratos o lotes. En el Diario, el precio de la señal frente al precio del broker.
 - **Enchufe de datos Rithmic (CME):** el puente ya existe en `src/motores/fuentes/rithmicPuente.ts`. Cuando el usuario compre la API.
 - **Bybit:** datos, Demo Trading y comparación Paper vs Demo. El usuario decide si se hace.
-- **Importador de datos históricos** (CSV o Parquet: Databento, broker…).
+- ✅ **Importador de la historia de Binance** (`grabadora/importador.ts`, `importar.sh`): trades, OI (5 min) y funding desde data.binance.vision, por los mismos motores, a `{datos}/historia` en el VPS. **Falta:** que el Juez lea esa historia en el VPS (el navegador no aguanta años de filas) y otros importadores (Bybit L2, Databento…).
 
 ### Bots
 - Que los bots de estrategia usen stop, objetivo y RR: la estrategia declara `GESTION` y el Juez la valida con `src/motores/juez/salidas.ts`.

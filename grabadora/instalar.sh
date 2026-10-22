@@ -45,6 +45,7 @@ fi
 id athenai >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin athenai
 mkdir -p "$APP" "$DATOS"
 cp "$AQUI/grabadora.mjs" "$APP/grabadora.mjs"
+[ -f "$AQUI/importar.mjs" ] && cp "$AQUI/importar.mjs" "$APP/importar.mjs"
 if [ -d "$AQUI/web" ]; then rm -rf "$APP/web"; cp -r "$AQUI/web" "$APP/web"; fi
 # Python (Pyodide) para las señales de los bots de Paper 24/7.
 if [ -d "$AQUI/pyodide" ]; then rm -rf "$APP/pyodide"; cp -r "$AQUI/pyodide" "$APP/pyodide"; fi

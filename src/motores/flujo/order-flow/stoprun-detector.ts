@@ -157,8 +157,16 @@ const median = (xs: number[]): number => {
 /**
  * Detecta barridos confirmados en las barras. `tick` = tamaño mínimo de precio (step del libro).
  * `fromT`: solo se evalúan rupturas con barra ≥ fromT (para no reprocesar todo en cada llamada).
+ * `cache`: referencia (máximo, mínimo y mediana de volumen) ya calculada por barra. Solo depende de barras anteriores,
+ * que ya están cerradas, así que no cambia; sin ella se recalculaba la mediana en cada lote de trades.
  */
-export function detectStopRuns(bars: readonly StopRunBar[], tick: number, params: StopRunParams, fromT = Number.NEGATIVE_INFINITY): StopRunEvent[] {
+export function detectStopRuns(
+  bars: readonly StopRunBar[],
+  tick: number,
+  params: StopRunParams,
+  fromT = Number.NEGATIVE_INFINITY,
+  cache?: Map<number, { hi: number; lo: number; med: number; n: number }>,
+): StopRunEvent[] {
   const out: StopRunEvent[] = [];
   if (!(tick > 0) || bars.length < 3) return out;
   const minBreak = params.minBreakTicks * tick;
@@ -169,24 +177,29 @@ export function detectStopRuns(bars: readonly StopRunBar[], tick: number, params
       i += 1;
       continue;
     }
-    const refFrom = bar.t - params.lookbackMs;
-    const refTo = bar.t - params.gapMs;
-    let hi = Number.NEGATIVE_INFINITY;
-    let lo = Number.POSITIVE_INFINITY;
-    const vols: number[] = [];
-    for (let k = i - 1; k >= 0; k -= 1) {
-      const b = bars[k];
-      if (b.t < refFrom) break;
-      vols.push(b.buyQty + b.sellQty);
-      if (b.t > refTo) continue;
-      if (b.high > hi) hi = b.high;
-      if (b.low < lo) lo = b.low;
+    let ref = cache?.get(bar.t);
+    if (!ref) {
+      const refFrom = bar.t - params.lookbackMs;
+      const refTo = bar.t - params.gapMs;
+      let h = Number.NEGATIVE_INFINITY;
+      let l = Number.POSITIVE_INFINITY;
+      const vols: number[] = [];
+      for (let k = i - 1; k >= 0; k -= 1) {
+        const b = bars[k];
+        if (b.t < refFrom) break;
+        vols.push(b.buyQty + b.sellQty);
+        if (b.t > refTo) continue;
+        if (b.high > h) h = b.high;
+        if (b.low < l) l = b.low;
+      }
+      ref = { hi: h, lo: l, med: vols.length ? median(vols) : 0, n: vols.length };
+      cache?.set(bar.t, ref);
     }
-    if (vols.length < params.minBars || !Number.isFinite(hi) || !Number.isFinite(lo)) {
+    const { hi, lo, med } = ref;
+    if (ref.n < params.minBars || !Number.isFinite(hi) || !Number.isFinite(lo)) {
       i += 1;
       continue;
     }
-    const med = median(vols);
     let ev: StopRunEvent | null = null;
     for (const direction of ["HIGH", "LOW"] as const) {
       const level = direction === "HIGH" ? hi : lo;
@@ -267,6 +280,8 @@ export class StopRunSeries {
   private lastId = 0;
   private evaluatedT = Number.NEGATIVE_INFINITY;
   private eventMap = new Map<string, StopRunEvent>();
+  /** Referencia por barra (ver detectStopRuns): se borra al cambiar parámetros y se poda con las barras. */
+  private refs = new Map<number, { hi: number; lo: number; med: number; n: number }>();
   version = 0;
 
   setParams(p: Partial<StopRunParams> | null | undefined): void {
@@ -277,6 +292,7 @@ export class StopRunSeries {
       this.lastId = 0;
       this.evaluatedT = Number.NEGATIVE_INFINITY;
     }
+    this.refs.clear();
     this.params = next;
   }
 
@@ -301,6 +317,7 @@ export class StopRunSeries {
     this.lastId = 0;
     this.evaluatedT = Number.NEGATIVE_INFINITY;
     this.eventMap.clear();
+    this.refs.clear();
     this.version += 1;
   }
 
@@ -326,7 +343,8 @@ export class StopRunSeries {
     }
     // Se reevalúa desde la barra anterior a la última ya evaluada (un rechazo puede llegar en barras nuevas).
     const from = this.evaluatedT - this.params.barMs * (this.params.rejectBars + 1);
-    const found = detectStopRuns(this.bars, tick, this.params, from);
+    const found = detectStopRuns(this.bars, tick, this.params, from, this.refs);
+    for (const t of this.refs.keys()) if (t < from) this.refs.delete(t);
     let changed = false;
     for (const e of found) {
       if (e.rejectT <= this.evaluatedT) continue; // ya cubierto por una evaluación anterior (o es pasado)
