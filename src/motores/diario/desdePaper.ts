@@ -9,11 +9,13 @@ export function fichaDeOperacion(o: OperacionPaper, bot: Bot | undefined): Ficha
   const riesgoUsd = g ? o.cantidad * g.riesgo : 0;
   const pnlPrecio = o.pnl + o.comisiones + o.funding;
   const capitalEntrada = o.retorno !== 0 ? o.pnl / o.retorno : bot?.capitalInicial ?? 0;
+  // Tu cuenta a mano se reconoce también por su id (la v2 no la lista entre los bots).
+  const manual = bot?.origen === 'manual' || o.botId.startsWith('manual:');
   return {
     id: `${o.botId}#${o.id ?? o.salidaT}`,
-    origen: bot?.origen === 'manual' ? 'manual' : 'bot',
-    botId: bot?.origen === 'manual' ? null : o.botId,
-    estrategia: bot?.origen === 'manual' ? 'Manual' : bot?.nombre ?? o.botId,
+    origen: manual ? 'manual' : 'bot',
+    botId: manual ? null : o.botId,
+    estrategia: manual ? 'Manual' : bot?.nombre ?? o.botId,
     mercado: bot?.mercado ?? (mercadoIdSeguro('binance', o.simbolo) as MercadoId),
     lado: o.lado,
     entrada: { t: o.entradaT, precio: o.precioEntrada, motivo: '', senales: {} },

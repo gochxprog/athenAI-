@@ -1,0 +1,34 @@
+/* Diario v2 · negro y bordes finos. Verde = ganancia, morado = pérdida (aquí no hay rojo). */
+.diario-v2 { --gana: var(--vivo); --pierde: #a855f7; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; animation: entrar .35s ease; }
+.diario-v2 h1 { font-weight: 300; font-size: 24px; letter-spacing: -.01em; margin-top: 4px; }
+.diario-v2 .gana { color: var(--gana); } .diario-v2 .pierde { color: var(--pierde); }
+.diario-v2 > .seg { justify-self: start; flex-wrap: wrap; }
+.kpis-d { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.kpis-d .dato b { font-size: 18px; }
+.dos-d { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 12px; }
+.calendario { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.calendario header { display: flex; align-items: center; gap: 10px; }
+.calendario header b { font-weight: 500; } .calendario header span { margin-left: auto; font-size: 11.5px; color: var(--tenue); }
+.rejilla-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)) minmax(0, .9fr); gap: 4px; }
+.rejilla-cal > .et { text-align: center; font-size: 9px; }
+.dia { min-height: 54px; border: 1px solid var(--borde); border-radius: 7px; padding: 4px 5px; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; transition: border-color .2s; }
+.dia:hover, .dia.sel { border-color: var(--txt); }
+.dia { overflow: hidden; } .dia small { font-size: 10px; color: var(--apagado); } .dia b { font-size: 11px; font-weight: 500; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dia i { font-style: normal; font-size: 9px; color: var(--tenue); }
+.semana { display: flex; align-items: center; justify-content: flex-end; font-size: 10.5px; color: var(--apagado); padding-right: 2px; }
+.horas-d { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.barras-h { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 2px; height: 130px; align-items: end; }
+.barras-h > div { height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; }
+.barras-h i { width: 100%; border-radius: 2px 2px 0 0; background: var(--borde2); min-height: 1px; }
+.barras-h i.gana { background: var(--gana); } .barras-h i.pierde { background: var(--pierde); }
+.barras-h small { font: 9px var(--mono); color: var(--apagado); height: 10px; }
+.chips-d { display: flex; flex-wrap: wrap; gap: 5px; font-size: 10.5px; }
+.chips-d span { border: 1px solid var(--borde2); border-radius: 5px; padding: 2px 7px; color: var(--tenue); }
+.fichas-d { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 10px; }
+.ficha-d { padding: 12px; display: flex; flex-direction: column; gap: 8px; border-left: 2px solid var(--borde2); }
+.ficha-d.borde-gana { border-left-color: var(--gana); } .ficha-d.borde-pierde { border-left-color: var(--pierde); }
+.ficha-d header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.ficha-d header b { font-weight: 500; } .ficha-d .sub { font-size: 10.5px; color: var(--apagado); }
+.ficha-d .res { margin-left: auto; }
+.linea-d { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 11px; color: var(--tenue); }
+@media (max-width: 1100px) { .kpis-d { grid-template-columns: repeat(3, minmax(0, 1fr)); } .dos-d { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) { .kpis-d { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dia { min-height: 44px; padding: 3px; } .dia b { font-size: 9px; } .dia i { display: none; } .semana { font-size: 9px; } }

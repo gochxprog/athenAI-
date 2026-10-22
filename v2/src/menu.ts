@@ -24,7 +24,7 @@ export const MENU: { seccion: string; items: Item[] }[] = [
       { id: 'terminal', nombre: 'Terminal', icono: ListOrdered, fase: 3 },
       { id: 'mercado', nombre: 'Mercado', icono: CandlestickChart },
       { id: 'riesgo', nombre: 'Riesgo', icono: Shield, fase: 3 },
-      { id: 'diario', nombre: 'Diario', icono: CalendarDays, fase: 3 },
+      { id: 'diario', nombre: 'Diario', icono: CalendarDays },
     ],
   },
   {
