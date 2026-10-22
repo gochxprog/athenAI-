@@ -160,7 +160,6 @@ export default function AgentesView() {
       return [{ id: 'etq', hora: new Date(), texto: 'Triple barrera + filtro CUSUM + meta-etiquetado sobre tus barras grabadas. Ábrelo en Laboratorio → Etiquetador.' }];
     return a.id === 'rastreador' ? consolas.rastreador : consolas.flujo;
   };
-  const etiquetaDatos = feeds.feeds.length ? `Datos de mercado · ${feeds.feeds.map((f) => f.simbolo).join(' · ')}` : 'Sin fuente de datos';
   const agente = AGENTES.find((a) => a.id === seleccion) ?? null;
   const color = (id: AgenteId) => ESTILO_AGENTE[id].color;
   const muro: DatosMuro = {
@@ -192,7 +191,7 @@ export default function AgentesView() {
 
       <Panel cuerpo="p-0" className="overflow-hidden">
         <div className="relative h-[480px] md:h-[600px]">
-          <SalaAgentes3D seleccion={seleccion} onSeleccion={setSeleccion} estados={estados} etiquetaDatos={etiquetaDatos} muro={muro} />
+          <SalaAgentes3D seleccion={seleccion} onSeleccion={setSeleccion} estados={estados} muro={muro} />
           <div className="pointer-events-none absolute bottom-4 left-4 flex items-center gap-2 text-[10px] text-plata-500">
             <MousePointerClick size={12} /> Haz clic en un agente para abrir su consola
           </div>

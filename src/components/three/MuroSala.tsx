@@ -5,6 +5,10 @@ import { ALTO_MURO as H, ANCHO_MURO as W, pintarMuro, type DatosMuro } from './m
 import { useFrame } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
+import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
+
+// La luz de la pantalla (luz de área) necesita estas tablas una sola vez.
+RectAreaLightUniformsLib.init();
 
 /** La pantalla en la pared del fondo (detrás de la capa 3), un poco inclinada hacia la cámara. */
 export default function MuroSala({ datos, posicion }: { datos: DatosMuro; posicion: [number, number, number] }) {
@@ -38,14 +42,16 @@ export default function MuroSala({ datos, posicion }: { datos: DatosMuro; posici
       </RoundedBox>
       <mesh>
         <planeGeometry args={[w, h]} />
-        <meshBasicMaterial map={textura} toneMapped={false} />
+        <meshBasicMaterial map={textura} toneMapped={false} fog={false} />
       </mesh>
       {/* Tira de luz bajo la pantalla y el reflejo en el suelo de la sala. */}
       <mesh position={[0, -h / 2 - 0.16, 0]}>
         <boxGeometry args={[w * 0.92, 0.012, 0.01]} />
         <meshBasicMaterial color="#ffffff" transparent opacity={0.7} toneMapped={false} />
       </mesh>
-      <pointLight position={[0, 0, 1.6]} intensity={3} distance={7} color="#cfd8ff" />
+      {/* La pantalla ilumina la sala: luz de área del tamaño de la pantalla mirando hacia los puestos. */}
+      <rectAreaLight width={w} height={h} intensity={9} color="#c9d4ff" position={[0, 0, 0.05]} rotation={[0, Math.PI, 0]} />
+      <pointLight position={[0, -0.6, 2.2]} intensity={2.5} distance={9} color="#b9c6ff" />
     </group>
   );
 }

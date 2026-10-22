@@ -89,7 +89,7 @@ export default function Agentes() {
       </div>
       <section className="caja sala-v2 vista-v1">
         <Suspense fallback={<p className="vacio">Abriendo la sala…</p>}>
-          <Sala seleccion={sel} onSeleccion={(id) => setSel(sel === id ? null : id)} estados={estados} activos={activos} etiquetaDatos={`Datos del VPS · ${v.mercados.map((m) => m.simbolo).join(' · ') || 'sin mercados'}`} muro={muroDe(v, velas)} />
+          <Sala seleccion={sel} onSeleccion={(id) => setSel(sel === id ? null : id)} estados={estados} activos={activos} muro={muroDe(v, velas)} />
         </Suspense>
       </section>
       <div className="fichas-ag">

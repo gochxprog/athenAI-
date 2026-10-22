@@ -1,31 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { ContactShadows, Grid, Html, OrbitControls, RoundedBox } from '@react-three/drei';
+import { ContactShadows, Grid, Html, MeshReflectorMaterial, OrbitControls, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
-import { AGENTES, CAPAS, ESTILO_AGENTE, type Accesorio, type AgenteId } from '@/data/agentes';
+import { AGENTES, ESTILO_AGENTE, type Accesorio, type AgenteId } from '@/data/agentes';
 import { ALTO, ANCHO, PANTALLAS } from './pantallas';
 import MuroSala from './MuroSala';
 import type { DatosMuro } from './muro';
 
-/** Filas por capa (detectores delante, ejecución al fondo), mirando hacia el núcleo de datos. */
-const FILAS: Record<1 | 2 | 3, { z: number; paso: number }> = {
-  1: { z: 0, paso: 3.2 },
-  2: { z: -2.9, paso: 2.9 },
-  3: { z: -5.8, paso: 3.2 },
-};
-const NUCLEO: [number, number, number] = [0, 0, 2.6];
+/** La pantalla gigante en la pared del fondo: todos los puestos la miran, como en una sala de control. */
+const MURO: [number, number, number] = [0, 3.0, -7.0];
+/** Núcleo de datos: flota delante de la pantalla y manda paquetes a cada puesto. */
+const NUCLEO: [number, number, number] = [0, 0, -5.1];
+/** Dos filas en arco (la de atrás más abierta), cada puesto girado hacia el centro de la pantalla. */
+const ARCOS = [
+  { z: -2.9, paso: 2.2, curva: 0.09 },
+  { z: -0.2, paso: 2.4, curva: 0.07 },
+];
 
 const PUESTOS = (() => {
   const out = {} as Record<AgenteId, { pos: [number, number, number]; rot: number }>;
-  for (const capa of [1, 2, 3] as const) {
-    const lista = AGENTES.filter((a) => a.capa === capa);
-    const { z, paso } = FILAS[capa];
+  ARCOS.forEach(({ z, paso, curva }, fila) => {
+    const lista = AGENTES.slice(fila * 5, fila * 5 + 5);
     lista.forEach((a, i) => {
       const x = (i - (lista.length - 1) / 2) * paso;
-      // Ligeramente girado hacia el centro de la sala.
-      out[a.id] = { pos: [x, 0, z], rot: -Math.atan2(x, 10) };
+      const zz = z + curva * x * x;
+      out[a.id] = { pos: [x, 0, zz], rot: Math.atan2(x, zz - MURO[2]) };
     });
-  }
+  });
   return out;
 })();
 
@@ -167,15 +168,12 @@ function AccesorioCabeza({ tipo, vivo }: { tipo: Accesorio; vivo: boolean }) {
 
 const GRIS_OSCURO = '#1a1b1e';
 const GRIS = '#2c2e33';
-const GRIS_CLARO = '#8e929a';
 
 interface Props {
   seleccion: AgenteId | null;
   onSeleccion: (id: AgenteId) => void;
   /** Texto de estado bajo el nombre de cada agente. */
   estados: Record<AgenteId, string>;
-  /** Rótulo del núcleo: fuente y activos. */
-  etiquetaDatos: string;
   /** Pantalla gigante en la pared del fondo (sin datos no se pinta). */
   muro?: DatosMuro;
   /** Quién trabaja de verdad ahora (por defecto: los que tienen motor). */
@@ -183,7 +181,7 @@ interface Props {
 }
 
 /** Núcleo de datos de mercado: icosaedro que respira en el centro de la sala. */
-function NucleoDatos({ etiqueta }: { etiqueta: string }) {
+function NucleoDatos() {
   const ref = useRef<THREE.Group>(null);
   useFrame(({ clock }) => {
     if (!ref.current) return;
@@ -209,9 +207,6 @@ function NucleoDatos({ etiqueta }: { etiqueta: string }) {
         <meshBasicMaterial color="#ffffff" transparent opacity={0.35} />
       </mesh>
       <pointLight position={[0, 1.2, 0]} intensity={6} distance={6} color="#ffffff" />
-      <Html position={[0, 0.3, 0.75]} center style={{ pointerEvents: 'none' }}>
-        <p className="whitespace-nowrap text-[9px] uppercase tracking-[0.2em] text-plata-400">{etiqueta}</p>
-      </Html>
     </group>
   );
 }
@@ -225,7 +220,7 @@ function FlujoPaquetes({ vivo }: { vivo: (a: (typeof AGENTES)[number]) => boolea
       (ids.split(',').filter(Boolean) as AgenteId[]).map((id) => {
         const { pos } = PUESTOS[id];
         const ini = new THREE.Vector3(NUCLEO[0], 1.15, NUCLEO[2]);
-        const fin = new THREE.Vector3(pos[0], 1.05, pos[2] + 0.4);
+        const fin = new THREE.Vector3(pos[0], 1.05, pos[2]);
         return new THREE.QuadraticBezierCurve3(ini, new THREE.Vector3((ini.x + fin.x) / 2, 2.2, (ini.z + fin.z) / 2), fin);
       }),
     [ids],
@@ -397,17 +392,24 @@ function Puesto({ id, seleccionado, onSeleccion, estado, vivo }: { id: AgenteId;
         </mesh>
         <mesh position={[0, 0.78, 0]} castShadow>
           <capsuleGeometry args={[0.17, 0.36, 8, 20]} />
-          <meshStandardMaterial color={vivo ? GRIS_CLARO : GRIS} metalness={0.75} roughness={0.28} />
+          <meshStandardMaterial color={vivo ? '#3b3f47' : GRIS} metalness={0.85} roughness={0.25} />
         </mesh>
+        {/* LED en la espalda y en el pecho, del color del agente (lo que se ve desde atrás de la sala). */}
+        {[0.172, -0.172].map((z) => (
+          <mesh key={z} position={[0, 0.82, z]}>
+            <boxGeometry args={[z > 0 ? 0.035 : 0.12, z > 0 ? 0.3 : 0.022, 0.01]} />
+            <meshBasicMaterial color={estilo.color} transparent opacity={vivo ? 1 : 0.12} toneMapped={false} />
+          </mesh>
+        ))}
         <group ref={cabeza} position={[0, 1.22, 0]}>
           <mesh castShadow>
             <sphereGeometry args={[0.15, 32, 32]} />
-            <meshStandardMaterial color={vivo ? '#c5c8ce' : '#4a4d53'} metalness={0.8} roughness={0.2} />
+            <meshStandardMaterial color={vivo ? '#5a5e67' : '#34363b'} metalness={0.9} roughness={0.18} />
           </mesh>
           {/* Visor */}
           <mesh position={[0, 0.01, -0.12]} rotation={[0, Math.PI, 0]}>
             <boxGeometry args={[0.2, 0.035, 0.06]} />
-            <meshStandardMaterial color={vivo ? '#ffffff' : '#3a3c40'} emissive="#ffffff" emissiveIntensity={vivo ? (seleccionado ? 2.2 : 1.2) : 0} />
+            <meshStandardMaterial color={vivo ? estilo.color : '#3a3c40'} emissive={estilo.color} emissiveIntensity={vivo ? (seleccionado ? 3 : 1.8) : 0} toneMapped={false} />
           </mesh>
           <AccesorioCabeza tipo={estilo.accesorio} vivo={vivo} />
         </group>
@@ -430,63 +432,58 @@ function Puesto({ id, seleccionado, onSeleccion, estado, vivo }: { id: AgenteId;
   );
 }
 
+/** La sala a oscuras: piso negro que refleja la pantalla, la pared del fondo y las aristas del cuarto. */
 function Sala() {
-  // Aristas de la sala para dar profundidad sin paredes sólidas.
-  const geo = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(17, 5, 12)), []);
+  const geo = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(18, 5.2, 15)), []);
+  const compacto = useThree((st) => st.size.width) < 700;
   return (
-    <lineSegments geometry={geo} position={[0, 2.5, -1.8]}>
-      <lineBasicMaterial color="#ffffff" transparent opacity={0.08} />
-    </lineSegments>
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.001, -0.5]}>
+        <planeGeometry args={[18, 15]} />
+        <MeshReflectorMaterial resolution={compacto ? 256 : 512} blur={[300, 80]} mixBlur={1} mixStrength={18} roughness={0.9} depthScale={1} minDepthThreshold={0.4} maxDepthThreshold={1.4} color="#070708" metalness={0.6} mirror={0.4} />
+      </mesh>
+      <mesh position={[0, 2.6, -7.5]}>
+        <planeGeometry args={[18, 5.2]} />
+        <meshStandardMaterial color="#0d0e12" roughness={0.85} />
+      </mesh>
+      <lineSegments geometry={geo} position={[0, 2.6, -0.5]}>
+        <lineBasicMaterial color="#ffffff" transparent opacity={0.06} />
+      </lineSegments>
+    </group>
   );
 }
 
-/** Aleja la cámara en pantallas estrechas para que los diez puestos queden siempre a la vista. */
+/** Cámara detrás de los puestos, mirando a la pantalla (más lejos en pantallas estrechas para que quepa todo). */
+const MIRA: [number, number, number] = [0, 1.3, -3.2];
 function AjusteCamara() {
   const { camera, size } = useThree();
   useEffect(() => {
-    const factor = Math.max(1, 1.9 / (size.width / size.height));
-    camera.position.set(0, 6.2 * factor, 9.6 * factor);
-    camera.lookAt(0, 0.9, -2.2);
+    // En el celular se acerca más de la cuenta: se ven el centro y la pantalla; los lados, girando con el dedo.
+    const factor = Math.max(1, 1.75 / (size.width / size.height)) ** 0.55;
+    camera.position.set(0, 1.3 + 4.3 * factor, -3.2 + 12.7 * factor);
+    camera.lookAt(...MIRA);
   }, [camera, size.width, size.height]);
   return null;
 }
 
-/** Rótulo de cada anillo (capa). */
-function RotulosCapas() {
-  const compacto = useThree((st) => st.size.width) < 700;
-  if (compacto) return null;
-  return (
-    <>
-      {([1, 2, 3] as const).map((c) => (
-        <Html key={c} position={[-7.4, 0.02, FILAS[c].z + 0.4]} center style={{ pointerEvents: 'none' }}>
-          <p className="whitespace-nowrap text-[8.5px] uppercase tracking-[0.2em] text-plata-600">
-            Capa {c} · {CAPAS[c]}
-          </p>
-        </Html>
-      ))}
-    </>
-  );
-}
-
-export default function SalaAgentes3D({ seleccion, onSeleccion, estados, etiquetaDatos, muro, activos }: Props) {
+export default function SalaAgentes3D({ seleccion, onSeleccion, estados, muro, activos }: Props) {
   const vivo = (a: (typeof AGENTES)[number]) => activos?.[a.id] ?? a.real;
   return (
-    <Canvas shadows camera={{ position: [0, 6.2, 9.6], fov: 42 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }}>
+    <Canvas shadows camera={{ position: [0, 5.6, 9.5], fov: 46 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }}>
       <AjusteCamara />
-      <ambientLight intensity={0.35} />
-      <directionalLight position={[3, 6, 4]} intensity={1.1} castShadow shadow-mapSize={[1024, 1024]} />
-      <directionalLight position={[-4, 3, -2]} intensity={0.35} />
+      <fog attach="fog" args={['#000000', 18, 40]} />
+      <ambientLight intensity={0.1} />
+      <directionalLight position={[3, 7, 6]} intensity={0.35} castShadow shadow-mapSize={[1024, 1024]} />
       <Sala />
-      <Grid position={[0, 0, 0]} args={[20, 20]} cellSize={0.5} cellThickness={0.5} cellColor="#2a2a2e" sectionSize={2} sectionThickness={0.8} sectionColor="#45484e" fadeDistance={14} fadeStrength={1.5} infiniteGrid />
-      <ContactShadows position={[0, 0.005, 0]} opacity={0.6} scale={12} blur={2.4} far={3} />
-      <NucleoDatos etiqueta={etiquetaDatos} />
+      <Grid position={[0, 0.002, 0]} args={[20, 20]} cellSize={0.5} cellThickness={0.4} cellColor="#16171a" sectionSize={2} sectionThickness={0.7} sectionColor="#26282d" fadeDistance={16} fadeStrength={1.5} infiniteGrid />
+      <ContactShadows position={[0, 0.005, 0]} opacity={0.7} scale={16} blur={2.4} far={3} />
+      <NucleoDatos />
       <FlujoPaquetes vivo={vivo} />
-      {muro && <MuroSala datos={muro} posicion={[0, 3.0, -7.0]} />}
-      <RotulosCapas />
+      {muro && <MuroSala datos={muro} posicion={MURO} />}
       {AGENTES.map((a) => (
         <Puesto key={a.id} id={a.id} seleccionado={seleccion === a.id} onSeleccion={onSeleccion} estado={estados[a.id]} vivo={vivo(a)} />
       ))}
-      <OrbitControls target={[0, 0.9, -2.2]} enablePan={false} minDistance={5} maxDistance={24} minPolarAngle={0.5} maxPolarAngle={1.35} enableDamping />
+      <OrbitControls target={MIRA} enablePan={false} minDistance={5} maxDistance={24} minPolarAngle={0.5} maxPolarAngle={1.35} enableDamping />
     </Canvas>
   );
 }
