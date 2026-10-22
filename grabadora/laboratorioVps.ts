@@ -49,7 +49,15 @@ export function cargarVelas(datos: string, simbolo: string, serie: Serie, fuente
 export function correrPrueba(p: PedidoPrueba, datos: string, py: PyodideMinimo, paso: (t: string) => void): ResultadoPrueba {
   paso(`Leyendo ${p.simbolo} (${p.fuente}) y armando velas de ${p.serie}…`);
   const velas = cargarVelas(datos, p.simbolo, p.serie, p.fuente);
-  if (velas.length < MIN_VELAS) throw new Error(`Solo hay ${velas.length} velas de ${p.serie} de ${p.simbolo}: hacen falta al menos ${MIN_VELAS}. Graba más días, importa historia o usa una serie más corta.`);
+  if (velas.length < MIN_VELAS) {
+    // Qué hay en disco, para ver a la primera si faltan datos o no se encuentran.
+    const visto = (d: string) => {
+      const a = new AlmacenDisco(d);
+      const dias = a.dias(p.simbolo);
+      return `${d}: ${dias.length} días (${dias[0] ?? '—'} → ${dias.at(-1) ?? '—'}), ${dias.reduce((s, x) => s + a.leerDia(p.simbolo, x).length, 0)} filas`;
+    };
+    throw new Error(`Solo hay ${velas.length} velas de ${p.serie} de ${p.simbolo}: hacen falta al menos ${MIN_VELAS}. Graba más días, importa historia o usa una serie más corta.\nEn disco · ${visto(datos)} · ${visto(path.join(datos, 'historia'))}`);
+  }
   let ejec;
   try {
     ejec = ejecutarEstrategia(py, p.codigo, velas, paso);

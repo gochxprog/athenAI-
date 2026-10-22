@@ -17,7 +17,7 @@ export default function Hilos({ agentes, pulsos }: { agentes: AgenteAnillo[]; pu
     const escena = c.parentElement!;
     const destellos: Destello[] = [];
     let lineas: { a: [number, number]; b: [number, number]; sale: boolean }[] = [];
-    let centro = { x: 0, y: 0, r: 100 };
+    let centro = { x: 0, y: 0, r: 100, lim: 100 };
     let cuadro = 0;
     let giro = 0;
     let ultimo = performance.now();
@@ -29,7 +29,7 @@ export default function Hilos({ agentes, pulsos }: { agentes: AgenteAnillo[]; pu
       c.height = e.height * dpr;
       x.setTransform(dpr, 0, 0, dpr, 0, 0);
       const cer = escena.querySelector('.cerebro')!.getBoundingClientRect();
-      centro = { x: cer.left - e.left + cer.width / 2, y: cer.top - e.top + cer.height / 2, r: Math.min(cer.width, cer.height) * 0.36 };
+      centro = { x: cer.left - e.left + cer.width / 2, y: cer.top - e.top + cer.height / 2, r: Math.min(cer.width, cer.height) * 0.36, lim: Math.min(cer.width, cer.height) / 2 - 30 };
       lineas = [...escena.querySelectorAll<HTMLElement>('.tarjeta.izq, .tarjeta.der')].flatMap((t) => {
         const r = t.getBoundingClientRect();
         const sale = t.classList.contains('der');
@@ -98,7 +98,8 @@ export default function Hilos({ agentes, pulsos }: { agentes: AgenteAnillo[]; pu
       }
       // Anillo de agentes.
       giro += dt * 0.04;
-      const ra = centro.r * 1.42;
+      // El anillo de agentes cabe con sus nombres dentro del área del cerebro (sin chocar con las tarjetas ni cortarse).
+      const ra = Math.min(centro.r * 1.42, centro.lim);
       x.strokeStyle = 'rgba(255,255,255,0.09)';
       x.beginPath();
       x.ellipse(centro.x, centro.y, ra, ra * 0.92, 0, 0, Math.PI * 2);

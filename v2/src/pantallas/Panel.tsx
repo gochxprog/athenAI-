@@ -1,6 +1,6 @@
 // Panel general (v2): lo que pasa ahora, con datos reales de la grabadora. En el centro, el cerebro (machine learning)
 // con el ojo: cada fila nueva que graba el VPS es un golpe. Alrededor, el anillo de agentes y los hilos a las tarjetas.
-import { lazy, Suspense, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { AGENTES } from '@/data/agentes';
 import { deHoy, movimientos, useVps, type Fila, type Vps } from '../vps';
 import Hilos from './Hilos';
@@ -22,18 +22,6 @@ function saludo(v: Vps) {
   return `${hola} ${!v.mercados.length ? 'Conectando…' : caidos.length ? `${caidos.map((m) => corto(m.simbolo)).join(' y ')} sin conexión.` : 'Todo está grabando.'}`;
 }
 
-function lectura(f?: Fila): string {
-  if (!f) return 'Esperando la primera barra…';
-  const x = f.valores;
-  const flujo = x.flujo_5_ratio ?? 0;
-  const partes = [flujo > 0.15 ? 'Compradores mandan' : flujo < -0.15 ? 'Vendedores mandan' : 'Flujo en equilibrio'];
-  if ((x.absorcion_bid ?? 0) > 0) partes.push('absorción en el bid');
-  if ((x.absorcion_ask ?? 0) > 0) partes.push('absorción en el ask');
-  if (x.stoprun_alto) partes.push('barrido de máximos');
-  if (x.stoprun_bajo) partes.push('barrido de mínimos');
-  return partes.join(' · ');
-}
-
 function Linea({ filas }: { filas: Fila[] }) {
   const c = filas.slice(-60).map((f) => f.close);
   if (c.length < 2) return <svg className="linea" />;
@@ -51,8 +39,19 @@ const Tarjeta = ({ titulo, valor, nota, barra, lado, children }: { titulo: strin
   </div>
 );
 
+/** El cerebro (three.js, ~500 KB) entra después del primer pintado: las tarjetas salen al instante. */
+function useDespues() {
+  const [ya, setYa] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setTimeout(() => setYa(true), 60));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  return ya;
+}
+
 export default function Panel() {
   const v = useVps();
+  const cerebroListo = useDespues();
   const filas = v.almacen.reduce((s, a) => s + a.filas, 0);
   const desde = Math.min(...v.almacen.map((a) => a.desde ?? Infinity));
   const dias = Number.isFinite(desde) ? (Date.now() - desde) / 86_400_000 : 0;
@@ -61,8 +60,6 @@ export default function Panel() {
   const activos = v.bots.filter((b) => b.estado === 'activo').length;
   const hoy = deHoy(v.ops);
   const pnl = hoy.reduce((s, o) => s + o.pnl, 0);
-  const lider = v.filas.BTCUSDT ? 'BTCUSDT' : v.mercados[0]?.simbolo ?? '';
-  const ultima = (v.filas[lider] ?? []).at(-1);
   // Encendidos solo los agentes que ya trabajan en la versión 2 (el resto llega con sus fases).
   const trabajando: Record<string, boolean> = { vigia: vivos > 0, flujo: vivos > 0, ejecutor: activos > 0, guardian: v.bots.length > 0 };
   const agentes = AGENTES.map((a) => ({ nombre: a.nombre, activo: !!trabajando[a.id] }));
@@ -84,7 +81,7 @@ export default function Panel() {
       <section className="escena caja">
         <div className="cerebro">
           <Suspense fallback={null}>
-            <Cerebro ojo haces={false} eventos={filas} actividad={vivos ? 1 : 0.25} />
+            {cerebroListo && <Cerebro ojo haces={false} eventos={filas} actividad={vivos ? 1 : 0.25} />}
           </Suspense>
         </div>
         <Hilos agentes={agentes} pulsos={filas} />
@@ -105,10 +102,6 @@ export default function Panel() {
           <Tarjeta lado="der" titulo="Machine learning · sin entrenar" valor={`${num(Math.min(100, (dias / DIAS_ML) * 100))} %`} nota={`${num(dias, 1)} de ${DIAS_ML} días`} barra={dias / DIAS_ML} />
           <Tarjeta lado="der" titulo="Juez" valor="—" nota="llega en la fase 2" barra={0} />
           <Tarjeta lado="der" titulo="Bots en Paper" valor={String(activos)} nota={`${hoy.length} operaciones hoy`} barra={v.bots.length ? activos / v.bots.length : 0} />
-        </div>
-        <div className="lectura">
-          <div className="et">Lectura del momento · {corto(lider) || '—'}</div>
-          <b>{lectura(ultima)}</b>
         </div>
       </section>
 

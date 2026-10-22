@@ -239,21 +239,45 @@ function bolaAleatoria(n: number, r: number) {
   return out;
 }
 
+/**
+ * Une cada nodo con sus `k` vecinos más cercanos. Rejilla espacial: se miran anillos de celdas cada vez más anchos
+ * hasta que el k-ésimo vecino queda más cerca que el anillo siguiente. Mismo resultado que comparar todos contra
+ * todos (O(n²), ~7 M de distancias que congelaban el teléfono al abrir), en una fracción del tiempo.
+ */
 function enlazarVecinos(pos: Float32Array, desde: number, hasta: number, k: number, pares: Set<number>, ady: number[][]) {
+  const n = hasta - desde;
+  const lado = (2.4 * RADIO) / Math.max(1, Math.cbrt(n / 2));
+  const celda = (v: number) => Math.floor(v / lado);
+  const rejilla = new Map<string, number[]>();
+  for (let i = desde; i < hasta; i++) {
+    const c = `${celda(pos[i * 3])},${celda(pos[i * 3 + 1])},${celda(pos[i * 3 + 2])}`;
+    (rejilla.get(c) ?? rejilla.set(c, []).get(c)!).push(i);
+  }
   const mejores: { j: number; d: number }[] = [];
+  const probar = (i: number, j: number, ix: number, iy: number, iz: number) => {
+    const dx = pos[j * 3] - ix, dy = pos[j * 3 + 1] - iy, dz = pos[j * 3 + 2] - iz;
+    const d = dx * dx + dy * dy + dz * dz;
+    if (mejores.length < k || d < mejores[mejores.length - 1].d || (d === mejores[mejores.length - 1].d && j < mejores[mejores.length - 1].j)) {
+      let s = mejores.length;
+      while (s > 0 && (mejores[s - 1].d > d || (mejores[s - 1].d === d && mejores[s - 1].j > j))) s--;
+      mejores.splice(s, 0, { j, d });
+      if (mejores.length > k) mejores.pop();
+    }
+  };
   for (let i = desde; i < hasta; i++) {
     mejores.length = 0;
     const ix = pos[i * 3], iy = pos[i * 3 + 1], iz = pos[i * 3 + 2];
-    for (let j = desde; j < hasta; j++) {
-      if (j === i) continue;
-      const dx = pos[j * 3] - ix, dy = pos[j * 3 + 1] - iy, dz = pos[j * 3 + 2] - iz;
-      const d = dx * dx + dy * dy + dz * dz;
-      if (mejores.length < k || d < mejores[mejores.length - 1].d) {
-        let s = mejores.length;
-        while (s > 0 && mejores[s - 1].d > d) s--;
-        mejores.splice(s, 0, { j, d });
-        if (mejores.length > k) mejores.pop();
-      }
+    const [cx, cy, cz] = [celda(ix), celda(iy), celda(iz)];
+    for (let r = 0; ; r++) {
+      // Solo la cáscara del cubo de radio r (lo de dentro ya se miró).
+      for (let x = cx - r; x <= cx + r; x++)
+        for (let y = cy - r; y <= cy + r; y++)
+          for (let z = cz - r; z <= cz + r; z++) {
+            if (Math.max(Math.abs(x - cx), Math.abs(y - cy), Math.abs(z - cz)) !== r) continue;
+            for (const j of rejilla.get(`${x},${y},${z}`) ?? []) if (j !== i) probar(i, j, ix, iy, iz);
+          }
+      // Todo lo que falta está a más de r·lado: si el k-ésimo ya está más cerca, no puede cambiar.
+      if ((mejores.length === k && mejores[k - 1].d <= (r * lado) ** 2) || r * lado > 4 * RADIO) break;
     }
     for (const m of mejores) agregarPar(i, m.j, pares, ady);
   }
@@ -845,7 +869,14 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
       ojo?.actualizar(dt, t, golpes, cerebro.quaternion);
       renderer.render(escena, camara);
     };
-    tick();
+    // Los shaders se compilan en paralelo (KHR_parallel_shader_compile) en vez de congelar la página al primer
+    // dibujo; mientras tanto el lienzo está invisible y luego aparece con un fundido.
+    canvas.style.opacity = '0';
+    canvas.style.transition = 'opacity .6s ease';
+    void renderer.compileAsync(escena, camara).catch(() => undefined).then(() => {
+      canvas.style.opacity = '1';
+      tick();
+    });
     listoRef.current?.({ nodos: red.total, sinapsis: red.sinapsis });
 
     return () => {
