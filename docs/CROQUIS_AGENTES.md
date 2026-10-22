@@ -66,4 +66,9 @@ ideas solos, las 24 horas. Nada pasa a Paper sin el Juez y sin tu OK.
 ## 7. Lo que tienes que decidir tú
 1. **La bóveda:** ¿último **20 %** del tiempo? (recomendado)
 2. **Etiquetas por defecto:** objetivo 2 ATR, stop 1,5 ATR, máximo 60 velas de 5 min. (Se pueden cambiar.)
-3. **El VPS:** ¿cuánta RAM y CPU tiene tu plan de Contabo? Con 8 GB / 4 núcleos alcanza para el ML clásico y redes pequeñas. Para redes grandes se alquila una GPU por horas.
+3. ~~El VPS~~ **Respondido: 4 GB de RAM.** Plan para que alcance:
+   - Un solo trabajo pesado a la vez (Juez **o** entrenamiento), en fila.
+   - Cada entrenamiento con tope de memoria (~1,5 GB, systemd `MemoryMax`); si se pasa, se corta y la grabadora sigue.
+   - ML clásico (LightGBM) en float32: ~150 MB por millón de filas. Va bien.
+   - Red neuronal: solo modelos pequeños en el VPS; las grandes, en una GPU alquilada por horas o en tu PC.
+   - El instalador agrega 2 GB de swap como colchón.
