@@ -100,7 +100,7 @@ export default function Panel() {
         </div>
         <div className="col der">
           <Tarjeta lado="der" titulo="Machine learning · sin entrenar" valor={`${num(Math.min(100, (dias / DIAS_ML) * 100))} %`} nota={`${num(dias, 1)} de ${DIAS_ML} días`} barra={dias / DIAS_ML} />
-          <Tarjeta lado="der" titulo="Juez" valor="—" nota="llega en la fase 2" barra={0} />
+          <Tarjeta lado="der" titulo="Juez" valor="✓" nota="en el Laboratorio" barra={1} />
           <Tarjeta lado="der" titulo="Bots en Paper" valor={String(activos)} nota={`${hoy.length} operaciones hoy`} barra={v.bots.length ? activos / v.bots.length : 0} />
         </div>
       </section>
@@ -109,7 +109,7 @@ export default function Panel() {
         <section className="caja bloque">
           <div className="et">Camino de la estrategia</div>
           <div className="estaciones">
-            {([['01 Laboratorio', '—', 'fase 2'], ['02 Juez', '—', 'fase 2'], ['03 Biblioteca', '—', 'fase 3'], ['04 Paper', String(v.bots.length), 'bots'], ['05 Real', '—', 'sin broker']] as const).map(([t, n, s], i) => (
+            {([['01 Laboratorio', '✓', 'activo'], ['02 Juez', '✓', 'activo'], ['03 Biblioteca', '✓', 'activa'], ['04 Paper', String(v.bots.length), 'bots'], ['05 Real', '—', 'sin broker']] as const).map(([t, n, s], i) => (
               <div key={t} className={`estacion ${i === 3 && v.bots.length ? 'on' : ''} ${i === 4 ? 'bloq' : ''}`}>
                 <span className="et">{t}</span><b className="cifra">{n}</b><small>{s}</small>
               </div>

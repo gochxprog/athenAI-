@@ -11,7 +11,7 @@
 //      cualquier otro veredicto no puede tener bot.
 import { bandaTrasOperaciones } from '../juez/monteCarlo';
 import { crearAleatorio } from '@/lib/random';
-import type { Bot, MercadoVivo } from './ejecutor';
+import type { Bot, EstadoBot, MercadoVivo } from './ejecutor';
 
 export interface ReglasGuardian {
   /** Caída máxima del día (fracción). */
@@ -20,6 +20,17 @@ export interface ReglasGuardian {
   /** Operaciones mínimas antes de juzgar la banda. */
   minOperacionesBanda: number;
 }
+
+/** Nombre de cada estado de un bot (lo comparten la plataforma y la v2). */
+export const NOMBRE_ESTADO: Record<EstadoBot, string> = {
+  activo: 'Activo',
+  'sin-datos': 'Sin datos',
+  'pausado-dia': 'Pausado hasta mañana',
+  cuarentena: 'Cuarentena',
+  'fuera-de-banda': 'Fuera de la banda del Juez',
+  pausado: 'Pausado',
+  apagado: 'Apagado',
+};
 
 export const REGLAS_POR_DEFECTO: ReglasGuardian = { ddDiarioMax: 0.05, perdidasSeguidasMax: 5, minOperacionesBanda: 5 };
 

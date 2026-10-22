@@ -1,7 +1,7 @@
 // Piezas comunes de la Terminal: formato, nombres de estado y hooks del motor de Paper (VPS o navegador).
 import { useEffect, useState } from 'react';
 import { motorPaper } from '@/motores/paper/iniciar';
-import type { EstadoBot, OperacionPaper } from '@/motores/paper/ejecutor';
+import type { OperacionPaper } from '@/motores/paper/ejecutor';
 import { conSigno } from '@/lib/format';
 import { motorOrderFlow } from '@/motores/worker/motorCliente';
 import { grabadora } from '@/motores/grabadora/cliente';
@@ -10,15 +10,7 @@ export const pct = (v: number, d = 2) => conSigno(v * 100, d, '%');
 export const usd = (v: number) => `${conSigno(v, 2)} USD`;
 export const hora = (t: number) => new Date(t).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-export const NOMBRE_ESTADO: Record<EstadoBot, string> = {
-  activo: 'Activo',
-  'sin-datos': 'Sin datos',
-  'pausado-dia': 'Pausado hasta mañana',
-  cuarentena: 'Cuarentena',
-  'fuera-de-banda': 'Fuera de la banda del Juez',
-  pausado: 'Pausado',
-  apagado: 'Apagado',
-};
+export { NOMBRE_ESTADO } from '@/motores/paper/guardian';
 
 /** Re-renderiza con cada revisión del motor de Paper (1 vez por segundo). */
 export function useMotorPaper() {

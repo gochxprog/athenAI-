@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import type { Bot, OperacionPaper } from '@/motores/paper/ejecutor';
 import type { EventoPaper } from '@/motores/paper/motorPaper';
+import type { ReglasGuardian } from '@/motores/paper/guardian';
 
 export interface Mercado { simbolo: string; conexion: string; filasSesion: number; ultimoCierre: number | null; cortes: number }
 export interface Fila { cierre: number; close: number; valores: Record<string, number | null> }
@@ -17,6 +18,9 @@ export interface Vps {
   almacen: { simbolo: string; filas: number; desde: number | null }[];
   historia: Historia[];
   bots: Bot[];
+  /** Apagado de emergencia activo y reglas del Guardián (de /api/paper). */
+  apagado: boolean;
+  reglas: ReglasGuardian | null;
   bitacora: EventoPaper[];
   ops: OperacionPaper[];
   /** Últimas filas (≈ 30 min) de cada mercado: precio y Features recién calculadas. */
@@ -24,7 +28,7 @@ export interface Vps {
 }
 
 const CADA_MS = 5_000;
-let actual: Vps = { listo: false, sinSesion: false, caido: false, inicio: null, mercados: [], almacen: [], historia: [], bots: [], bitacora: [], ops: [], filas: {} };
+let actual: Vps = { listo: false, sinSesion: false, caido: false, inicio: null, mercados: [], almacen: [], historia: [], bots: [], apagado: false, reglas: null, bitacora: [], ops: [], filas: {} };
 const oyentes = new Set<(v: Vps) => void>();
 let reloj: ReturnType<typeof setTimeout> | null = null;
 /** La grabadora respondió que no tiene bots (BOTS=0): no se vuelve a preguntar. */
@@ -43,7 +47,7 @@ async function sondear(): Promise<void> {
     const [e, h, p, o] = await Promise.all([
       pedir<{ inicio: number; simbolos: Mercado[]; almacen: Vps['almacen'] }>('/api/estado'),
       pedir<{ mercados: Historia[] }>('/api/historia').catch(() => null),
-      pedir<{ bots: Bot[]; bitacora: EventoPaper[] }>('/api/paper').catch(() => null),
+      pedir<{ bots: Bot[]; bitacora: EventoPaper[]; apagado: boolean; reglas: ReglasGuardian }>('/api/paper').catch(() => null),
       pedir<{ operaciones: OperacionPaper[] }>('/api/paper/operaciones').catch(() => null),
     ]);
     if (!e) throw new Error('caido');
@@ -52,12 +56,22 @@ async function sondear(): Promise<void> {
         e.simbolos.filter((m) => m.ultimoCierre).map(async (m) => [m.simbolo, (await pedir<{ filas: Fila[] }>(`/api/filas?simbolo=${m.simbolo}&desde=${m.ultimoCierre! - 1_800_000}&limite=400`).catch(() => null))?.filas ?? actual.filas[m.simbolo] ?? []] as const),
       ),
     );
-    actual = { listo: true, sinSesion: false, caido: false, inicio: e.inicio, mercados: e.simbolos, almacen: e.almacen, historia: h?.mercados ?? [], bots: p?.bots ?? [], bitacora: p?.bitacora ?? [], ops: o?.operaciones ?? [], filas };
+    actual = { listo: true, sinSesion: false, caido: false, inicio: e.inicio, mercados: e.simbolos, almacen: e.almacen, historia: h?.mercados ?? [],
+      // Tu cuenta a mano (Terminal) no es un bot: va aparte.
+      bots: (p?.bots ?? []).filter((b) => b.origen !== 'manual'), apagado: p?.apagado ?? false, reglas: p?.reglas ?? null, bitacora: p?.bitacora ?? [], ops: o?.operaciones ?? [], filas };
   } catch (err) {
     actual = { ...actual, listo: true, sinSesion: (err as Error).message === 'sin-sesion', caido: (err as Error).message !== 'sin-sesion' };
   }
   oyentes.forEach((f) => f(actual));
+  // Un solo temporizador aunque `refrescar` lance un sondeo mientras otro estaba en curso.
+  if (reloj) clearTimeout(reloj);
   reloj = oyentes.size ? setTimeout(sondear, CADA_MS) : null;
+}
+
+/** Pide el estado ya (tras una acción), sin esperar al siguiente sondeo. */
+export function refrescar(): void {
+  if (reloj) clearTimeout(reloj);
+  void sondear();
 }
 
 export function useVps(): Vps {

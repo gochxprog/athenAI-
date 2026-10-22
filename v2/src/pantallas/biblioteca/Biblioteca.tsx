@@ -4,6 +4,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { BookMarked, Bot, FlaskConical, Search, Trash2 } from 'lucide-react';
 import type { EntradaBiblioteca, ResultadoPrueba, Trabajo } from '@/motores/laboratorio/prueba';
 import { pedir } from '../../api';
+import { pct } from '../../formato';
 import { CLAVE_LAB } from '../laboratorio/api';
 import '../laboratorio/lab.css';
 import './biblioteca.css';
@@ -11,7 +12,6 @@ import './biblioteca.css';
 const Resultado = lazy(() => import('../laboratorio/Resultado'));
 const FILTROS = ['Todas', 'Aprobadas', 'Rechazadas'] as const;
 const aprobada = (e: EntradaBiblioteca) => e.veredicto.startsWith('APROBADA');
-const pct = (v: number | null, d = 1) => (v === null || !Number.isFinite(v) ? '—' : `${v >= 0 ? '+' : ''}${(v * 100).toLocaleString('es-ES', { maximumFractionDigits: d })} %`);
 const fecha = (t: number) => new Date(t).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 export default function Biblioteca() {
@@ -97,8 +97,8 @@ export default function Biblioteca() {
             </header>
             <div className="metricas mono">
               <span>Sharpe <b>{e.oos.sharpe === null ? '—' : e.oos.sharpe.toFixed(2)}</b></span>
-              <span>Retorno <b>{pct(e.oos.retorno)}</b></span>
-              <span>Caída <b>{pct(-e.oos.caida)}</b></span>
+              <span>Retorno <b>{pct(e.oos.retorno, 1)}</b></span>
+              <span>Caída <b>{pct(-e.oos.caida, 1)}</b></span>
               <span>Ops <b>{e.oos.operaciones}</b></span>
               <span>Variantes <b>{e.ensayos}</b></span>
             </div>

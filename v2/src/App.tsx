@@ -5,6 +5,7 @@ import { TODAS, type IdPantalla } from './menu';
 
 const Laboratorio = lazy(() => import('./pantallas/laboratorio/Laboratorio'));
 const Biblioteca = lazy(() => import('./pantallas/biblioteca/Biblioteca'));
+const Paper = lazy(() => import('./pantallas/paper/Paper'));
 
 // Ruta en el hash (#/panel). Solo existen las pantallas ya construidas; el resto del menú va con candado.
 const leer = (): IdPantalla => {
@@ -21,7 +22,7 @@ export default function App() {
   }, []);
   return (
     <Shell pantalla={pantalla} ir={(id) => (location.hash = `/${id}`)}>
-      <Suspense fallback={null}>{pantalla === 'laboratorio' ? <Laboratorio /> : pantalla === 'biblioteca' ? <Biblioteca /> : <Panel />}</Suspense>
+      <Suspense fallback={null}>{pantalla === 'laboratorio' ? <Laboratorio /> : pantalla === 'biblioteca' ? <Biblioteca /> : pantalla === 'paper' ? <Paper /> : <Panel />}</Suspense>
     </Shell>
   );
 }

@@ -19,7 +19,7 @@ export const MENU: { seccion: string; items: Item[] }[] = [
   {
     seccion: 'Dinero',
     items: [
-      { id: 'paper', nombre: 'Paper', icono: Wallet, fase: 3 },
+      { id: 'paper', nombre: 'Paper', icono: Wallet },
       { id: 'real', nombre: 'Real', icono: DollarSign, fase: 9 },
       { id: 'terminal', nombre: 'Terminal', icono: ListOrdered, fase: 3 },
       { id: 'mercado', nombre: 'Mercado', icono: CandlestickChart, fase: 3 },
