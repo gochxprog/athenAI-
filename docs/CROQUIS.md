@@ -115,14 +115,20 @@ flowchart LR
 | 3 | **Biblioteca** | Estrategias aprobadas por el Juez |
 | 4 | **Paper** | Bots en prueba, cada uno con su porqué (cuenta propia + demo del broker) |
 | 5 | **Real** | Bots que pasaron Paper (bloqueado hasta conectar broker) |
-| 6 | **Terminal** | Lista tipo MetaTrader: posiciones, órdenes e historial de **todos** los bots (filtro Paper/Real), gráfico con DOM y motores de order flow; ticket a mano pequeño, a un lado |
-| 7 | **Diario** | Calendario, métricas y cada operación con su porqué |
-| 8 | **Investigación** | Buscador de edge del ML, red de hipótesis, patrones |
-| 9 | **Red neuronal** | Modelos profundos (cuando toque) |
-| 10 | **Agentes** | Sala 3D: quién trabaja en qué |
-| 11 | **Datos y sistema** | Simple: fuentes, grabadora, VPS, calendario automático, notificaciones |
+| 6 | **Terminal** | Lista tipo MetaTrader: posiciones, órdenes e historial de **todos** los bots (filtro Paper/Real); ticket a mano pequeño, a un lado |
+| 7 | **Mercado** | Gráfico con DOM y los motores de order flow (eventos, memoria, Features, salud) |
+| 8 | **Riesgo** | El Guardián: límites por bot y del día, apagado de emergencia, quién está frenado y por qué |
+| 9 | **Diario** | Calendario, métricas y cada operación con su porqué |
+| 10 | **Investigación** | **Red de hipótesis** (se queda siempre: cada estrategia probada es un puntito, aprobada o rechazada, y cómo se relacionan) + buscador de edge del ML + patrones |
+| 11 | **Red neuronal** | Modelos profundos (cuando toque) |
+| 12 | **Agentes** | Sala 3D: quién trabaja en qué |
+| 13 | **Datos** | Fuentes, grabadora, almacén |
+| 14 | **Calendario** | CPI, FOMC, nóminas… se llena solo; cuándo esperan los bots |
+| 15 | **Sistema** | VPS, salud, notificaciones |
 
-Ninguna pantalla vacía «de adorno»: si no tiene motor, no aparece en el menú hasta que lo tenga.
+Por decidir más adelante (cuando se use y se vea si hace falta): separar Laboratorio en Editor + Juez, y Diario en Diario + Estadísticas.
+
+Ninguna pantalla vacía «de adorno»: si no tiene motor, no aparece en el menú hasta que lo tenga. La red de hipótesis sí aparece desde el principio, porque se arma con las estrategias reales que pasan por el Juez.
 
 ## 9. Orden de construcción (unos 3 meses)
 La plataforma actual sigue funcionando hasta que la nueva la reemplace. La grabadora graba todo el tiempo.
