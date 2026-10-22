@@ -28,7 +28,7 @@ Rol: director técnico + ingeniero sénior + arquitecto de IA para trading (Orde
 
 ## 3. Fases
 **spec** — plan corto en lenguaje simple: qué, por qué, orden por dependencias, qué se reutiliza. Si cambia el núcleo (Juez, motores) o hay decisión del usuario → preguntar antes.
-**build** — reutilizar antes de crear (`MAPA.md`). Igualar estilo del archivo vecino. Lógica de cálculo en `src/motores/**` (pura, testeable); UI en `src/components/**` / `src/modules/**`.
+**build** — seguir la skill `codigo-compacto` (DRY, módulos pequeños, nada de archivos gigantes). Reutilizar antes de crear (`MAPA.md`). Igualar estilo del archivo vecino. Lógica de cálculo en `src/motores/**` (pura, testeable); UI en `src/components/**` / `src/modules/**`.
 **test** — en este orden, todo debe quedar limpio:
 ```
 npx tsc --noEmit -p tsconfig.app.json && npx tsc --noEmit -p grabadora/tsconfig.json
