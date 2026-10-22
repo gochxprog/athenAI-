@@ -4,6 +4,8 @@ import { ContactShadows, Grid, Html, OrbitControls, RoundedBox } from '@react-th
 import * as THREE from 'three';
 import { AGENTES, CAPAS, ESTILO_AGENTE, type Accesorio, type AgenteId } from '@/data/agentes';
 import { ALTO, ANCHO, PANTALLAS } from './pantallas';
+import MuroSala from './MuroSala';
+import type { DatosMuro } from './muro';
 
 /** Filas por capa (detectores delante, ejecución al fondo), mirando hacia el núcleo de datos. */
 const FILAS: Record<1 | 2 | 3, { z: number; paso: number }> = {
@@ -174,6 +176,10 @@ interface Props {
   estados: Record<AgenteId, string>;
   /** Rótulo del núcleo: fuente y activos. */
   etiquetaDatos: string;
+  /** Pantalla gigante en la pared del fondo (sin datos no se pinta). */
+  muro?: DatosMuro;
+  /** Quién trabaja de verdad ahora (por defecto: los que tienen motor). */
+  activos?: Partial<Record<AgenteId, boolean>>;
 }
 
 /** Núcleo de datos de mercado: icosaedro que respira en el centro de la sala. */
@@ -211,16 +217,18 @@ function NucleoDatos({ etiqueta }: { etiqueta: string }) {
 }
 
 /** Paquetes de datos que viajan del núcleo a cada puesto en arco. */
-function FlujoPaquetes() {
+function FlujoPaquetes({ vivo }: { vivo: (a: (typeof AGENTES)[number]) => boolean }) {
+  // Un paquete hacia cada agente que trabaja (se rehace solo cuando cambia quién trabaja).
+  const ids = AGENTES.filter(vivo).map((a) => a.id).join();
   const curvas = useMemo(
     () =>
-      AGENTES.filter((a) => a.real).map((a) => {
-        const { pos } = PUESTOS[a.id];
+      (ids.split(',').filter(Boolean) as AgenteId[]).map((id) => {
+        const { pos } = PUESTOS[id];
         const ini = new THREE.Vector3(NUCLEO[0], 1.15, NUCLEO[2]);
         const fin = new THREE.Vector3(pos[0], 1.05, pos[2] + 0.4);
         return new THREE.QuadraticBezierCurve3(ini, new THREE.Vector3((ini.x + fin.x) / 2, 2.2, (ini.z + fin.z) / 2), fin);
       }),
-    [],
+    [ids],
   );
   const trazos = useMemo(() => {
     const mat = new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.12 });
@@ -293,7 +301,7 @@ function Monitor({ id, color, activo, apagado }: { id: AgenteId; color: string; 
   );
 }
 
-function Puesto({ id, seleccionado, onSeleccion, estado }: { id: AgenteId; seleccionado: boolean; onSeleccion: (id: AgenteId) => void; estado: string }) {
+function Puesto({ id, seleccionado, onSeleccion, estado, vivo }: { id: AgenteId; seleccionado: boolean; onSeleccion: (id: AgenteId) => void; estado: string; vivo: boolean }) {
   const { pos, rot } = PUESTOS[id];
   const agente = AGENTES.find((a) => a.id === id)!;
   const estilo = ESTILO_AGENTE[id];
@@ -303,7 +311,6 @@ function Puesto({ id, seleccionado, onSeleccion, estado }: { id: AgenteId; selec
   const [hover, setHover] = useState(false);
   const fase = useMemo(() => Math.random() * 10, []);
 
-  const vivo = agente.real;
   // En pantallas estrechas el rótulo solo lleva el nombre (los 10 puestos no caben con dos líneas).
   const compacto = useThree((st) => st.size.width) < 700;
   useFrame(({ clock }) => {
@@ -425,9 +432,9 @@ function Puesto({ id, seleccionado, onSeleccion, estado }: { id: AgenteId; selec
 
 function Sala() {
   // Aristas de la sala para dar profundidad sin paredes sólidas.
-  const geo = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(17, 4, 12)), []);
+  const geo = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(17, 5, 12)), []);
   return (
-    <lineSegments geometry={geo} position={[0, 2, -1.8]}>
+    <lineSegments geometry={geo} position={[0, 2.5, -1.8]}>
       <lineBasicMaterial color="#ffffff" transparent opacity={0.08} />
     </lineSegments>
   );
@@ -439,7 +446,7 @@ function AjusteCamara() {
   useEffect(() => {
     const factor = Math.max(1, 1.9 / (size.width / size.height));
     camera.position.set(0, 6.2 * factor, 9.6 * factor);
-    camera.lookAt(0, 0.4, -2.2);
+    camera.lookAt(0, 0.9, -2.2);
   }, [camera, size.width, size.height]);
   return null;
 }
@@ -461,7 +468,8 @@ function RotulosCapas() {
   );
 }
 
-export default function SalaAgentes3D({ seleccion, onSeleccion, estados, etiquetaDatos }: Props) {
+export default function SalaAgentes3D({ seleccion, onSeleccion, estados, etiquetaDatos, muro, activos }: Props) {
+  const vivo = (a: (typeof AGENTES)[number]) => activos?.[a.id] ?? a.real;
   return (
     <Canvas shadows camera={{ position: [0, 6.2, 9.6], fov: 42 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }}>
       <AjusteCamara />
@@ -472,12 +480,13 @@ export default function SalaAgentes3D({ seleccion, onSeleccion, estados, etiquet
       <Grid position={[0, 0, 0]} args={[20, 20]} cellSize={0.5} cellThickness={0.5} cellColor="#2a2a2e" sectionSize={2} sectionThickness={0.8} sectionColor="#45484e" fadeDistance={14} fadeStrength={1.5} infiniteGrid />
       <ContactShadows position={[0, 0.005, 0]} opacity={0.6} scale={12} blur={2.4} far={3} />
       <NucleoDatos etiqueta={etiquetaDatos} />
-      <FlujoPaquetes />
+      <FlujoPaquetes vivo={vivo} />
+      {muro && <MuroSala datos={muro} posicion={[0, 3.0, -7.0]} />}
       <RotulosCapas />
       {AGENTES.map((a) => (
-        <Puesto key={a.id} id={a.id} seleccionado={seleccion === a.id} onSeleccion={onSeleccion} estado={estados[a.id]} />
+        <Puesto key={a.id} id={a.id} seleccionado={seleccion === a.id} onSeleccion={onSeleccion} estado={estados[a.id]} vivo={vivo(a)} />
       ))}
-      <OrbitControls target={[0, 0.4, -2.2]} enablePan={false} minDistance={5} maxDistance={24} minPolarAngle={0.5} maxPolarAngle={1.35} enableDamping />
+      <OrbitControls target={[0, 0.9, -2.2]} enablePan={false} minDistance={5} maxDistance={24} minPolarAngle={0.5} maxPolarAngle={1.35} enableDamping />
     </Canvas>
   );
 }

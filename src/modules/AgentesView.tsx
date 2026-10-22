@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bot, Cpu, MousePointerClick, Terminal } from 'lucide-react';
 import SalaAgentes3D from '@/components/three/SalaAgentes3D';
+import { velasDe, type DatosMuro } from '@/components/three/muro';
 import Encabezado from '@/components/ui/Encabezado';
 import Panel from '@/components/ui/Panel';
 import PanelLateral from '@/components/ui/PanelLateral';
@@ -125,6 +126,7 @@ export default function AgentesView() {
   }, []);
 
   const vivos = feeds.feeds.filter((f) => f.conexion === 'en-vivo').length;
+  const reales = AGENTES.filter((a) => a.real).length;
   const estadoAgente = (a: Agente): string => {
     if (!a.real) return `Sin motor · Bloque ${a.bloque}`;
     if (!feeds.feeds.length) return 'Sin fuente';
@@ -160,7 +162,20 @@ export default function AgentesView() {
   };
   const etiquetaDatos = feeds.feeds.length ? `Datos de mercado · ${feeds.feeds.map((f) => f.simbolo).join(' · ')}` : 'Sin fuente de datos';
   const agente = AGENTES.find((a) => a.id === seleccion) ?? null;
-  const reales = AGENTES.filter((a) => a.real).length;
+  const color = (id: AgenteId) => ESTILO_AGENTE[id].color;
+  const muro: DatosMuro = {
+    mercados: feeds.feeds.map((f) => ({ simbolo: f.simbolo, precio: f.precio, velas: velasDe(f.historial), serie: '10 S · ÚLTIMOS 5 MIN', conexion: f.conexion })),
+    lineas: [
+      ...(['vigia', 'flujo', 'rastreador'] as const).flatMap((id) => consolas[id].slice(0, 6).map((l) => ({ t: l.hora.getTime(), quien: AGENTES.find((a) => a.id === id)!.nombre, color: color(id), texto: l.texto }))),
+      ...motorPaper.bitacora.slice(0, 10).map((x) => (x.grave ? { t: x.t, quien: 'Guardián', color: color('guardian'), texto: `${x.nombre}: ${x.texto}` } : { t: x.t, quien: 'Ejecutor', color: color('ejecutor'), texto: `${x.nombre}: ${x.texto}` })),
+    ].sort((a, b) => b.t - a.t),
+    cifras: [
+      { nombre: 'Mercados en vivo', valor: `${vivos}/${feeds.feeds.length}` },
+      { nombre: 'Agentes con motor', valor: `${reales}/${AGENTES.length}` },
+      { nombre: 'Bots activos', valor: `${motorPaper.bots.filter((b) => b.estado === 'activo' && b.origen !== 'manual').length}` },
+      { nombre: 'Posiciones abiertas', valor: `${motorPaper.bots.filter((b) => b.posicion).length}` },
+    ],
+  };
 
   return (
     <div className="space-y-4">
@@ -177,7 +192,7 @@ export default function AgentesView() {
 
       <Panel cuerpo="p-0" className="overflow-hidden">
         <div className="relative h-[480px] md:h-[600px]">
-          <SalaAgentes3D seleccion={seleccion} onSeleccion={setSeleccion} estados={estados} etiquetaDatos={etiquetaDatos} />
+          <SalaAgentes3D seleccion={seleccion} onSeleccion={setSeleccion} estados={estados} etiquetaDatos={etiquetaDatos} muro={muro} />
           <div className="pointer-events-none absolute bottom-4 left-4 flex items-center gap-2 text-[10px] text-plata-500">
             <MousePointerClick size={12} /> Haz clic en un agente para abrir su consola
           </div>

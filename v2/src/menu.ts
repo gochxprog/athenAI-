@@ -13,7 +13,7 @@ export const MENU: { seccion: string; items: Item[] }[] = [
       { id: 'biblioteca', nombre: 'Biblioteca', icono: BookMarked },
       { id: 'investigacion', nombre: 'Investigación', icono: Sparkles, fase: 4 },
       { id: 'red', nombre: 'Red neuronal', icono: Brain, fase: 5 },
-      { id: 'agentes', nombre: 'Agentes', icono: Bot, fase: 5 },
+      { id: 'agentes', nombre: 'Agentes', icono: Bot },
     ],
   },
   {

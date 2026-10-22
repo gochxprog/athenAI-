@@ -1,0 +1,17 @@
+/* Sala de agentes v2 · la sala 3D grande y, debajo, cada agente con su color (apagado si aún no trabaja). */
+.agentes-v2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; animation: entrar .35s ease; }
+.agentes-v2 h1 { font-weight: 300; font-size: 24px; letter-spacing: -.01em; margin-top: 4px; }
+.agentes-v2 .vacio { color: var(--apagado); font-size: 12px; padding: 16px; }
+.sala-v2 { position: relative; height: min(72vh, 680px); min-height: 420px; overflow: hidden; background: radial-gradient(ellipse at 50% 20%, #0b0c10, #000 70%); }
+.fichas-ag { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.ficha-ag { padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; text-align: left; border-left: 2px solid var(--c); transition: border-color .2s, opacity .2s; }
+.ficha-ag b { font-weight: 500; display: flex; align-items: center; gap: 7px; }
+.ficha-ag i, .detalle-ag h2 i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); }
+.ficha-ag span { font-size: 10.5px; color: var(--tenue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ficha-ag.dormido { opacity: .45; border-left-color: var(--borde2); } .ficha-ag.dormido i { box-shadow: none; }
+.ficha-ag:hover, .ficha-ag.sel { border-color: var(--c); border-left-width: 2px; }
+.detalle-ag { padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; border-left: 2px solid var(--c); animation: entrar .25s ease; }
+.detalle-ag h2 { font-weight: 400; font-size: 18px; display: flex; align-items: center; gap: 9px; }
+.detalle-ag p { color: var(--tenue); font-size: 12.5px; } .detalle-ag .mono { font-size: 11px; }
+@media (max-width: 1100px) { .fichas-ag { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .fichas-ag { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sala-v2 { height: 440px; min-height: 0; } }
