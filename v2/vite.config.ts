@@ -12,7 +12,7 @@ export default defineConfig({
   base: './',
   plugins: [react()],
   // Tailwind solo para las vistas del Juez que se reutilizan de la plataforma vieja (mismo código, mismo aspecto).
-  css: { postcss: { plugins: [tailwind({ ...base, content: [aqui('./src/**/*.tsx'), aqui('../src/components/laboratorio/vista/*.tsx'), aqui('../src/components/charts/AbanicoTrayectorias.tsx')] })] } },
+  css: { postcss: { plugins: [tailwind({ ...base, corePlugins: { preflight: false }, content: [aqui('./src/**/*.tsx'), aqui('../src/components/laboratorio/vista/*.tsx'), aqui('../src/components/charts/AbanicoTrayectorias.tsx')] })] } },
   resolve: { alias: { '@': aqui('../src'), '@v2': aqui('./src') } },
   // En desarrollo, la API va a una grabadora (VPS=http://ip:8080 npm run v2:dev).
   server: { proxy: { '/api': process.env.VPS ?? 'http://localhost:8080' } },
