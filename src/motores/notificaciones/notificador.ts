@@ -2,7 +2,7 @@
 // Vigila los feeds (fallos y recuperación), la memoria del mercado ("hoy es distinto", régimen), el calendario
 // (eventos fuertes) y el Juez. Anti-spam por aviso. Mientras la plataforma corra en el navegador, los avisos
 // solo salen con la pestaña abierta (24/7 requiere el VPS, Bloque F).
-import { canalesActivos, CONFIG_NOTIF_POR_DEFECTO, peticion, peticionArchivo, resultadoEnvio, type Aviso, type Canal, type ConfigNotificaciones } from './canales';
+import { canalesActivos, conLimite, CONFIG_NOTIF_POR_DEFECTO, peticion, peticionArchivo, resultadoEnvio, type Aviso, type Canal, type ConfigNotificaciones } from './canales';
 import type { EstadoFeed } from '../worker/protocolo';
 import type { EventoCalendario } from '../nucleo/calendario';
 
@@ -36,7 +36,7 @@ export class Notificador {
   private ocultaDesde: number | null = null;
 
   constructor(
-    private readonly fetchImpl: typeof fetch = (...a) => fetch(...a),
+    private readonly fetchImpl: typeof fetch = conLimite((...a) => fetch(...a)),
     private readonly almacen: Pick<Storage, 'getItem' | 'setItem'> | null = typeof localStorage === 'undefined' ? null : localStorage,
     private readonly reloj: () => number = () => Date.now(),
     private readonly visible: () => boolean = () => typeof document === 'undefined' || document.visibilityState !== 'hidden',

@@ -3,7 +3,7 @@
 // canales) se guarda solo en el VPS, en {datos}/avisos.json con permisos 600, y nunca se devuelve por la API.
 import fs from 'node:fs';
 import path from 'node:path';
-import { canalesActivos, chatsTelegram, CONFIG_NOTIF_POR_DEFECTO, peticion, resultadoEnvio, type Aviso, type ConfigNotificaciones } from '../src/motores/notificaciones/canales';
+import { canalesActivos, chatsTelegram, conLimite, CONFIG_NOTIF_POR_DEFECTO, peticion, resultadoEnvio, type Aviso, type ConfigNotificaciones } from '../src/motores/notificaciones/canales';
 import { Notificador } from '../src/motores/notificaciones/notificador';
 import { EVENTOS_PREDEFINIDOS } from '../src/motores/nucleo/calendario';
 import type { EstadoFeed } from '../src/motores/worker/protocolo';
@@ -49,7 +49,8 @@ function limpiar(c: Record<string, unknown>): ConfigNotificaciones {
 
 export function crearAvisos(o: { datos: string; log: (t: string) => void; fetchImpl?: typeof fetch; reloj?: () => number }): ApiAvisos {
   const archivo = path.join(o.datos, 'avisos.json');
-  const pedir = o.fetchImpl ?? fetch;
+  // Discord en fila y respetando su límite (429): una ráfaga de avisos no se pierde.
+  const pedir = conLimite(o.fetchImpl ?? fetch);
   let config: ConfigNotificaciones;
   try {
     config = limpiar(JSON.parse(fs.readFileSync(archivo, 'utf8')) as Record<string, unknown>);

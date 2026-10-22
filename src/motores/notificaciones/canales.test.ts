@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canalesActivos, chatsTelegram, CONFIG_NOTIF_POR_DEFECTO, peticion, resultadoEnvio, type Aviso } from './canales';
+import { canalesActivos, chatsTelegram, conLimite, CONFIG_NOTIF_POR_DEFECTO, peticion, resultadoEnvio, type Aviso } from './canales';
 
 const aviso: Aviso = { tipo: 'bot', clave: 'x', titulo: 'Bot «Ruptura» · BTCUSDT', texto: 'Cierra largo · +100 puntos', prioridad: 'normal' };
 const conWa = { ...CONFIG_NOTIF_POR_DEFECTO, whatsapp: { activo: true, telefono: '+58 412-123 4567', apikey: ' 987654 ' } };
@@ -22,6 +22,19 @@ describe('Canales: WhatsApp, errores claros y chat de Telegram', () => {
     expect(x.detalle).toContain('chat not found');
     expect(x.detalle).toContain('Buscar mi chat ID');
     expect(await resultadoEnvio(new Response('', { status: 200 }))).toEqual({ ok: true, detalle: 'Enviado' });
+  });
+
+  it('Discord en fila: ante 429 espera lo que pide y reintenta; el 404 dice que el webhook ya no existe', async () => {
+    const esperas: number[] = [];
+    let n = 0;
+    const pedir = (async () => (n++ === 0 ? new Response(JSON.stringify({ retry_after: 1.5 }), { status: 429 }) : new Response(null, { status: 204 }))) as typeof fetch;
+    const f = conLimite(pedir, async (ms) => void esperas.push(ms));
+    const [a, b] = await Promise.all([f('https://discord.com/api/webhooks/1/x', {}), f('https://discord.com/api/webhooks/1/x', {})]);
+    expect([a.status, b.status]).toEqual([204, 204]);
+    expect(n).toBe(3); // 429, reintento y el segundo aviso: ninguno se pierde
+    expect(esperas[0]).toBe(1_500);
+    const r = Object.defineProperty(new Response(JSON.stringify({ message: 'Unknown Webhook', code: 10015 }), { status: 404 }), 'url', { value: 'https://discord.com/api/webhooks/1/x' });
+    expect((await resultadoEnvio(r)).detalle).toContain('crea uno nuevo');
   });
 
   it('busca los chats que le escribieron al bot (getUpdates)', async () => {

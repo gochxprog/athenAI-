@@ -104,7 +104,42 @@ export async function resultadoEnvio(r: Response): Promise<{ ok: boolean; detall
   } catch {
     // no era JSON: va el texto tal cual
   }
-  return { ok: false, detalle: `HTTP ${r.status}${motivo ? ` · ${motivo}` : ''}${/chat not found/i.test(motivo) ? ' → escríbele primero a tu bot y usa «Buscar mi chat ID»' : ''}` };
+  const pista = /chat not found/i.test(motivo)
+    ? ' → escríbele primero a tu bot y usa «Buscar mi chat ID»'
+    : /unknown webhook/i.test(motivo) || (r.status === 404 && (r.url ?? '').includes('discord'))
+      ? ' → ese webhook ya no existe (lo borraron o lo regeneraron): crea uno nuevo en Discord y pégalo'
+      : r.status === 429
+        ? ' → el servicio pidió esperar: demasiados avisos seguidos'
+        : '';
+  return { ok: false, detalle: `HTTP ${r.status}${motivo ? ` · ${motivo}` : ''}${pista}` };
+}
+
+/** Separación entre envíos a un mismo servicio limitado (Discord: ≈ 5 cada 2 s por webhook). */
+export const SEPARACION_MS = 450;
+
+/**
+ * Envíos a Discord en fila: uno tras otro, separados, y si responde 429 se espera lo que pide (retry_after) y se
+ * reintenta hasta 3 veces. Así una ráfaga de avisos (bots + fallos + eventos) no se pierde por el límite.
+ */
+export function conLimite(pedir: typeof fetch, esperar = (ms: number) => new Promise<void>((ok) => setTimeout(ok, ms))): typeof fetch {
+  let cola: Promise<unknown> = Promise.resolve();
+  return (url, init) => {
+    if (!String(url).includes('discord')) return pedir(url, init);
+    const turno = cola.then(async () => {
+      for (let intento = 0; ; intento++) {
+        const r = await pedir(url, init);
+        if (r.status !== 429 || intento >= 3) {
+          await esperar(SEPARACION_MS);
+          return r;
+        }
+        const cuerpo = (await r.clone().json().catch(() => ({}))) as { retry_after?: number };
+        const s = Number(r.headers.get('retry-after')) || Number(cuerpo.retry_after) || 1;
+        await esperar(Math.min(30, s) * 1000);
+      }
+    });
+    cola = turno.catch(() => undefined);
+    return turno;
+  };
 }
 
 /** Chats que le escribieron a tu bot de Telegram (getUpdates): así se encuentra el Chat ID sin adivinar. */
