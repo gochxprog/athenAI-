@@ -122,6 +122,13 @@ export class AlmacenDisco {
   }
 
   /** Filas con cierre > `desde`, en orden, como mucho `limite`. `mas` = quedan más después. */
+  /** Todas las filas de un día (AAAA-MM-DD) de un mercado. */
+  leerDia(simbolo: string, d: string): FilaDisco[] {
+    const dir = this.dirMercado(simbolo);
+    const f = dir && path.join(dir, 'filas', `${d}.jsonl`);
+    return f && fs.existsSync(f) ? leerLineas<FilaDisco>(f) : [];
+  }
+
   leer(simbolo: string, desde: number, limite: number): { filas: FilaDisco[]; mas: boolean } {
     const salida: FilaDisco[] = [];
     const dir = this.dirMercado(simbolo);

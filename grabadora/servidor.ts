@@ -18,6 +18,7 @@ import path from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { AlmacenDisco } from './almacenDisco';
 import type { ApiPaper } from './botsVps';
+import type { ApiLaboratorio } from './laboratorioVps';
 import { esMercadoId, partesMercado } from '../src/motores/mercado/mercadoId';
 
 export interface EstadoSimbolo {
@@ -40,6 +41,8 @@ export interface OpcionesServidor {
   paper?: ApiPaper | null;
   /** Resumen de la historia importada (importador.ts). */
   historia?: () => unknown;
+  /** Pruebas del Juez en el VPS (laboratorioVps.ts). */
+  laboratorio?: ApiLaboratorio | null;
   /** Reloj (pruebas). */
   reloj?: () => number;
 }
@@ -132,13 +135,16 @@ export function crearServidor(o: OpcionesServidor): http.Server {
       return html(303, '', { Location: '/entrar', 'Set-Cookie': cookie('', 0) });
     }
     if (url.pathname === '/entrar') return conSesion ? html(303, '', { Location: '/' }) : html(200, paginaEntrar());
-    if (url.pathname.startsWith('/api/paper/') && req.method === 'POST') {
+    // Acciones (POST, solo JSON): bots de Paper y pruebas del Laboratorio.
+    const modulo = req.method === 'POST' ? (['paper', 'laboratorio'] as const).find((m) => url.pathname.startsWith(`/api/${m}/`)) : undefined;
+    if (modulo) {
       const bearer = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
       if (!conSesion && !claveCorrecta(bearer, o.clave)) return json(401, { error: 'Clave incorrecta' });
-      if (!o.paper) return json(503, { error: 'Los bots no están activos en esta grabadora' });
+      const destino = o[modulo];
+      if (!destino) return json(503, { error: modulo === 'paper' ? 'Los bots no están activos en esta grabadora' : 'El Laboratorio no está activo en esta grabadora' });
       // Solo JSON: un formulario de otra página no puede disparar acciones con la cookie.
       if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return json(415, { error: 'Solo JSON' });
-      const accion = url.pathname.slice('/api/paper/'.length);
+      const accion = url.pathname.slice(`/api/${modulo}/`.length);
       let cuerpo = '';
       req.on('data', (c: Buffer) => {
         cuerpo += c.toString();
@@ -151,7 +157,7 @@ export function crearServidor(o: OpcionesServidor): http.Server {
         } catch {
           return json(400, { error: 'JSON no válido' });
         }
-        o.paper!
+        destino
           .accion(accion, datos)
           .then((r) => json(200, r))
           .catch((e) => json(400, { error: e instanceof Error ? e.message : String(e) }));
@@ -169,6 +175,7 @@ export function crearServidor(o: OpcionesServidor): http.Server {
           return json(200, { ...e, almacen: o.almacen.resumen() });
         }
         if (url.pathname === '/api/historia') return json(200, { mercados: o.historia?.() ?? [] });
+        if (url.pathname === '/api/laboratorio/trabajo') return o.laboratorio ? json(200, o.laboratorio.trabajo(url.searchParams.get('id') ?? '')) : json(503, { error: 'El Laboratorio no está activo en esta grabadora' });
         if (url.pathname === '/api/sesiones') {
           const simbolo = simboloPedido(url);
           return json(200, { sesiones: o.almacen.sesiones(simbolo === null ? undefined : simbolo) });

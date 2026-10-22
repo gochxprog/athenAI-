@@ -17,6 +17,7 @@ import { EVENTOS_PREDEFINIDOS } from '../src/motores/nucleo/calendario';
 import type { MensajeMercado } from '../src/motores/nucleo/tipos';
 import { AlmacenDisco } from './almacenDisco';
 import { resumenHistoria } from './importador';
+import { atenderJuez, crearLaboratorio } from './laboratorioVps';
 import { crearServidor, type EstadoSimbolo } from './servidor';
 import { almacenLocalDisco, cargadorPython, crearApiPaper, feedDe, LibroPaperDisco, senalesDisco } from './botsVps';
 import { MotorPaper } from '../src/motores/paper/motorPaper';
@@ -169,7 +170,7 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
       }, 1_000);
     });
   }
-  const servidor = crearServidor({ almacen, clave, estado, web: o.web, paper: motorBots ? crearApiPaper(motorBots) : null, historia: () => resumenHistoria(o.datos) });
+  const servidor = crearServidor({ almacen, clave, estado, web: o.web, paper: motorBots ? crearApiPaper(motorBots) : null, historia: () => resumenHistoria(o.datos), laboratorio: crearLaboratorio({ datos: o.datos, pyodide: o.pyodide ?? null, log }) });
   const alEscuchar = () => log(`Grabadora ${VERSION} escuchando en ${o.host ?? 'todas las interfaces'}, puerto ${o.puerto} · símbolos: ${o.simbolos.join(', ')} · datos en ${o.datos}`);
   if (o.host) servidor.listen(o.puerto, o.host, alEscuchar);
   else servidor.listen(o.puerto, alEscuchar);
@@ -187,7 +188,9 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
 }
 
 // Arranque como programa (no al importarlo desde las pruebas).
-if (process.argv[1] && /grabadora\.(m?js|ts)$/.test(process.argv[1])) {
+// Proceso hijo del Laboratorio: solo corre una prueba del Juez y termina (no graba).
+if (process.argv.includes('--juez')) atenderJuez();
+else if (process.argv[1] && /grabadora\.(m?js|ts)$/.test(process.argv[1])) {
   const simbolos = (process.env.SIMBOLOS ?? 'BTCUSDT').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
   const g = iniciarGrabadora({
     simbolos,

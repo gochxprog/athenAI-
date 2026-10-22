@@ -7,6 +7,7 @@ import { ejecutarEstrategia, mensajeError, type PyodideMinimo } from './python';
 import type { MensajeEtiquetas, MensajeLaboratorio, MensajeSenales, PeticionEtiquetar, PeticionLaboratorio, PeticionSenales, SenalEstrategia } from './protocolo';
 import { datasetCsv, etiquetar } from '../etiquetador/etiquetador';
 import { mercadoId } from '../mercado/mercadoId';
+import { huecosDe } from './entradaJuez';
 
 const ctx = self as unknown as { postMessage: (m: MensajeLaboratorio | MensajeSenales | MensajeEtiquetas) => void; onmessage: ((e: MessageEvent<PeticionLaboratorio | PeticionSenales | PeticionEtiquetar>) => void) | null };
 
@@ -30,7 +31,6 @@ async function leer(proveedor: PeticionLaboratorio['proveedor'], simbolo: string
 }
 
 /** Huecos: barras marcadas por el Vigía o primer barra de una nueva sesión de captura. */
-const huecosDe = (filas: FilaGuardada[]) => filas.map((f, i) => f.valores.hueco === 1 || (i > 0 && f.sesion !== filas[i - 1].sesion));
 
 /** Filas que se dan a la estrategia para calcular su señal actual (contexto suficiente para sus ventanas). */
 const FILAS_SENAL = 1_500;
