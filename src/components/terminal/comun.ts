@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { motorPaper } from '@/motores/paper/iniciar';
 import type { EstadoBot, OperacionPaper } from '@/motores/paper/ejecutor';
 import { conSigno } from '@/lib/format';
+import { motorOrderFlow } from '@/motores/worker/motorCliente';
+import { grabadora } from '@/motores/grabadora/cliente';
 
 export const pct = (v: number, d = 2) => conSigno(v * 100, d, '%');
 export const usd = (v: number) => `${conSigno(v, 2)} USD`;
@@ -42,3 +44,25 @@ export const ahoraSuscribir = (cb: () => void) => {
   return () => clearInterval(id);
 };
 
+/** Filas de Features grabadas de un mercado: la carpeta con más historia (la del VPS o la de este navegador). */
+export function useFilasGrabadas(simbolo: string | undefined): number | null {
+  const [n, setN] = useState<number | null>(null);
+  useEffect(() => {
+    if (!simbolo) return;
+    let vivo = true;
+    const leer = () =>
+      motorOrderFlow.resumenAlmacen().then(
+        (r) => vivo && setN(Math.max(0, ...(['grabadora', 'binance'] as const).map((p) => r[p]?.find((x) => x.simbolo === simbolo)?.filas ?? 0))),
+        () => undefined,
+      );
+    void leer();
+    const id = setInterval(leer, 60_000);
+    const fuera = grabadora.suscribir(() => !grabadora.estado.enCurso && void leer());
+    return () => {
+      vivo = false;
+      clearInterval(id);
+      fuera();
+    };
+  }, [simbolo]);
+  return n;
+}

@@ -1,6 +1,6 @@
 # Mapa del código · AthenAI
 
-Generado por `scripts/mapa.mjs` (217 archivos). Leer esto antes de explorar.
+Generado por `scripts/mapa.mjs` (218 archivos). Leer esto antes de explorar.
 Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 
 ## grabadora
@@ -11,7 +11,7 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 - `servidor.ts` → almacenDisco.ts, botsVps.ts, mercadoId.ts · ← grabadora.ts · 🧪 bots.test.ts, cliente.test.ts, grabadora.test.ts
 
 ## src
-- `App.tsx` → AvisoGrabadora.tsx, Sidebar.tsx, Topbar.tsx, metaModulo.ts, Navegacion.tsx, AgentesView.tsx, ConocimientoView.tsx, DashboardView.tsx, DatosView.tsx, DecisionesView.tsx, EstrategiasView.tsx, InvestigacionView.tsx, LaboratorioView.tsx, MaquinasView.tsx, OrderFlowView.tsx, TerminalView.tsx, cliente.ts, iniciar.ts, iniciar.ts, nav.ts · ← main.tsx
+- `App.tsx` → AvisoGrabadora.tsx, Sidebar.tsx, Topbar.tsx, metaModulo.ts, Navegacion.tsx, AgentesView.tsx, ConocimientoView.tsx, DashboardView.tsx, DatosView.tsx, DecisionesView.tsx, EstrategiasView.tsx, InvestigacionView.tsx, LaboratorioView.tsx, MaquinasView.tsx, TerminalView.tsx, cliente.ts, iniciar.ts, iniciar.ts, nav.ts · ← main.tsx
 - `main.tsx` → App.tsx
 - `vite-env.d.ts`
 
@@ -46,16 +46,16 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 - `WalkForwardJuez.tsx` → format.ts, walkForward.ts, protocolo.ts · ← ResultadoJuez.tsx
 
 ## components/layout
-- `Sidebar.tsx` → plantillas.ts, OrderFlowChart.tsx, Punto.tsx, agentes.ts, menu.ts, iniciar.ts, nav.ts · ← App.tsx
+- `Sidebar.tsx` → plantillas.ts, OrderFlowChart.tsx, Pildora.tsx, Punto.tsx, agentes.ts, menu.ts, iniciar.ts, nav.ts · ← App.tsx
 - `Topbar.tsx` → OrderFlowChart.tsx, Insignia.tsx, Punto.tsx, Navegacion.tsx, useCalendario.ts, useReloj.ts, format.ts · ← App.tsx
 
 ## components/orderflow
 - `DomEscalera.tsx` → agruparLibro.ts, format.ts, pipeline.ts · ← OrderFlowChart.tsx
 - `LienzoOrderFlow.tsx` → format.ts, historial.ts, pipeline.ts, tipos.ts · ← OrderFlowChart.tsx, TerminalView.tsx
-- `MemoriaMercado.tsx` → OrderFlowChart.tsx, ResumenMercados.tsx, Panel.tsx, TarjetaMotor.tsx, format.ts, regimen.ts, motorCliente.ts, protocolo.ts · ← OrderFlowView.tsx
-- `MotoresOrderFlow.tsx` → TarjetaMotor.tsx, format.ts, pipeline.ts, protocolo.ts · ← OrderFlowView.tsx
+- `MemoriaMercado.tsx` → OrderFlowChart.tsx, ResumenMercados.tsx, Panel.tsx, TarjetaMotor.tsx, format.ts, regimen.ts, motorCliente.ts, protocolo.ts · ← PanelMotores.tsx
+- `MotoresOrderFlow.tsx` → TarjetaMotor.tsx, format.ts, pipeline.ts, protocolo.ts · ← PanelMotores.tsx
 - `OrderFlowChart.tsx` → DomEscalera.tsx, LienzoOrderFlow.tsx, historialGrafico.ts, Punto.tsx, Navegacion.tsx, pipeline.ts, tipos.ts, motorCliente.ts, protocolo.ts · ← 15 archivos
-- `ResumenMercados.tsx` → Sparkline.tsx, OrderFlowChart.tsx, Punto.tsx, useCalendario.ts, format.ts, motorCliente.ts, protocolo.ts · ← MemoriaMercado.tsx, DashboardView.tsx, OrderFlowView.tsx
+- `ResumenMercados.tsx` → Sparkline.tsx, OrderFlowChart.tsx, Punto.tsx, useCalendario.ts, format.ts, motorCliente.ts, protocolo.ts · ← MemoriaMercado.tsx, DashboardView.tsx, TerminalView.tsx
 - `agruparLibro.ts` → pipeline.ts · ← DomEscalera.tsx · 🧪 agruparLibro.test.ts
 - `historialGrafico.ts` → almacen.ts, cliente.ts, historial.ts, pipeline.ts, tipos.ts, motorCliente.ts · ← OrderFlowChart.tsx
 
@@ -63,12 +63,13 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 - `BarraCuenta.tsx` → comun.ts, format.ts, ejecutor.ts · ← TerminalView.tsx
 - `Bots.tsx` → graficos.tsx, plantillas.ts, comun.ts, Panel.tsx, format.ts, costos.ts, ejecutor.ts, guardian.ts, paper.ts · ← TerminalView.tsx
 - `Cinta.tsx` → comun.ts · ← TerminalView.tsx
-- `Diario.tsx` → comun.ts, Panel.tsx, format.ts, desdePaper.ts, diario.ts, ejecutor.ts · ← TerminalView.tsx
+- `Diario.tsx` → comun.ts, Panel.tsx, Pildora.tsx, format.ts, desdePaper.ts, diario.ts, ejecutor.ts · ← TerminalView.tsx
 - `LibroOperaciones.tsx` → comun.ts, Panel.tsx, format.ts, ejecutor.ts, motorCliente.ts · ← TerminalView.tsx
 - `PanelGuardian.tsx` → comun.ts, Panel.tsx, format.ts · ← TerminalView.tsx
+- `PanelMotores.tsx` → MemoriaMercado.tsx, MotoresOrderFlow.tsx, OrderFlowChart.tsx, Panel.tsx, Pildora.tsx, format.ts, features.ts, pipeline.ts, tipos.ts, motorCliente.ts · ← TerminalView.tsx
 - `Posiciones.tsx` → comun.ts, format.ts, ejecutor.ts, manual.ts · ← TerminalView.tsx
-- `Ticket.tsx` → OrderFlowChart.tsx, comun.ts, format.ts, salidas.ts, fichas.ts, mercadoId.ts, manual.ts, motorPaper.ts, motorCliente.ts · ← TerminalView.tsx
-- `comun.ts` → format.ts, ejecutor.ts, iniciar.ts · ← 9 archivos
+- `Ticket.tsx` → OrderFlowChart.tsx, comun.ts, Pildora.tsx, format.ts, salidas.ts, fichas.ts, mercadoId.ts, manual.ts, motorPaper.ts, motorCliente.ts · ← TerminalView.tsx
+- `comun.ts` → format.ts, cliente.ts, ejecutor.ts, iniciar.ts, motorCliente.ts · ← 9 archivos
 
 ## components/three
 - `EsferaCerebro.tsx` · ← DashboardView.tsx
@@ -77,10 +78,11 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 
 ## components/ui
 - `Consola.tsx` → format.ts · ← AgentesView.tsx, DashboardView.tsx
-- `Encabezado.tsx` · ← 11 archivos
+- `Encabezado.tsx` · ← 10 archivos
 - `Insignia.tsx` · ← 11 archivos
 - `Panel.tsx` · ← 26 archivos
 - `PanelLateral.tsx` · ← AgentesView.tsx
+- `Pildora.tsx` · ← 5 archivos
 - `Punto.tsx` · ← 7 archivos
 - `SinMotor.tsx` → Panel.tsx · ← ConocimientoView.tsx, InvestigacionView.tsx
 - `TarjetaMotor.tsx` → graficos.tsx, Panel.tsx · ← MotoresDatos.tsx, MemoriaMercado.tsx, MotoresOrderFlow.tsx
@@ -97,7 +99,7 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 - `useReloj.ts` · ← Topbar.tsx
 
 ## lib
-- `format.ts` · ← 36 archivos
+- `format.ts` · ← 37 archivos
 - `random.ts` · ← juez.ts, antiFuturo.ts, hmm.ts, guardian.ts · 🧪 etiquetador.test.ts, backtest.test.ts, juez.test.ts, luckTest.test.ts, monteCarlo.test.ts, robustez.test.ts, sobreajuste.test.ts, walkForward.test.ts, memoria.test.ts, antifuga.test.ts, barras.test.ts, pipeline.test.ts, paper.test.ts
 
 ## modules
@@ -110,8 +112,7 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 - `InvestigacionView.tsx` → Encabezado.tsx, SinMotor.tsx · ← App.tsx
 - `LaboratorioView.tsx` → EstrategiasPython.tsx, Etiquetador.tsx, ResultadosJuez.tsx, Encabezado.tsx, Insignia.tsx · ← App.tsx
 - `MaquinasView.tsx` → OrderFlowChart.tsx, Encabezado.tsx, Panel.tsx, format.ts · ← App.tsx
-- `OrderFlowView.tsx` → MemoriaMercado.tsx, MotoresOrderFlow.tsx, OrderFlowChart.tsx, ResumenMercados.tsx, Encabezado.tsx, Insignia.tsx, Panel.tsx, format.ts, cliente.ts, features.ts, pipeline.ts, tipos.ts, motorCliente.ts · ← App.tsx
-- `TerminalView.tsx` → graficos.tsx, LienzoOrderFlow.tsx, OrderFlowChart.tsx, BarraCuenta.tsx, Bots.tsx, Cinta.tsx, Diario.tsx, LibroOperaciones.tsx, PanelGuardian.tsx, Posiciones.tsx, Ticket.tsx, comun.ts, Encabezado.tsx, Panel.tsx, manual.ts · ← App.tsx
+- `TerminalView.tsx` → graficos.tsx, LienzoOrderFlow.tsx, OrderFlowChart.tsx, ResumenMercados.tsx, BarraCuenta.tsx, Bots.tsx, Cinta.tsx, Diario.tsx, LibroOperaciones.tsx, PanelGuardian.tsx, PanelMotores.tsx, Posiciones.tsx, Ticket.tsx, comun.ts, Encabezado.tsx, Insignia.tsx, Panel.tsx, Pildora.tsx, format.ts, manual.ts · ← App.tsx
 
 ## motores/almacen
 - `almacen.ts` → features.ts, parametros.ts · ← 11 archivos · 🧪 almacen.test.ts, cliente.test.ts
@@ -236,7 +237,7 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 
 ## motores/worker
 - `motor.worker.ts` → almacen.ts, binance.ts, puenteSSE.ts, rithmicPuente.ts, extremos.ts, cruce.ts, gemelos.ts, regimen.ts, calendario.ts, features.ts, parametros.ts, pipeline.ts, tipos.ts, protocolo.ts
-- `motorCliente.ts` → binance.ts, calendario.ts, pipeline.ts, tipos.ts, protocolo.ts · ← 14 archivos
+- `motorCliente.ts` → binance.ts, calendario.ts, pipeline.ts, tipos.ts, protocolo.ts · ← 15 archivos
 - `protocolo.ts` → almacen.ts, rithmicPuente.ts, extremos.ts, cruce.ts, gemelos.ts, regimen.ts, calendario.ts, pipeline.ts, tipos.ts · ← 15 archivos · 🧪 lectura.test.ts, notificador.test.ts, manual.test.ts, paper.test.ts, bots.test.ts
 
 ## types

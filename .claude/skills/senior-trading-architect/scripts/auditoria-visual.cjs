@@ -14,7 +14,7 @@ try {
 
 const carpeta = process.argv[2] || 'auditoria';
 const base = (process.argv[3] || 'http://localhost:4173').replace(/\/$/, '');
-const MODULOS = ['panel', 'orderflow', 'laboratorio', 'investigacion', 'estrategias', 'conocimiento', 'agentes', 'paper', 'decisiones', 'maquinas', 'datos'];
+const MODULOS = ['panel', 'laboratorio', 'investigacion', 'estrategias', 'conocimiento', 'agentes', 'paper', 'decisiones', 'maquinas', 'datos'];
 
 (async () => {
   fs.mkdirSync(carpeta, { recursive: true });

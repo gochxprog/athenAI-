@@ -245,7 +245,7 @@ export default function DatosView() {
           <p className="max-w-3xl text-xs leading-relaxed text-plata-300">
             Absorción, agotamiento, imbalances, big trades, CVD de sesión, Open Interest, pools de liquidez (LHM), icebergs y stop runs se calculan por cada dollar bar del activo (≈ 2.000 barras al día según su volumen), sin mirar al futuro. Es la tabla que aprenderán los modelos.
           </p>
-          <button onClick={() => navegar('orderflow')} className="flex items-center gap-2 rounded-lg bg-white px-3.5 py-2 text-xs font-medium text-black">
+          <button onClick={() => navegar('paper')} className="flex items-center gap-2 rounded-lg bg-white px-3.5 py-2 text-xs font-medium text-black">
             Ver en Order Flow <ArrowRight size={13} />
           </button>
         </div>
@@ -297,7 +297,7 @@ function Feeds({ feeds, visible, enCola }: { feeds: EstadoFeed[]; visible: strin
                   <button
                     onClick={() => {
                       motorOrderFlow.ver(f.simbolo);
-                      navegar('orderflow');
+                      navegar('paper');
                     }}
                     className={`rounded border px-2 py-0.5 text-[10px] ${visible === f.simbolo ? 'border-plata-300 text-white' : 'border-borde text-plata-400 hover:text-white'}`}
                   >

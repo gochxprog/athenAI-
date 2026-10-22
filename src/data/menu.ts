@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, CandlestickChart, FlaskConical, Microscope, Library, Brain, Bot,
+  LayoutDashboard, FlaskConical, Microscope, Library, Brain, Bot,
   Wallet, Gavel, Server, Database, type LucideIcon,
 } from 'lucide-react';
 import type { Modulo } from '@/types/nav';
@@ -15,7 +15,6 @@ export const MENU: { titulo: string; items: ItemMenu[] }[] = [
     titulo: 'Panel General',
     items: [
       { id: 'panel', etiqueta: 'Panel General', icono: LayoutDashboard },
-      { id: 'orderflow', etiqueta: 'Order Flow', icono: CandlestickChart },
     ],
   },
   {

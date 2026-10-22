@@ -15,13 +15,12 @@ Todo lo que tiene la plataforma hoy, pantalla por pantalla y motor por motor.
 | Sección | Pantalla | Qué hace | Estado |
 |---|---|---|---|
 | Panel General | **Panel General** | Cerebro 3D que reacciona a los eventos reales. 8 carteles: pulso del flujo, señales en vivo, Features fuera de lo normal, contexto, lectura del momento, día gemelo, tus estrategias ahora y alertas. Mercados de un vistazo y registro del día | 🟢 |
-| Panel General | **Order Flow** | Gráfico de velas, Footprint, heatmap de liquidez (tipo Bookmap), DOM, eventos, memoria del mercado y tabla de Features con exportación a CSV | 🟢 |
 | Cerebro | **Laboratorio** | Editor de estrategias en Python, plantillas, el Juez completo (10 motores), papers y el Etiquetador | ✅ |
 | Cerebro | **Investigación** | Red de hipótesis (aplazada a propósito) | ⏸ |
 | Cerebro | **Estrategias** | Tus estrategias con el veredicto, la nota y la curva de su última prueba del Juez | 🟢 |
 | Cerebro | **Conocimiento** | Patrones encontrados (llega con el bloque de machine learning) | ⏸ |
 | Cerebro | **Agentes** | Sala 3D con los 10 agentes. Vigía, Flujo, Rastreador, Programador, Juez, Etiquetador, Ejecutor y Guardián trabajan de verdad | 🟢 (8 de 10) |
-| Dinero | **Terminal** (antes Paper Trading) | Mesa de operaciones en Paper: barra de cuenta, cinta, gráfico con las operaciones encima, ticket a mano (riesgo % o lotaje, stop, objetivo, gestión fija/BE/escalonada), posiciones, libro, **Diario estilo ATAS** (calendario día/semana/mes/año y métricas) y los bots con el Guardián. Los bots corren 24/7 en el VPS si la grabadora está conectada | 🟢 |
+| Dinero | **Terminal** (antes Paper Trading) | Mesa de operaciones en Paper (aquí vive todo lo que era la pantalla Order Flow): barra de cuenta, cinta, tarjetas de cada mercado, gráfico de velas/Footprint/heatmap con el DOM y las operaciones encima, eventos, cómo funciona cada motor, memoria del mercado, Features con CSV y salud del motor, ticket a mano (riesgo % o contratos, stop, objetivo, gestión fija/BE/escalonada), posiciones, libro, **Diario estilo ATAS** (calendario día/semana/mes/año y métricas) y los bots con el Guardián. Los bots corren 24/7 en el VPS si la grabadora está conectada | 🟢 |
 | Dinero | **Decisiones** | Bitácora real: pruebas del Juez, avisos y registro del motor | 🟢 |
 | Sistema | **Máquinas** | Telemetría real del navegador (memoria, núcleos, workers) | 🟢 |
 | Sistema | **Datos (Centro de datos)** | Fuentes y activos, grabación, almacenamiento, calendario de eventos fuertes, notificaciones y diagnóstico de Binance | 🟢 |

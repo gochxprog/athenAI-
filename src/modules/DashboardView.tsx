@@ -168,7 +168,7 @@ export default function DashboardView() {
 
       <section className="space-y-2">
         <TituloColumna>Mercados · de un vistazo</TituloColumna>
-        <ResumenMercados alElegir={() => navegar('orderflow')} />
+        <ResumenMercados alElegir={() => navegar('paper')} />
       </section>
 
       <Panel titulo="Registro del día" icono={Activity} accion={<Estado estado={vivos ? 'activo' : 'detenido'} texto={`${lineas.length} entradas`} />}>
@@ -254,7 +254,7 @@ function TarjetaPulso() {
   const m = mercadoPrincipal(feeds.feeds, feeds.visible);
   const p = m ? presionDe(m) : 0;
   return (
-    <Mini titulo="Pulso del flujo" icono={Gauge} destino="orderflow" conector="der" principal={m?.conexion === 'en-vivo' ? conSigno(p * 100, 0, ' %') : '—'} nota={m ? `presión ${corto(m.simbolo)} · 5 barras` : 'sin mercados'}>
+    <Mini titulo="Pulso del flujo" icono={Gauge} destino="paper" conector="der" principal={m?.conexion === 'en-vivo' ? conSigno(p * 100, 0, ' %') : '—'} nota={m ? `presión ${corto(m.simbolo)} · 5 barras` : 'sin mercados'}>
       {feeds.feeds.slice(0, 3).map((f) => (
         <Linea
           key={f.simbolo}
@@ -275,7 +275,7 @@ function TarjetaPulso() {
 function TarjetaSenales({ eventos }: { eventos: (EventoMotor & { simbolo: string })[] }) {
   const ultimo = eventos[0];
   return (
-    <Mini titulo="Señales en vivo" icono={Radio} destino="orderflow" conector="der" principal={num(eventos.length)} nota="eventos de los motores · 5 min">
+    <Mini titulo="Señales en vivo" icono={Radio} destino="paper" conector="der" principal={num(eventos.length)} nota="eventos de los motores · 5 min">
       {eventos.slice(0, 4).map((e) => (
         <Linea key={`${e.simbolo}${e.id}`} k={`${hora(new Date(e.disponibleEn))} ${corto(e.simbolo)} · ${NOMBRE_EVENTO[e.tipo]} ${e.lado}`} v={e.tipo === 'bigtrade' || e.tipo === 'liquidacion' ? `$${num(e.magnitud / 1000, 0)}k` : num(e.magnitud, 0)} />
       ))}
@@ -331,7 +331,7 @@ function TarjetaLectura() {
   const m = mercadoPrincipal(feeds.feeds, feeds.visible);
   const l = m ? lecturaDe(m, ahora) : null;
   return (
-    <Mini titulo="Lectura del momento" icono={MessageSquareText} destino="orderflow" conector="izq" principal={l ? l.titular : '—'} nota={m ? corto(m.simbolo) : ''}>
+    <Mini titulo="Lectura del momento" icono={MessageSquareText} destino="paper" conector="izq" principal={l ? l.titular : '—'} nota={m ? corto(m.simbolo) : ''}>
       {l?.motivos.slice(0, 2).map((t) => <p key={t} className="truncate text-plata-400">{t}</p>)}
       {feeds.feeds
         .filter((f) => f !== m)
@@ -349,7 +349,7 @@ function TarjetaGemelo() {
   const mem = m?.memoria?.memoria;
   const r = mem?.resumen;
   return (
-    <Mini titulo="Memoria · día gemelo" icono={History} destino="orderflow" conector="izq" principal={r && mem ? `${r.subieron}/${mem.gemelos.length} subieron` : '—'} nota={m ? corto(m.simbolo) : ''}>
+    <Mini titulo="Memoria · día gemelo" icono={History} destino="paper" conector="izq" principal={r && mem ? `${r.subieron}/${mem.gemelos.length} subieron` : '—'} nota={m ? corto(m.simbolo) : ''}>
       {r ? (
         <>
           <Linea k="Mediana 20 barras después" v={conSigno(r.retornoMediano * 100, 2, ' %')} />

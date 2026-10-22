@@ -1,15 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Pildora from '@/components/ui/Pildora';
 import { Activity, BookOpen, Brain, Cpu, Download, ListTree, Table2 } from 'lucide-react';
-import Encabezado from '@/components/ui/Encabezado';
 import Panel from '@/components/ui/Panel';
-import Insignia from '@/components/ui/Insignia';
-import OrderFlowChart, { NOMBRE_PROVEEDOR, useEstadoMotor, useFeeds } from '@/components/orderflow/OrderFlowChart';
-import ResumenMercados from '@/components/orderflow/ResumenMercados';
+import { useFeeds } from '@/components/orderflow/OrderFlowChart';
 import MemoriaMercado from '@/components/orderflow/MemoriaMercado';
 import MotoresOrderFlow from '@/components/orderflow/MotoresOrderFlow';
 import { descargarCsv, motorOrderFlow } from '@/motores/worker/motorCliente';
-import { grabadora } from '@/motores/grabadora/cliente';
 import { DEFINICIONES_FEATURES } from '@/motores/nucleo/features';
 import type { EstadoGrafico } from '@/motores/nucleo/pipeline';
 import type { TipoEvento } from '@/motores/nucleo/tipos';
@@ -27,32 +23,17 @@ const NOMBRE_EVENTO: Record<TipoEvento, string> = {
   liquidacion: 'Liquidación',
 };
 
-export default function OrderFlowView() {
-  const { estado, msProceso } = useEstadoMotor();
+/**
+ * Lo que era la pantalla Order Flow (sin el gráfico, que ya está en «Operar»): eventos detectados, cómo funciona cada
+ * motor, memoria del mercado, Features para el ML y salud del motor. Los motores no cambian.
+ */
+export default function PanelMotores({ estado, msProceso }: { estado: EstadoGrafico | null; msProceso: number }) {
   const [pestana, setPestana] = useState<Pestana>('eventos');
   const { feeds } = useFeeds();
   const visibleFeed = feeds.feeds.find((f) => f.simbolo === feeds.visible) ?? feeds.feeds[0];
-  const grabadas = useFilasGrabadas(visibleFeed?.simbolo);
 
   return (
     <div className="space-y-4">
-      <Encabezado
-        modulo="Order Flow"
-        titulo="Gráficos de Order Flow"
-        fuente={visibleFeed ? `${NOMBRE_PROVEEDOR[visibleFeed.proveedor].toUpperCase()} · ${visibleFeed.simbolo}` : 'SIN FUENTE'}
-        descripcion="Velas o Footprint, CVD, Open Interest, absorción, agotamiento, pools de liquidez (LHM), big trades, icebergs y stop runs, con el DOM al lado. Calculado por los motores de athenAI en un proceso aparte; lo mismo que ves es lo que aprenden los modelos."
-      >
-        <Insignia variante="contorno">{estado ? `${num(grabadas ?? 0)} filas grabadas · ${num(estado.metricas.barrasCanonicas)} en esta sesión` : 'Arrancando motor…'}</Insignia>
-      </Encabezado>
-
-      <ResumenMercados />
-
-      <Panel cuerpo="p-0" className="overflow-hidden">
-        <div className="h-auto lg:h-[680px]">
-          <OrderFlowChart estado={estado} />
-        </div>
-      </Panel>
-
       <div className="flex gap-1 overflow-x-auto rounded-xl border border-borde p-1">
         {(
           [
@@ -221,27 +202,4 @@ function Salud({ estado, msProceso }: { estado: EstadoGrafico | null; msProceso:
       </div>
     </Panel>
   );
-}
-
-/** Filas de Features grabadas de un mercado: la carpeta con más historia (la del VPS o la de este navegador). */
-function useFilasGrabadas(simbolo: string | undefined): number | null {
-  const [n, setN] = useState<number | null>(null);
-  useEffect(() => {
-    if (!simbolo) return;
-    let vivo = true;
-    const leer = () =>
-      motorOrderFlow.resumenAlmacen().then(
-        (r) => vivo && setN(Math.max(0, ...(['grabadora', 'binance'] as const).map((p) => r[p]?.find((x) => x.simbolo === simbolo)?.filas ?? 0))),
-        () => undefined,
-      );
-    void leer();
-    const id = setInterval(leer, 60_000);
-    const fuera = grabadora.suscribir(() => !grabadora.estado.enCurso && void leer());
-    return () => {
-      vivo = false;
-      clearInterval(id);
-      fuera();
-    };
-  }, [simbolo]);
-  return n;
 }

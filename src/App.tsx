@@ -19,7 +19,6 @@ iniciarGrabadora();
 
 // Cada módulo se carga bajo demanda: Three.js y R3F solo se descargan cuando hacen falta.
 const DashboardView = lazy(() => import('@/modules/DashboardView'));
-const OrderFlowView = lazy(() => import('@/modules/OrderFlowView'));
 const InvestigacionView = lazy(() => import('@/modules/InvestigacionView'));
 const ConocimientoView = lazy(() => import('@/modules/ConocimientoView'));
 const LaboratorioView = lazy(() => import('@/modules/LaboratorioView'));
@@ -32,7 +31,7 @@ const DatosView = lazy(() => import('@/modules/DatosView'));
 
 const VISTAS: Record<Modulo, ComponentType> = {
   panel: DashboardView,
-  orderflow: OrderFlowView,
+  orderflow: TerminalView, // la pantalla Order Flow se quitó: su gráfico y sus motores están en la Terminal
   laboratorio: LaboratorioView,
   investigacion: InvestigacionView,
   estrategias: EstrategiasView,

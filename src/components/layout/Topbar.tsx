@@ -43,7 +43,7 @@ export default function Topbar({ titulo, seccion }: { titulo: string; seccion: s
           </span>
         )}
         {distintos.length > 0 && (
-          <button onClick={() => navegar('orderflow')} className="hidden rounded-full border border-white bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-etiqueta text-black md:block" title="La data de ahora no se parece a nada de lo grabado">
+          <button onClick={() => navegar('paper')} className="hidden rounded-full border border-white bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-etiqueta text-black md:block" title="La data de ahora no se parece a nada de lo grabado">
             Hoy es distinto · {distintos.join(', ')}
           </button>
         )}

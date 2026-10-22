@@ -9,7 +9,11 @@ import { Bot as IconoBot, CalendarDays, CandlestickChart, Crosshair, Layers } fr
 import Encabezado from '@/components/ui/Encabezado';
 import Panel from '@/components/ui/Panel';
 import { Explicacion } from '@/components/laboratorio/graficos';
-import OrderFlowChart, { useEstadoMotor } from '@/components/orderflow/OrderFlowChart';
+import OrderFlowChart, { NOMBRE_PROVEEDOR, useEstadoMotor, useFeeds } from '@/components/orderflow/OrderFlowChart';
+import ResumenMercados from '@/components/orderflow/ResumenMercados';
+import Insignia from '@/components/ui/Insignia';
+import PanelMotores from '@/components/terminal/PanelMotores';
+import { num } from '@/lib/format';
 import type { MarcasGrafico } from '@/components/orderflow/LienzoOrderFlow';
 import BarraCuenta from '@/components/terminal/BarraCuenta';
 import Cinta from '@/components/terminal/Cinta';
@@ -19,7 +23,7 @@ import LibroOperaciones from '@/components/terminal/LibroOperaciones';
 import PanelGuardian from '@/components/terminal/PanelGuardian';
 import Diario from '@/components/terminal/Diario';
 import { NuevoBot, TarjetaBot } from '@/components/terminal/Bots';
-import { ahoraSuscribir, useMotorPaper, useOperaciones } from '@/components/terminal/comun';
+import { ahoraSuscribir, useFilasGrabadas, useMotorPaper, useOperaciones } from '@/components/terminal/comun';
 import { tieneObjetivo } from '@/motores/paper/manual';
 
 type Pestana = 'operar' | 'diario' | 'bots';
@@ -34,7 +38,10 @@ export default function TerminalView() {
   const ahora = useSyncExternalStore(ahoraSuscribir, () => Math.floor(Date.now() / 1_000)) * 1_000;
   const totalOps = motor.bots.reduce((s, b) => s + b.operaciones, 0);
   const ops = useOperaciones(totalOps);
-  const { estado } = useEstadoMotor();
+  const { estado, msProceso } = useEstadoMotor();
+  const { feeds } = useFeeds();
+  const visibleFeed = feeds.feeds.find((f) => f.simbolo === feeds.visible) ?? feeds.feeds[0];
+  const grabadas = useFilasGrabadas(visibleFeed?.simbolo);
   const [pestana, setPestana] = useState<Pestana>('operar');
   const nombre = (id: string) => {
     const b = motor.bots.find((x) => x.id === id);
@@ -88,6 +95,11 @@ export default function TerminalView() {
       <motion.div key={pestana} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-4">
         {pestana === 'operar' ? (
           <>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="etiqueta">{visibleFeed ? `${NOMBRE_PROVEEDOR[visibleFeed.proveedor]} · ${visibleFeed.simbolo}` : 'Sin fuente'}</span>
+              <Insignia variante="contorno">{estado ? `${num(grabadas ?? 0)} filas grabadas · ${num(estado.metricas.barrasCanonicas)} en esta sesión` : 'Arrancando motor…'}</Insignia>
+            </div>
+            <ResumenMercados />
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_330px]">
               <div className="min-w-0 overflow-hidden rounded-xl border border-borde-suave bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.04),transparent_60%)]" data-grafico-terminal>
                 <div className="h-auto lg:h-[700px]">
@@ -101,6 +113,7 @@ export default function TerminalView() {
             <Panel titulo="Posiciones abiertas" cuerpo="px-4 py-2">
               <Posiciones />
             </Panel>
+            <PanelMotores estado={estado} msProceso={msProceso} />
             <LibroOperaciones ops={ops} nombre={nombre} />
           </>
         ) : pestana === 'diario' ? (
