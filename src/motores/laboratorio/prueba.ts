@@ -25,3 +25,27 @@ export interface Trabajo {
   resultado: ResultadoPrueba | null;
   error: string | null;
 }
+
+/** Una prueba guardada en la Biblioteca (resumen; el resultado completo va aparte). */
+export interface EntradaBiblioteca {
+  id: string;
+  t: number;
+  nombre: string;
+  simbolo: string;
+  serie: Serie;
+  fuente: Fuente;
+  codigo: string;
+  combo: Combo;
+  gestion: ReglasSalida | null;
+  veredicto: string;
+  resumen: string;
+  score: number | null;
+  /** Variantes que el Juez contó en esta prueba. */
+  ensayos: number;
+  velas: { total: number; desde: number; hasta: number };
+  oos: { sharpe: number | null; retorno: number; caida: number; operaciones: number; aciertos: number | null };
+  /** Bot de Paper creado desde esta prueba. */
+  botId?: string;
+  /** El resultado completo sigue guardado (las pruebas viejas lo pierden). */
+  conResultado: boolean;
+}

@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AlmacenDisco } from './almacenDisco';
 import { almacenLocalDisco, cargadorPython, crearApiPaper, LibroPaperDisco, senalesDisco } from './botsVps';
+import { cargarVelas } from './laboratorioVps';
 import { crearServidor } from './servidor';
 import { MotorPaper } from '../src/motores/paper/motorPaper';
 import type { EstadoFeed } from '../src/motores/worker/protocolo';
@@ -71,6 +72,25 @@ describe('Bots en el VPS · señal con Python sobre las filas grabadas en disco'
     expect(s95.posicion).toBe(0);
     expect(sinDatos.posicion).toBeNull();
     expect(sinDatos.error).toMatch(/Sin filas/);
+  }, 120_000);
+});
+
+describe('Bots en el VPS · señal sobre las velas del Juez', () => {
+  it('con velas de 5 min usa solo las CERRADAS y calcula una vez por vela', async () => {
+    const dir = tmp();
+    const al = new AlmacenDisco(dir);
+    al.nuevaSesion('BTCUSDT', parametrosPorDefecto('BTCUSDT'), T0, 1);
+    // 12 filas de 1 min: velas de 5 min [0-4] [5-9] cerradas y [10-11] formándose.
+    al.guardar('BTCUSDT', 1, Array.from({ length: 12 }, (_, i) => ({ n: i, inicio: T0 + i * 60_000, cierre: T0 + i * 60_000 + 59_999, close: 100 + i, valores: {} })));
+    al.vaciar();
+    let cargas = 0;
+    const senales = senalesDisco(al, cargadorPython(null), (s, serie, desde) => (cargas++, cargarVelas(dir, s, serie, 'grabado', desde)));
+    // La estrategia devuelve 1 solo si ve exactamente 2 velas (las cerradas).
+    const x = { id: 'a', codigo: 'def estrategia(v, p):\n    return [1 if len(v) == 2 else 0 for _ in v]', combo: {}, proveedor: 'binance' as const, simbolo: 'BTCUSDT', serie: '5m' as const };
+    const [s1] = await senales([x]);
+    expect(s1).toMatchObject({ posicion: 1, t: T0 + 9 * 60_000 + 59_999 });
+    await senales([x]);
+    expect(cargas).toBe(1); // misma vela en formación: no recalcula
   }, 120_000);
 });
 

@@ -1,4 +1,5 @@
 import type { Costos } from '../juez/backtest';
+import type { Serie } from './velas';
 import type { Combo, ResultadoJuez } from '../juez/juez';
 import type { Proveedor } from '../almacen/almacen';
 import type { ConfigWfo } from '../juez/walkForward';
@@ -65,6 +66,8 @@ export interface EstrategiaEnVivo {
   combo: Combo;
   proveedor: Proveedor;
   simbolo: string;
+  /** Serie de velas del Juez (sin campo = filas tal cual). */
+  serie?: Serie;
 }
 
 export interface PeticionSenales {
@@ -79,6 +82,8 @@ export interface SenalEstrategia {
   posicion: number | null;
   /** Cierre de esa barra (ms). */
   t: number | null;
+  /** ATR de esa vela (para el stop de la GESTION). */
+  atr?: number | null;
   error?: string;
 }
 

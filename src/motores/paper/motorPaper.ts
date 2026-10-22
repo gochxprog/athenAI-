@@ -10,6 +10,8 @@ import type { Aviso } from '../notificaciones/canales';
 import type { EstadoFeed } from '../worker/protocolo';
 import type { EstrategiaEnVivo, SenalEstrategia } from '../laboratorio/protocolo';
 import type { Combo } from '../juez/juez';
+import { abrirGestionada, type ReglasSalida } from '../juez/salidas';
+import { MS_SERIE, type Serie } from '../laboratorio/velas';
 import type { Costos } from '../juez/costos';
 import type { Proveedor } from '../almacen/almacen';
 import { anotarCurva, anotarOperacion, aplicarFunding, cerrar, equity, precioMedio, rebalancear, type Bot, type MercadoVivo, type MotivoCierre, type OperacionPaper } from './ejecutor';
@@ -49,6 +51,8 @@ export interface NuevoBot {
   exposicion: number;
   costos: Costos;
   retornosJuez: number[];
+  serie?: Serie;
+  reglasSalida?: ReglasSalida | null;
 }
 
 const CLAVE_LOCAL = 'athenai.paper';
@@ -184,6 +188,8 @@ export class MotorPaper {
       motivo: 'Esperando la próxima entrada de la estrategia.',
       costos: d.costos,
       retornosJuez: d.retornosJuez.slice(-300),
+      ...(d.serie ? { serie: d.serie } : {}),
+      reglasSalida: d.reglasSalida ?? null,
       dia: { fecha: fechaUtc(t), pico: d.capital },
       pausadoDia: null,
       perdidasSeguidas: 0,
@@ -228,6 +234,16 @@ export class MotorPaper {
       this.anotar(b, acc.texto, true);
       await this.cerrarYRegistrar(b, 'guardian', this.mercado(b), false);
     }
+  }
+
+  /** Entrada de un bot de estrategia: pone su GESTION (stop por ATR de la vela de la señal) y lo anota. */
+  private alAbrir(b: Bot, atr: number | null): void {
+    const p = b.posicion!;
+    const r = b.reglasSalida;
+    const g = r ? abrirGestionada(p.lado, 0, p.precioEntrada, atr, r) : null;
+    if (r && g) b.gestion = { posicion: g, reglas: r };
+    const extra = g ? ` · stop ${precioTxt(g.stop)} · objetivo ${precioTxt(g.objetivo)}` : r ? ' · sin ATR para el stop: sale con la señal' : '';
+    this.anotar(b, `Abre ${p.lado > 0 ? 'largo' : 'corto'} a ${precioTxt(p.precioEntrada)} · ${(p.cantidad * p.precioEntrada).toLocaleString('es-ES', { maximumFractionDigits: 0 })} USD${extra}.`);
   }
 
   /** Orden a mano desde la Terminal (Paper). Tu cuenta de ese mercado se crea la primera vez con CAPITAL_MANUAL. */
@@ -423,7 +439,7 @@ export class MotorPaper {
   private async procesarSenales(claves: Set<string>): Promise<void> {
     const bots = this.bots.filter((b) => b.estado === 'activo' && b.origen !== 'manual' && !this.apagado && claves.has(b.mercado));
     if (!bots.length) return;
-    const xs = await this.deps.senales(bots.map((b) => ({ id: b.id, codigo: b.codigo, combo: b.combo, proveedor: b.proveedor, simbolo: b.simbolo })));
+    const xs = await this.deps.senales(bots.map((b) => ({ id: b.id, codigo: b.codigo, combo: b.combo, proveedor: b.proveedor, simbolo: b.simbolo, serie: b.serie })));
     for (const s of xs) {
       const b = this.bots.find((x) => x.id === s.id);
       if (!b || b.estado !== 'activo' || this.apagado) continue;
@@ -441,13 +457,28 @@ export class MotorPaper {
         await this.guardar(b);
         continue;
       }
-      if (!cambia || !m?.enVivo) continue;
+      // Salida por tiempo de la GESTION (maxBarras velas de su serie), como en el Juez: no re-entra hasta otra señal.
+      const ms = b.serie && b.serie !== 'dollar' ? MS_SERIE[b.serie] : null;
+      const maxBarras = b.gestion?.reglas.maxBarras;
+      if (m?.enVivo && b.gestion && b.posicion && ms && maxBarras !== undefined && s.t !== null && s.t - b.posicion.t >= maxBarras * ms) {
+        const op = cerrarGestionada(b, m, 'tiempo');
+        if (op) await this.registrar(b, op);
+      }
+      if (!cambia || !m?.enVivo) {
+        await this.guardar(b, false);
+        continue;
+      }
       b.motivo = '';
       const antes = b.posicion?.lado ?? 0;
-      const ops = rebalancear(b, s.posicion, m);
+      // Con GESTION, el cierre por cambio de señal se anota con su stop, objetivo y R.
+      if (b.gestion && b.posicion && s.posicion !== b.posicion.lado) {
+        const op = cerrarGestionada(b, m, 'senal');
+        if (op) await this.registrar(b, op);
+      }
+      const ops = b.estado === 'activo' ? rebalancear(b, s.posicion, m) : [];
       for (const op of ops) await this.registrar(b, op);
       if (b.estado !== 'activo') await this.cerrarYRegistrar(b, 'guardian', m, false);
-      else if (b.posicion && b.posicion.lado !== antes) this.anotar(b, `Abre ${b.posicion.lado > 0 ? 'largo' : 'corto'} a ${precioTxt(b.posicion.precioEntrada)} · ${(b.posicion.cantidad * b.posicion.precioEntrada).toLocaleString('es-ES', { maximumFractionDigits: 0 })} USD.`);
+      else if (b.posicion && b.posicion.lado !== antes) this.alAbrir(b, s.atr ?? null);
       await this.guardar(b);
     }
   }

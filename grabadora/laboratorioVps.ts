@@ -30,12 +30,15 @@ type Mensaje = { tipo: 'paso'; texto: string } | { tipo: 'listo'; resultado: Res
  * (nunca todo junto en memoria) y se guardan las MAX_VELAS más recientes. Los días son múltiplos de todas las series,
  * así que armar las velas por día da lo mismo que armarlas de una vez.
  */
-export function cargarVelas(datos: string, simbolo: string, serie: Serie, fuente: Fuente): VelaLab[] {
+export function cargarVelas(datos: string, simbolo: string, serie: Serie, fuente: Fuente, desde = -Infinity): VelaLab[] {
+  // `desde` (ms): solo los días desde ahí (la señal en vivo de los bots no necesita toda la historia).
+  const desdeDia = Number.isFinite(desde) ? new Date(desde).toISOString().slice(0, 10) : '';
   const almacenes = [...(fuente !== 'grabado' ? [path.join(datos, 'historia')] : []), ...(fuente !== 'historia' ? [datos] : [])].map((d) => new AlmacenDisco(d));
   let velas: VelaLab[] = [];
   let ultimo = -Infinity;
   for (const a of almacenes)
     for (const d of a.dias(simbolo)) {
+      if (d < desdeDia) continue;
       const filas = a.leerDia(simbolo, d).filter((f) => f.cierre > ultimo && f.close > 0);
       if (!filas.length) continue;
       ultimo = filas[filas.length - 1].cierre;
@@ -97,7 +100,7 @@ function validar(c: Record<string, unknown>): PedidoPrueba {
 }
 
 /** En la grabadora: lanza las pruebas (una a la vez) y guarda sus estados (las últimas 20). */
-export function crearLaboratorio(o: { datos: string; pyodide: string | null; log?: (t: string) => void; lanzar?: () => ChildProcess }): ApiLaboratorio {
+export function crearLaboratorio(o: { datos: string; pyodide: string | null; log?: (t: string) => void; lanzar?: () => ChildProcess; alTerminar?: (p: PedidoPrueba, r: ResultadoPrueba) => void }): ApiLaboratorio {
   const trabajos = new Map<string, Trabajo>();
   const lanzar = o.lanzar ?? (() => fork(process.argv[1], ['--juez'], { execArgv: ['--max-old-space-size=2048'] }));
   let activo: { id: string; hijo: ChildProcess; reloj: ReturnType<typeof setTimeout> } | null = null;
@@ -128,7 +131,15 @@ export function crearLaboratorio(o: { datos: string; pyodide: string | null; log
       activo = { id: t.id, hijo, reloj: setTimeout(() => terminar(t, { estado: 'error', error: 'La prueba pasó de 30 minutos: usa menos variantes o una serie más larga.' }), LIMITE_MS) };
       hijo.on('message', (m: Mensaje) => {
         if (m.tipo === 'paso') t.pasos = [...t.pasos.slice(-30), m.texto];
-        else if (m.tipo === 'listo') terminar(t, { estado: 'listo', resultado: m.resultado });
+        else if (m.tipo === 'listo') {
+          // A la Biblioteca (con su código), aprobada o no: cada intento cuenta.
+          try {
+            o.alTerminar?.({ codigo, ...pedido }, m.resultado);
+          } catch (e) {
+            o.log?.(`Biblioteca: no se pudo guardar (${e instanceof Error ? e.message : e})`);
+          }
+          terminar(t, { estado: 'listo', resultado: m.resultado });
+        }
         else terminar(t, { estado: 'error', error: m.mensaje });
       });
       hijo.on('exit', (codigoSalida) => terminar(t, { estado: 'error', error: `El proceso del Juez se cerró (${codigoSalida ?? 'sin código'}): probablemente se quedó sin memoria.` }));

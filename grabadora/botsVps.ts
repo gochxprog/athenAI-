@@ -14,11 +14,15 @@ import type { EstadoFeed } from '../src/motores/worker/protocolo';
 import type { Pipeline } from '../src/motores/nucleo/pipeline';
 import type { EstrategiaEnVivo, SenalEstrategia } from '../src/motores/laboratorio/protocolo';
 import { ejecutarEstrategia, mensajeError, type PyodideMinimo } from '../src/motores/laboratorio/python';
+import { armarVelas, MS_SERIE, type Serie, type VelaLab } from '../src/motores/laboratorio/velas';
+import { atrSerie } from '../src/motores/juez/salidas';
 import type { AlmacenDisco } from './almacenDisco';
 import { leerLineas } from './almacenDisco';
 
 /** Filas que se dan a la estrategia para su señal actual (igual que el Laboratorio del navegador). */
 export const FILAS_SENAL = 1_500;
+/** Velas de su serie que recibe una estrategia en vivo (de historia + grabado). */
+export const VELAS_SENAL = 500;
 
 /** Escribe un archivo de una vez (temporal + rename): un apagón nunca deja medio JSON. */
 function escribirAtomico(archivo: string, texto: string): void {
@@ -114,7 +118,9 @@ export function cargadorPython(dir: string | null): () => Promise<PyodideMinimo>
 }
 
 /** Señal actual de cada estrategia: la variante del Juez sobre las últimas filas grabadas (mismo código que el Laboratorio). */
-export function senalesDisco(almacen: Pick<AlmacenDisco, 'leerUltimas'>, python: () => Promise<PyodideMinimo>) {
+export function senalesDisco(almacen: Pick<AlmacenDisco, 'leerUltimas'>, python: () => Promise<PyodideMinimo>, cargar?: (simbolo: string, serie: Serie, desde: number) => VelaLab[]) {
+  // Con velas de tiempo, la señal solo cambia cuando cierra una vela: se calcula una vez por vela y se guarda.
+  const cache = new Map<string, { balde: number; senal: SenalEstrategia }>();
   return async (xs: EstrategiaEnVivo[]): Promise<SenalEstrategia[]> => {
     const py = await python();
     const salida: SenalEstrategia[] = [];
@@ -126,9 +132,27 @@ export function senalesDisco(almacen: Pick<AlmacenDisco, 'leerUltimas'>, python:
           salida.push({ id: x.id, posicion: null, t: null, error: `Sin filas grabadas de ${x.simbolo}` });
           continue;
         }
+        // Las mismas velas con las que el Juez la aprobó, y solo las CERRADAS: la que se está formando se quita
+        // (el Juez decide al cierre de cada vela; usarla a medias sería otra estrategia).
+        const ms = x.serie && x.serie !== 'dollar' ? MS_SERIE[x.serie] : null;
+        const ultima = filas[filas.length - 1].cierre;
+        const balde = ms ? Math.floor(ultima / ms) : -1;
+        const guardada = cache.get(x.id);
+        if (ms && guardada?.balde === balde) {
+          salida.push(guardada.senal);
+          continue;
+        }
+        const velas = ms && x.serie ? (cargar ? cargar(x.simbolo, x.serie, ultima - (VELAS_SENAL + 2) * ms) : armarVelas(filas, x.serie)).filter((v) => v.cierre < balde * ms).slice(-VELAS_SENAL) : armarVelas(filas, 'dollar');
+        if (!velas.length) {
+          salida.push({ id: x.id, posicion: null, t: null, error: `Aún no hay una vela de ${x.serie} cerrada` });
+          continue;
+        }
         const fijo = `${x.codigo}\nPARAMETROS = ${JSON.stringify(Object.fromEntries(Object.entries(x.combo).map(([k, v]) => [k, [v]])))}\n`;
-        const pos = ejecutarEstrategia(py, fijo, filas).posiciones[0];
-        salida.push({ id: x.id, posicion: pos[pos.length - 1] ?? 0, t: filas[filas.length - 1].cierre });
+        const ejec = ejecutarEstrategia(py, fijo, velas);
+        const pos = ejec.posiciones[0];
+        const senal: SenalEstrategia = { id: x.id, posicion: pos[pos.length - 1] ?? 0, t: velas[velas.length - 1].cierre, ...(ejec.gestion ? { atr: atrSerie(velas, ejec.gestion.periodoAtr ?? 14).at(-1) ?? null } : {}) };
+        if (ms) cache.set(x.id, { balde, senal });
+        salida.push(senal);
       } catch (err) {
         salida.push({ id: x.id, posicion: null, t: null, error: mensajeError(err) });
       }

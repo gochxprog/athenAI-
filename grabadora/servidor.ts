@@ -9,6 +9,9 @@
 //   POST /api/paper/{crear|pausar|reanudar|borrar|apagar|rearmar|reglas|orden|cerrar}  cuerpo JSON (con clave)
 //   GET  /api/avisos                   → canales activos de los avisos 24/7 (sin credenciales)  (con clave)
 //   POST /api/avisos/{guardar|probar}  configuración de Discord/Telegram/ntfy en el VPS        (con clave)
+//   GET  /api/biblioteca               → pruebas guardadas e intentos totales                   (con clave)
+//   GET  /api/biblioteca/resultado?id= → resultado completo de una prueba                      (con clave)
+//   POST /api/biblioteca/{paper|borrar} cuerpo { id, capital?, exposicion? }                   (con clave)
 // La clave va en la cabecera «Authorization: Bearer <clave>». CORS abierto: la clave es la que protege los datos.
 // La PLATAFORMA (web) pide contraseña antes de mostrar nada: /entrar (la clave de la grabadora) crea una sesión
 // con cookie HttpOnly + SameSite=Strict (+ Secure detrás de HTTPS), válida 30 días; /salir la cierra. Con
@@ -22,6 +25,7 @@ import type { AlmacenDisco } from './almacenDisco';
 import type { ApiPaper } from './botsVps';
 import type { ApiLaboratorio } from './laboratorioVps';
 import type { ApiAvisos } from './avisosVps';
+import type { ApiBiblioteca } from './bibliotecaVps';
 import { esMercadoId, partesMercado } from '../src/motores/mercado/mercadoId';
 
 export interface EstadoSimbolo {
@@ -48,6 +52,8 @@ export interface OpcionesServidor {
   laboratorio?: ApiLaboratorio | null;
   /** Avisos 24/7 de los bots (avisosVps.ts). */
   avisos?: ApiAvisos | null;
+  /** Pruebas guardadas y paso a Paper (bibliotecaVps.ts). */
+  biblioteca?: ApiBiblioteca | null;
   /** Reloj (pruebas). */
   reloj?: () => number;
 }
@@ -141,12 +147,12 @@ export function crearServidor(o: OpcionesServidor): http.Server {
     }
     if (url.pathname === '/entrar') return conSesion ? html(303, '', { Location: '/' }) : html(200, paginaEntrar());
     // Acciones (POST, solo JSON): bots de Paper, pruebas del Laboratorio y avisos.
-    const modulo = req.method === 'POST' ? (['paper', 'laboratorio', 'avisos'] as const).find((m) => url.pathname.startsWith(`/api/${m}/`)) : undefined;
+    const modulo = req.method === 'POST' ? (['paper', 'laboratorio', 'avisos', 'biblioteca'] as const).find((m) => url.pathname.startsWith(`/api/${m}/`)) : undefined;
     if (modulo) {
       const bearer = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
       if (!conSesion && !claveCorrecta(bearer, o.clave)) return json(401, { error: 'Clave incorrecta' });
       const destino = o[modulo];
-      if (!destino) return json(503, { error: `${{ paper: 'Los bots', laboratorio: 'El Laboratorio', avisos: 'Los avisos' }[modulo]} no están activos en esta grabadora` });
+      if (!destino) return json(503, { error: `${{ paper: 'Los bots', laboratorio: 'El Laboratorio', avisos: 'Los avisos', biblioteca: 'La Biblioteca' }[modulo]} no están activos en esta grabadora` });
       // Solo JSON: un formulario de otra página no puede disparar acciones con la cookie.
       if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return json(415, { error: 'Solo JSON' });
       const accion = url.pathname.slice(`/api/${modulo}/`.length);
@@ -180,6 +186,11 @@ export function crearServidor(o: OpcionesServidor): http.Server {
           return json(200, { ...e, almacen: o.almacen.resumen() });
         }
         if (url.pathname === '/api/historia') return json(200, { mercados: o.historia?.() ?? [] });
+        if (url.pathname === '/api/biblioteca') return o.biblioteca ? json(200, o.biblioteca.lista()) : json(503, { error: 'La Biblioteca no está activa en esta grabadora' });
+        if (url.pathname === '/api/biblioteca/resultado') {
+          const r = o.biblioteca?.resultado(url.searchParams.get('id') ?? '');
+          return r ? json(200, r) : json(404, { error: 'Ese resultado ya no está guardado.' });
+        }
         if (url.pathname === '/api/avisos') return o.avisos ? json(200, o.avisos.estado()) : json(503, { error: 'Los avisos no están activos en esta grabadora' });
         if (url.pathname === '/api/laboratorio/trabajo') return o.laboratorio ? json(200, o.laboratorio.trabajo(url.searchParams.get('id') ?? '')) : json(503, { error: 'El Laboratorio no está activo en esta grabadora' });
         if (url.pathname === '/api/sesiones') {

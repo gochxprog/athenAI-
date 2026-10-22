@@ -19,6 +19,7 @@ import type { Combo } from '../juez/juez';
 import type { Proveedor } from '../almacen/almacen';
 import type { ResumenFlujo } from '../nucleo/pipeline';
 import type { MovimientoStop, PosicionGestionada, ReglasSalida } from '../juez/salidas';
+import type { Serie } from '../laboratorio/velas';
 
 export interface MercadoVivo {
   t: number;
@@ -33,7 +34,7 @@ export interface MercadoVivo {
 
 export type EstadoBot = 'activo' | 'sin-datos' | 'pausado-dia' | 'cuarentena' | 'fuera-de-banda' | 'pausado' | 'apagado';
 
-export type MotivoCierre = 'senal' | 'guardian' | 'hueco' | 'apagado' | 'manual' | 'stop' | 'objetivo' | 'break-even' | 'stop-en-ganancia';
+export type MotivoCierre = 'senal' | 'guardian' | 'hueco' | 'apagado' | 'manual' | 'stop' | 'objetivo' | 'break-even' | 'stop-en-ganancia' | 'tiempo';
 
 export interface PosicionAbierta {
   lado: 1 | -1;
@@ -113,6 +114,10 @@ export interface Bot {
   origen?: 'bot' | 'manual';
   /** Stop, objetivo y gestión de la posición abierta (juez/salidas.ts). */
   gestion?: { posicion: PosicionGestionada; reglas: ReglasSalida } | null;
+  /** Velas con las que el Juez aprobó la estrategia: la señal en vivo se calcula sobre las mismas (sin campo = filas). */
+  serie?: Serie;
+  /** GESTION de la estrategia (stop en ATR, objetivo en R, BE…): se pone a cada entrada, como en el Juez. */
+  reglasSalida?: ReglasSalida | null;
 }
 
 export const MAX_PUNTOS_CURVA = 1_000;

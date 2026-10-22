@@ -7,7 +7,8 @@ export type Serie = 'dollar' | '1m' | '5m' | '15m' | '1h' | '4h';
 export const SERIES: readonly Serie[] = ['dollar', '1m', '5m', '15m', '1h', '4h'];
 /** Vela armada: una fila con apertura, máximo, mínimo, volumen y delta siempre presentes. */
 export type VelaLab = FilaFeatures & Required<Pick<FilaFeatures, 'open' | 'high' | 'low' | 'volumen' | 'delta'>>;
-const MS: Record<Exclude<Serie, 'dollar'>, number> = { '1m': 60_000, '5m': 300_000, '15m': 900_000, '1h': 3_600_000, '4h': 14_400_000 };
+/** Duración (ms) de cada serie de tiempo. */
+export const MS_SERIE: Record<Exclude<Serie, 'dollar'>, number> = { '1m': 60_000, '5m': 300_000, '15m': 900_000, '1h': 3_600_000, '4h': 14_400_000 };
 
 /** Una fila como vela completa (las filas viejas sin apertura/máximo/mínimo usan el cierre). */
 const comoVela = (f: FilaFeatures, n: number): VelaLab => ({
@@ -27,7 +28,7 @@ const comoVela = (f: FilaFeatures, n: number): VelaLab => ({
  */
 export function armarVelas(filas: readonly FilaFeatures[], serie: Serie): VelaLab[] {
   if (serie === 'dollar') return filas.map(comoVela);
-  const ms = MS[serie];
+  const ms = MS_SERIE[serie];
   const out: VelaLab[] = [];
   let actual: VelaLab | null = null;
   let balde = -1;

@@ -4,7 +4,7 @@ import { FlaskConical, Play, Square } from 'lucide-react';
 import { SERIES, type Serie } from '@/motores/laboratorio/velas';
 import { FUENTES, type Fuente, type Trabajo } from '@/motores/laboratorio/prueba';
 import { useVps } from '../../vps';
-import { cancelar, probar, trabajo } from './api';
+import { cancelar, CLAVE_LAB, probar, trabajo } from './api';
 import { PLANTILLAS } from './plantillas';
 import Resultado from './Resultado';
 import '../../tw.css';
@@ -12,12 +12,11 @@ import './lab.css';
 
 // CodeMirror y uPlot se bajan solo al abrir el Laboratorio.
 const Editor = lazy(() => import('./Editor'));
-const CLAVE = 'athenai.v2.laboratorio';
 const NOMBRE_FUENTE: Record<Fuente, string> = { todo: 'Historia + grabado', historia: 'Solo historia', grabado: 'Solo grabado' };
 
 const leer = () => {
   try {
-    return JSON.parse(localStorage.getItem(CLAVE) ?? '') as { nombre: string; codigo: string; serie: Serie; fuente: Fuente; id?: string };
+    return JSON.parse(localStorage.getItem(CLAVE_LAB) ?? '') as { nombre: string; codigo: string; serie: Serie; fuente: Fuente; id?: string };
   } catch {
     return { nombre: PLANTILLAS[0].nombre, codigo: PLANTILLAS[0].codigo, serie: '5m' as Serie, fuente: 'todo' as Fuente };
   }
@@ -41,7 +40,7 @@ export default function Laboratorio() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(CLAVE, JSON.stringify(estado));
+      localStorage.setItem(CLAVE_LAB, JSON.stringify(estado));
     } catch {
       // sin almacenamiento (modo privado): no pasa nada
     }

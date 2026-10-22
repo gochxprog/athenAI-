@@ -1,0 +1,31 @@
+/* Biblioteca v2 · mismas tarjetas negras con borde fino; lo aprobado brilla un poco más. */
+.bib { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; animation: entrar .35s ease; }
+.bib h1 { font-weight: 300; font-size: 24px; letter-spacing: -.01em; margin-top: 4px; }
+.kpis-bib { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.kpis-bib .dato b { font-size: 22px; }
+.barra-bib { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.busca { display: flex; align-items: center; gap: 7px; border: 1px solid var(--borde2); border-radius: 8px; padding: 5px 10px; color: var(--apagado); flex: 1; max-width: 340px; }
+.busca input { background: none; border: 0; outline: none; color: var(--txt); font-size: 12px; width: 100%; }
+.vacia-bib { display: flex; gap: 10px; align-items: center; padding: 18px; color: var(--tenue); font-size: 12.5px; }
+.fichas { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); gap: 12px; }
+.ficha { padding: 14px; display: flex; flex-direction: column; gap: 10px; transition: border-color .2s, box-shadow .2s; }
+.ficha:hover, .ficha.abierta { border-color: var(--borde2); }
+.ficha.si { border-color: rgba(255, 255, 255, .28); box-shadow: 0 0 26px -14px #fff; }
+.ficha header { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.ficha header b { display: block; font-weight: 500; font-size: 14px; }
+.ficha .sub { font-size: 10.5px; color: var(--apagado); }
+.sello { font-size: 10px; letter-spacing: .08em; border: 1px solid var(--borde2); border-radius: 6px; padding: 3px 7px; color: var(--tenue); white-space: nowrap; }
+.sello.si { background: var(--txt); color: #000; border-color: var(--txt); font-weight: 600; }
+.metricas { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11px; color: var(--apagado); }
+.metricas b { color: var(--txt); font-weight: 500; }
+.ficha .resumen { font-size: 11.5px; color: var(--tenue); line-height: 1.5; }
+.chip-bib { align-self: flex-start; font-size: 10px; border: 1px solid var(--borde2); border-radius: 5px; padding: 2px 7px; color: var(--tenue); }
+.ficha footer { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: auto; }
+.ficha .boton:disabled { opacity: .4; cursor: not-allowed; }
+.ficha .quitar { margin-left: auto; }
+.en-paper { font-size: 10.5px; color: var(--vivo); }
+.a-paper { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; border-top: 1px solid var(--borde); padding-top: 10px; font-size: 11px; color: var(--tenue); }
+.a-paper label { display: flex; flex-direction: column; gap: 4px; }
+.a-paper input { width: 120px; background: #000; border: 1px solid var(--borde2); border-radius: 6px; padding: 5px 8px; color: var(--txt); font: 12px var(--mono); }
+.a-paper small { width: 100%; color: var(--apagado); font-size: 10.5px; }
+@media (max-width: 760px) { .kpis-bib { grid-template-columns: repeat(2, minmax(0, 1fr)); } .busca { max-width: none; } }

@@ -17,8 +17,9 @@ import { EVENTOS_PREDEFINIDOS } from '../src/motores/nucleo/calendario';
 import type { MensajeMercado } from '../src/motores/nucleo/tipos';
 import { AlmacenDisco } from './almacenDisco';
 import { resumenHistoria } from './importador';
-import { atenderJuez, crearLaboratorio } from './laboratorioVps';
+import { atenderJuez, cargarVelas, crearLaboratorio } from './laboratorioVps';
 import { crearAvisos } from './avisosVps';
+import { crearBiblioteca } from './bibliotecaVps';
 import { crearServidor, type EstadoSimbolo } from './servidor';
 import { almacenLocalDisco, cargadorPython, crearApiPaper, feedDe, LibroPaperDisco, senalesDisco } from './botsVps';
 import { MotorPaper } from '../src/motores/paper/motorPaper';
@@ -144,12 +145,13 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
   // Bots de Paper 24/7: el mismo motor que la plataforma, con su libro en {datos}/paper.
   const avisos = crearAvisos({ datos: o.datos, log });
   let motorBots: MotorPaper | null = null;
+  const biblioteca = crearBiblioteca({ datos: o.datos, paper: () => motorBots });
   let latido: ReturnType<typeof setInterval> | null = null;
   if (o.bots !== false) {
     const dirPaper = path.join(o.datos, 'paper');
     const libro = new LibroPaperDisco(dirPaper);
     const motor = new MotorPaper({
-      senales: senalesDisco(almacen, cargadorPython(o.pyodide ?? null)),
+      senales: senalesDisco(almacen, cargadorPython(o.pyodide ?? null), (s, serie, desde) => cargarVelas(o.datos, s, serie, 'todo', desde)),
       avisar: (a) => {
         log(`Bots · ${a.titulo}: ${a.texto}`);
         void avisos.enviar(a);
@@ -175,7 +177,7 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
       }, 1_000);
     });
   }
-  const servidor = crearServidor({ almacen, clave, estado, web: o.web, paper: motorBots ? crearApiPaper(motorBots) : null, historia: () => resumenHistoria(o.datos), laboratorio: crearLaboratorio({ datos: o.datos, pyodide: o.pyodide ?? null, log }), avisos });
+  const servidor = crearServidor({ almacen, clave, estado, web: o.web, paper: motorBots ? crearApiPaper(motorBots) : null, historia: () => resumenHistoria(o.datos), laboratorio: crearLaboratorio({ datos: o.datos, pyodide: o.pyodide ?? null, log, alTerminar: (p, r) => biblioteca.guardar(p, r) }), avisos, biblioteca });
   const alEscuchar = () => log(`Grabadora ${VERSION} escuchando en ${o.host ?? 'todas las interfaces'}, puerto ${o.puerto} · símbolos: ${o.simbolos.join(', ')} · datos en ${o.datos}`);
   if (o.host) servidor.listen(o.puerto, o.host, alEscuchar);
   else servidor.listen(o.puerto, alEscuchar);

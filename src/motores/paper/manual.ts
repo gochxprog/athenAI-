@@ -84,7 +84,7 @@ export function abrirManual(bot: Bot, m: MercadoVivo, o: OrdenManual): string | 
   return null;
 }
 
-const MOTIVO: Record<MotivoSalida, MotivoCierre> = { objetivo: 'objetivo', stop: 'stop', 'break-even': 'break-even', 'stop-en-ganancia': 'stop-en-ganancia', senal: 'senal', tiempo: 'manual', fin: 'manual' };
+const MOTIVO: Record<MotivoSalida, MotivoCierre> = { objetivo: 'objetivo', stop: 'stop', 'break-even': 'break-even', 'stop-en-ganancia': 'stop-en-ganancia', senal: 'senal', tiempo: 'tiempo', fin: 'manual' };
 
 /** Cierra a mercado y anota lo planeado y el resultado en R. */
 export function cerrarGestionada(bot: Bot, m: MercadoVivo, motivo: MotivoCierre): OperacionPaper | null {
