@@ -59,6 +59,16 @@ export default function Sidebar({ activo, onSeleccion }: Props) {
                 const sel = activo === it.id;
                 const d = info[it.id];
                 const Icono = it.icono;
+                if (it.reservado)
+                  return (
+                    <li key={it.id}>
+                      <div className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-[13px] text-plata-600" title="Espacio reservado: todavía no se ha decidido qué va aquí" data-reservado={it.id}>
+                        <Icono size={16} strokeWidth={1.5} />
+                        <span className="flex-1 text-left">{it.etiqueta}</span>
+                        <Lock size={11} />
+                      </div>
+                    </li>
+                  );
                 return (
                   <li key={it.id}>
                     <button

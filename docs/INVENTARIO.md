@@ -20,6 +20,7 @@ Todo lo que tiene la plataforma hoy, pantalla por pantalla y motor por motor.
 | Cerebro | **Estrategias** | Tus estrategias con el veredicto, la nota y la curva de su última prueba del Juez | 🟢 |
 | Cerebro | **Conocimiento** | Patrones encontrados (llega con el bloque de machine learning) | ⏸ |
 | Cerebro | **Agentes** | Sala 3D con los 10 agentes. Vigía, Flujo, Rastreador, Programador, Juez, Etiquetador, Ejecutor y Guardián trabajan de verdad | 🟢 (8 de 10) |
+| Panel General | **Red neuronal** (reservado) | El lugar donde estaba Order Flow, guardado para la futura red neuronal. Bloqueado en el menú hasta decidir qué va | ⚪ |
 | Dinero | **Terminal** (antes Paper Trading) | Mesa de operaciones en Paper (aquí vive todo lo que era la pantalla Order Flow): barra de cuenta, cinta, tarjetas de cada mercado, gráfico de velas/Footprint/heatmap con el DOM y las operaciones encima, eventos, cómo funciona cada motor, memoria del mercado, Features con CSV y salud del motor, ticket a mano (riesgo % o contratos, stop, objetivo, gestión fija/BE/escalonada), posiciones, libro, **Diario estilo ATAS** (calendario día/semana/mes/año y métricas) y los bots con el Guardián. Los bots corren 24/7 en el VPS si la grabadora está conectada | 🟢 |
 | Dinero | **Decisiones** | Bitácora real: pruebas del Juez, avisos y registro del motor | 🟢 |
 | Sistema | **Máquinas** | Telemetría real del navegador (memoria, núcleos, workers) | 🟢 |

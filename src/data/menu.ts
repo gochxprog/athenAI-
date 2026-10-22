@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, FlaskConical, Microscope, Library, Brain, Bot,
+  LayoutDashboard, Network, FlaskConical, Microscope, Library, Brain, Bot,
   Wallet, Gavel, Server, Database, type LucideIcon,
 } from 'lucide-react';
 import type { Modulo } from '@/types/nav';
@@ -8,6 +8,8 @@ export interface ItemMenu {
   id: Modulo;
   etiqueta: string;
   icono: LucideIcon;
+  /** Lugar guardado para algo que aún no existe: se ve en el menú, pero no se puede abrir. */
+  reservado?: boolean;
 }
 
 export const MENU: { titulo: string; items: ItemMenu[] }[] = [
@@ -15,6 +17,8 @@ export const MENU: { titulo: string; items: ItemMenu[] }[] = [
     titulo: 'Panel General',
     items: [
       { id: 'panel', etiqueta: 'Panel General', icono: LayoutDashboard },
+      // Donde estaba Order Flow (ahora dentro de la Terminal): reservado para la futura red neuronal.
+      { id: 'orderflow', etiqueta: 'Red neuronal', icono: Network, reservado: true },
     ],
   },
   {
