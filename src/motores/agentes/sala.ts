@@ -3,6 +3,10 @@
 import { AGENTES, type AgenteId } from '../../data/agentes';
 
 export type EstadoAgente = 'trabajando' | 'esperando' | 'alerta' | 'pausado' | 'dormido';
+/** Cuánto se enciende un agente: 2 trabajando (o en alerta), 1 encendido y listo (su motor corre, espera su turno),
+ *  0 apagado (pausado o su motor aún no existe). */
+export type Nivel = 0 | 1 | 2;
+export const nivelAgente = (e: EstadoAgente): Nivel => (e === 'trabajando' || e === 'alerta' ? 2 : e === 'esperando' ? 1 : 0);
 export interface Nota { t: number; id: AgenteId; texto: string; grave?: boolean }
 /** Actividad por hora: [hora (ms / 3.600.000, entera), cuántas cosas hizo]. */
 export type Cubos = [number, number][];

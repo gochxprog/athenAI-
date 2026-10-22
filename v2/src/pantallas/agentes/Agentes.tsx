@@ -1,9 +1,9 @@
 // Sala de agentes (v2): la sala 3D con los 10 puestos y, en la pared del fondo, la pantalla gigante con las velas
 // de 1 min de cada mercado, la radio de los agentes y las cifras del día. Los estados, la radio y la fila salen del
-// orquestador del VPS (/api/agentes): un agente solo se enciende si de verdad está trabajando ahí.
+// orquestador del VPS (/api/agentes): un agente se enciende si su motor corre ahí, y a tope solo si está trabajando.
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { AGENTES, ESTILO_AGENTE, type AgenteId } from '@/data/agentes';
-import { frase, type EstadoSala } from '@/motores/agentes/sala';
+import { frase, nivelAgente, type EstadoSala, type Nivel } from '@/motores/agentes/sala';
 import type { DatosMuro, VelaMuro } from '@/components/three/muro';
 import { pedir } from '../../api';
 import { dinero, num } from '../../formato';
@@ -60,7 +60,7 @@ export default function Agentes() {
   const ficha = (id: AgenteId) => sala.agentes.find((a) => a.id === id)!;
   // En la sala, solo una palabra (el detalle va en las fichas de abajo): los rótulos no se enciman.
   const estados = Object.fromEntries(sala.agentes.map((a) => [a.id, a.estado === 'dormido' ? a.ahora.replace('llega en la fase', 'llega en') : a.estado])) as Record<AgenteId, string>;
-  const activos = Object.fromEntries(sala.agentes.map((a) => [a.id, a.estado === 'trabajando' || a.estado === 'alerta'])) as Record<AgenteId, boolean>;
+  const niveles = Object.fromEntries(sala.agentes.map((a) => [a.id, nivelAgente(a.estado)])) as Record<AgenteId, Nivel>;
   const r = sala.recursos;
   const elegir = (id: AgenteId) => setSel(sel === id ? null : id);
 
@@ -79,7 +79,7 @@ export default function Agentes() {
       </div>
       <section className="caja sala-v2 vista-v1">
         <Suspense fallback={<p className="vacio">Abriendo la sala…</p>}>
-          <Sala seleccion={sel} onSeleccion={elegir} estados={estados} activos={activos} muro={muroDe(v, sala, velas)} />
+          <Sala seleccion={sel} onSeleccion={elegir} estados={estados} niveles={niveles} muro={muroDe(v, sala, velas)} />
         </Suspense>
       </section>
       {sel && <DetalleAgente ficha={ficha(sel)} notas={sala.notas.filter((n) => n.id === sel)} cerrar={() => setSel(null)} />}

@@ -23,6 +23,8 @@ import { Backoff } from '../flujo/realtime/backoff';
 
 /** Tope de espera de cada pedido REST (exchangeInfo, snapshot, OI). */
 const REST_MS = 10_000;
+/** Trades perdidos que se recuperan como mucho tras una reconexión (5 pedidos de 1.000). */
+const MAX_RELLENO = 5_000;
 import type { AggTrade, Liquidacion, MensajeMercado } from '../nucleo/tipos';
 import { grupoParaPrecio, inferirTick } from '../nucleo/parametros';
 
@@ -152,6 +154,9 @@ export class FuenteBinance {
   private detenida = false;
   private libros = new Map<string, EstadoLibro>();
   private lotes = new Map<string, AggTrade[]>();
+  /** Último aggTradeId publicado por mercado y los que están recuperando trades perdidos (no publican mientras). */
+  private ultimoId = new Map<string, number>();
+  private rellenando = new Set<string>();
   private funding = new Map<string, { tasa: number; t: number }>();
   private timers: ReturnType<typeof setInterval>[] = [];
   private readonly backoffInfo = new Backoff({ baseMs: 1_000, maxMs: 30_000, jitter: 'equal', floorMs: 500 });
@@ -521,11 +526,45 @@ export class FuenteBinance {
 
   private vaciarLotes(): void {
     for (const [s, lote] of this.lotes) {
-      if (!lote.length) continue;
+      if (!lote.length || this.rellenando.has(s)) continue;
       lote.sort((a, b) => a.aggTradeId - b.aggTradeId);
-      const l = this.libros.get(s);
-      if (l && l.grupo === 0) l.grupo = grupoParaPrecio(lote[lote.length - 1].price, inferirTick(s, lote.map((t) => t.price)));
-      this.o.onMensaje(s, { tipo: 'trades', trades: lote.splice(0, lote.length) });
+      // Faltan trades (reconexión: Binance corta cada 24 h): se piden por REST antes de seguir, así el CVD, el
+      // delta y las barras no quedan con un hueco. Los ids de Binance son consecutivos.
+      const ultimo = this.ultimoId.get(s);
+      if (ultimo !== undefined && lote[0].aggTradeId > ultimo + 1 && !this.sinRest) {
+        void this.rellenar(s, ultimo + 1, lote[0].aggTradeId - 1);
+        continue;
+      }
+      this.publicarTrades(s, lote.splice(0, lote.length));
+    }
+  }
+
+  private publicarTrades(s: string, trades: AggTrade[]): void {
+    const l = this.libros.get(s);
+    if (l && l.grupo === 0) l.grupo = grupoParaPrecio(trades[trades.length - 1].price, inferirTick(s, trades.map((t) => t.price)));
+    this.ultimoId.set(s, Math.max(this.ultimoId.get(s) ?? -1, trades[trades.length - 1].aggTradeId));
+    this.o.onMensaje(s, { tipo: 'trades', trades });
+  }
+
+  /** Recupera los trades [desde, hasta] (hasta 5.000; más que eso, o si falla, el hueco queda marcado como antes). */
+  private async rellenar(s: string, desde: number, hasta: number): Promise<void> {
+    this.rellenando.add(s);
+    const faltan: AggTrade[] = [];
+    try {
+      for (let id = desde, vueltas = 0; id <= hasta && vueltas < MAX_RELLENO / 1_000; vueltas += 1) {
+        const xs = await this.json<Omit<AggTradeBinance, 'e' | 's'>[]>(`/fapi/v1/aggTrades?symbol=${s}&fromId=${id}&limit=1000`);
+        const ts = xs.map((x) => convertirAggTrade({ ...x, e: 'aggTrade', s })).filter((t): t is AggTrade => !!t && t.aggTradeId <= hasta);
+        if (!ts.length) break;
+        faltan.push(...ts);
+        id = ts[ts.length - 1].aggTradeId + 1;
+      }
+    } catch {
+      // sin REST: sigue con el hueco marcado
+    } finally {
+      this.rellenando.delete(s);
+      const lote = this.lotes.get(s) ?? [];
+      const todos = [...faltan, ...lote.splice(0, lote.length)].sort((a, b) => a.aggTradeId - b.aggTradeId);
+      if (!this.detenida && todos.length) this.publicarTrades(s, todos.filter((t, i) => i === 0 || t.aggTradeId !== todos[i - 1].aggTradeId));
     }
   }
 

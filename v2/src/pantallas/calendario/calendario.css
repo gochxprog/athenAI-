@@ -1,0 +1,10 @@
+/* Calendario v2 · lista de eventos con su cuenta atrás y su ventana. */
+.calendario-v2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; animation: entrar .35s ease; }
+.calendario-v2 h1 { font-weight: 300; font-size: 24px; letter-spacing: -.01em; margin-top: 4px; }
+.bloque-c { padding: 14px; display: flex; flex-direction: column; gap: 9px; }
+.evento-c { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--borde); padding-top: 9px; font-size: 12.5px; }
+.evento-c > div { display: flex; flex-direction: column; gap: 3px; } .evento-c > div:last-child { text-align: right; }
+.evento-c b { font-weight: 500; } .evento-c small { font-size: 10.5px; color: var(--apagado); }
+.evento-c.dentro { border-left: 2px solid var(--baja); padding-left: 10px; } .evento-c.dentro .mono { color: var(--baja); }
+.evento-c.pasado { opacity: .5; }
+.nota-c { font-size: 12px; color: var(--tenue); line-height: 1.6; }

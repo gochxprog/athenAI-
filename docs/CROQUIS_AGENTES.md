@@ -89,7 +89,7 @@ numpy y pandas los baja instalar.sh al VPS (comprobados con su huella sha256).
 2. **Etiquetas por defecto:** objetivo 2 ATR, stop 1,5 ATR, máximo 60 velas de 5 min. (Se pueden cambiar.)
 3. ~~El VPS~~ **Respondido: 4 GB de RAM.** Plan para que alcance:
    - Un solo trabajo pesado a la vez (Juez **o** entrenamiento), en fila.
-   - Cada entrenamiento con tope de memoria (~1,5 GB, systemd `MemoryMax`); si se pasa, se corta y la grabadora sigue.
+   - Cada entrenamiento con tope de memoria (proceso aparte con ~1 GB; el servicio entero `MemoryMax=2600M` con `OOMPolicy=continue`): si se pasa, se corta solo ese trabajo y la grabadora sigue.
    - ML clásico (LightGBM) en float32: ~150 MB por millón de filas. Va bien.
    - Red neuronal: solo modelos pequeños en el VPS; las grandes, en una GPU alquilada por horas o en tu PC.
    - El instalador agrega 2 GB de swap como colchón.

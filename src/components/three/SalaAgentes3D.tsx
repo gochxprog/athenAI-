@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { ContactShadows, Grid, Html, OrbitControls, RoundedBox } from '@react-three/drei';
+import { ContactShadows, Grid, Html, MeshReflectorMaterial, OrbitControls, RoundedBox } from '@react-three/drei';
+import type { OrbitControls as Orbita } from 'three-stdlib';
 import * as THREE from 'three';
-import { AGENTES, ESTILO_AGENTE, type Accesorio, type AgenteId } from '@/data/agentes';
+import { AGENTES, ESTILO_AGENTE, type AgenteId } from '@/data/agentes';
+import type { Nivel } from '@/motores/agentes/sala';
+import { Robot } from './AgenteRobot';
+import PrimeraPersona, { type Inicio } from './PrimeraPersona';
 import { ALTO, ANCHO, PANTALLAS } from './pantallas';
 import MuroSala from './MuroSala';
 import type { DatosMuro } from './muro';
@@ -32,142 +36,6 @@ const PUESTOS = (() => {
   return out;
 })();
 
-/** Gris grafito mate de los accesorios (sin color: el color de cada agente es solo la luz de su puesto). */
-const MATE = '#2a2c31';
-const MATE_CLARO = '#8e929a';
-
-/** El accesorio va dentro del grupo de la cabeza (se mueve con ella). La cara (visor) mira hacia −z. */
-function AccesorioCabeza({ tipo, vivo }: { tipo: Accesorio; vivo: boolean }) {
-  const mat = <meshStandardMaterial color={MATE} metalness={0.1} roughness={0.9} transparent opacity={vivo ? 1 : 0.55} />;
-  switch (tipo) {
-    case 'antena':
-      return (
-        <group>
-          <mesh position={[0, 0.2, 0]}>
-            <cylinderGeometry args={[0.008, 0.008, 0.14, 8]} />
-            <meshStandardMaterial color="#8e929a" metalness={0.8} roughness={0.3} />
-          </mesh>
-          <mesh position={[0, 0.29, 0]}>
-            <sphereGeometry args={[0.028, 16, 16]} />
-            <meshStandardMaterial color={MATE_CLARO} emissive="#ffffff" emissiveIntensity={vivo ? 0.35 : 0} roughness={0.6} />
-          </mesh>
-        </group>
-      );
-    case 'auriculares':
-      return (
-        <group>
-          <mesh>
-            <torusGeometry args={[0.165, 0.014, 8, 24, Math.PI]} />
-            {mat}
-          </mesh>
-          {[-0.165, 0.165].map((x) => (
-            <mesh key={x} position={[x, -0.01, 0]} rotation={[0, 0, Math.PI / 2]}>
-              <cylinderGeometry args={[0.05, 0.05, 0.04, 20]} />
-              {mat}
-            </mesh>
-          ))}
-        </group>
-      );
-    case 'sombrero':
-      return (
-        <group position={[0, 0.1, 0]}>
-          <mesh>
-            <cylinderGeometry args={[0.27, 0.27, 0.014, 32]} />
-            {mat}
-          </mesh>
-          <mesh position={[0, 0.065, 0]}>
-            <cylinderGeometry args={[0.12, 0.14, 0.12, 24]} />
-            {mat}
-          </mesh>
-        </group>
-      );
-    case 'gorra':
-      return (
-        <group>
-          <mesh position={[0, 0.03, 0]}>
-            <sphereGeometry args={[0.158, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
-            {mat}
-          </mesh>
-          {/* Al revés: la visera hacia la nuca (+z). */}
-          <mesh position={[0, 0.05, 0.17]}>
-            <boxGeometry args={[0.2, 0.012, 0.12]} />
-            {mat}
-          </mesh>
-        </group>
-      );
-    case 'birrete':
-      return (
-        <group position={[0, 0.13, 0]}>
-          <mesh>
-            <cylinderGeometry args={[0.13, 0.14, 0.07, 24]} />
-            {mat}
-          </mesh>
-          <mesh position={[0, 0.045, 0]} rotation={[0, Math.PI / 4, 0]}>
-            <boxGeometry args={[0.3, 0.015, 0.3]} />
-            {mat}
-          </mesh>
-          <mesh position={[0.13, -0.02, -0.13]}>
-            <sphereGeometry args={[0.018, 10, 10]} />
-            <meshStandardMaterial color={MATE_CLARO} roughness={0.9} />
-          </mesh>
-        </group>
-      );
-    case 'cinta':
-      return (
-        <mesh position={[0, 0.05, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.148, 0.022, 10, 32]} />
-          {mat}
-        </mesh>
-      );
-    case 'gorro':
-      return (
-        <group>
-          <mesh position={[0, 0.03, 0]}>
-            <sphereGeometry args={[0.16, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
-            {mat}
-          </mesh>
-          <mesh position={[0, 0.2, 0]}>
-            <sphereGeometry args={[0.05, 16, 16]} />
-            <meshStandardMaterial color={MATE_CLARO} roughness={0.95} />
-          </mesh>
-        </group>
-      );
-    case 'boina':
-      return (
-        <mesh position={[0.02, 0.12, 0]} rotation={[0, 0, -0.25]} scale={[1, 0.35, 1]}>
-          <sphereGeometry args={[0.17, 24, 16]} />
-          {mat}
-        </mesh>
-      );
-    case 'casco':
-      return (
-        <group>
-          <mesh position={[0, 0.02, 0]}>
-            <sphereGeometry args={[0.172, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
-            {mat}
-          </mesh>
-          <mesh position={[0, 0.15, 0]}>
-            <boxGeometry args={[0.03, 0.04, 0.3]} />
-            {mat}
-          </mesh>
-        </group>
-      );
-    case 'visera':
-      return (
-        <group>
-          <mesh position={[0, 0.06, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <torusGeometry args={[0.15, 0.016, 10, 32]} />
-            {mat}
-          </mesh>
-          <mesh position={[0, 0.07, -0.19]} rotation={[0.25, 0, 0]}>
-            <boxGeometry args={[0.2, 0.01, 0.1]} />
-            {mat}
-          </mesh>
-        </group>
-      );
-  }
-}
-
 /** Celular o pantalla táctil: sin suavizado y a resolución normal. */
 const MOVIL = typeof window !== 'undefined' && window.matchMedia('(max-width: 760px), (pointer: coarse)').matches;
 const GRIS_OSCURO = '#1a1b1e';
@@ -180,9 +48,31 @@ interface Props {
   estados: Record<AgenteId, string>;
   /** Pantalla gigante en la pared del fondo (sin datos no se pinta). */
   muro?: DatosMuro;
-  /** Quién trabaja de verdad ahora (por defecto: los que tienen motor). */
-  activos?: Partial<Record<AgenteId, boolean>>;
+  /** Cuánto se enciende cada agente según el orquestador (por defecto: listo si tiene motor). */
+  niveles?: Partial<Record<AgenteId, Nivel>>;
 }
+
+/** Lo que no se puede atravesar en primera persona: cada puesto (escritorio + silla) y el núcleo. */
+const OBSTACULOS: [number, number, number][] = [
+  ...Object.values(PUESTOS).map(({ pos: [x, , z], rot }) => [x + 0.15 * Math.sin(rot), z + 0.15 * Math.cos(rot), 0.95] as [number, number, number]),
+  [NUCLEO[0], NUCLEO[2], 0.7],
+];
+
+/** Halo redondo y suave (para la luz de cada puesto en el suelo y en el escritorio). */
+let brillo: THREE.Texture | null = null;
+const texturaBrillo = () =>
+  (brillo ??= (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d')!;
+    const r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    r.addColorStop(0, 'rgba(255,255,255,1)');
+    r.addColorStop(0.35, 'rgba(255,255,255,0.4)');
+    r.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = r;
+    g.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(c);
+  })());
 
 /** Núcleo de datos de mercado: icosaedro que respira en el centro de la sala. */
 function NucleoDatos() {
@@ -300,32 +190,22 @@ function Monitor({ id, color, activo, apagado }: { id: AgenteId; color: string; 
   );
 }
 
-function Puesto({ id, seleccionado, onSeleccion, estado, vivo }: { id: AgenteId; seleccionado: boolean; onSeleccion: (id: AgenteId) => void; estado: string; vivo: boolean }) {
+function Puesto({ id, seleccionado, onSeleccion, estado, nivel }: { id: AgenteId; seleccionado: boolean; onSeleccion: (id: AgenteId) => void; estado: string; nivel: Nivel }) {
   const { pos, rot } = PUESTOS[id];
   const agente = AGENTES.find((a) => a.id === id)!;
   const estilo = ESTILO_AGENTE[id];
-  const cabeza = useRef<THREE.Group>(null);
-  const cuerpo = useRef<THREE.Group>(null);
   const anillo = useRef<THREE.Mesh>(null);
   const [hover, setHover] = useState(false);
-  const fase = useMemo(() => Math.random() * 10, []);
-
   // En pantallas estrechas el rótulo solo lleva el nombre (los 10 puestos no caben con dos líneas).
   const compacto = useThree((st) => st.size.width) < 700;
   useFrame(({ clock }) => {
-    // Sin motor: el agente está quieto (cabeza baja, sin respirar).
-    const t = vivo ? clock.elapsedTime + fase : fase;
-    if (cabeza.current) {
-      cabeza.current.rotation.y = Math.sin(t * 0.7) * 0.25;
-      cabeza.current.rotation.x = -0.15 + Math.sin(t * 1.3) * 0.06;
-    }
-    if (cuerpo.current) cuerpo.current.position.y = Math.sin(t * 1.8) * 0.012;
-    if (anillo.current) {
-      anillo.current.rotation.z = t * 0.5;
-      const m = anillo.current.material as THREE.MeshBasicMaterial;
-      m.opacity = seleccionado ? 0.9 : hover ? 0.5 : 0.18;
-    }
+    if (!anillo.current) return;
+    anillo.current.rotation.z = clock.elapsedTime * 0.5;
+    (anillo.current.material as THREE.MeshBasicMaterial).opacity = seleccionado ? 0.9 : hover ? 0.5 : 0.15;
   });
+  // Cuánta luz del color del agente: a tope si trabaja, media si está listo, casi nada si está apagado.
+  const luz = nivel === 2 ? 1 : nivel ? 0.6 : 0.07;
+  const halo = (opacidad: number) => <meshBasicMaterial map={texturaBrillo()} color={estilo.color} transparent opacity={opacidad} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />;
 
   return (
     <group
@@ -333,7 +213,8 @@ function Puesto({ id, seleccionado, onSeleccion, estado, vivo }: { id: AgenteId;
       rotation={[0, rot, 0]}
       onClick={(e) => {
         e.stopPropagation();
-        onSeleccion(id);
+        // Un arrastre (girar la sala o mirar en primera persona) no es un toque.
+        if (e.delta < 8) onSeleccion(id);
       }}
       onPointerOver={(e) => {
         e.stopPropagation();
@@ -345,28 +226,26 @@ function Puesto({ id, seleccionado, onSeleccion, estado, vivo }: { id: AgenteId;
         document.body.style.cursor = '';
       }}
     >
-      {/* Anillo de selección */}
       <mesh ref={anillo} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0.15]}>
-        <ringGeometry args={[0.78, 0.8, 64, 1, 0, Math.PI * 1.7]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.2} />
+        <ringGeometry args={[0.86, 0.88, 64, 1, 0, Math.PI * 1.7]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.15} />
       </mesh>
 
-      {/* Luz LED del puesto en su color: un aro fino en el suelo con un halo muy suave, y una tira bajo el
-          borde del escritorio. Encendida si el agente trabaja; casi apagada si aún no tiene motor. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, 0.15]}>
-        <circleGeometry args={[0.74, 48]} />
-        <meshBasicMaterial color={estilo.color} transparent opacity={vivo ? (seleccionado ? 0.08 : 0.04) : 0.012} depthWrite={false} />
+      {/* La luz del puesto: halo suave en el suelo, aro LED, tira bajo el escritorio y el reflejo del monitor. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, 0.1]}>
+        <planeGeometry args={[2.4, 2.4]} />
+        {halo(luz * (seleccionado ? 0.5 : 0.32))}
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.006, 0.15]}>
-        <ringGeometry args={[0.735, 0.75, 96]} />
-        <meshBasicMaterial color={estilo.color} transparent opacity={vivo ? (seleccionado ? 0.95 : 0.6) : 0.1} depthWrite={false} toneMapped={false} />
+        <ringGeometry args={[0.8, 0.815, 96]} />
+        <meshBasicMaterial color={estilo.color} transparent opacity={luz * (seleccionado ? 1 : 0.7)} depthWrite={false} toneMapped={false} />
       </mesh>
       <mesh position={[0, 0.692, 0.152]}>
         <boxGeometry args={[1.22, 0.008, 0.006]} />
-        <meshBasicMaterial color={estilo.color} transparent opacity={vivo ? 0.85 : 0.1} toneMapped={false} />
+        <meshBasicMaterial color={estilo.color} transparent opacity={luz * 0.9} toneMapped={false} />
       </mesh>
 
-      {/* Escritorio */}
+      {/* Escritorio, teclado y monitor */}
       <RoundedBox args={[1.3, 0.05, 0.7]} radius={0.01} position={[0, 0.72, -0.2]} castShadow>
         <meshStandardMaterial color={GRIS} metalness={0.4} roughness={0.55} />
       </RoundedBox>
@@ -376,10 +255,14 @@ function Puesto({ id, seleccionado, onSeleccion, estado, vivo }: { id: AgenteId;
           <meshStandardMaterial color={GRIS_OSCURO} metalness={0.5} roughness={0.5} />
         </mesh>
       ))}
-      <Monitor id={id} color={estilo.color} activo={vivo && (seleccionado || hover)} apagado={!vivo} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.747, -0.2]}>
+        <planeGeometry args={[1.1, 0.6]} />
+        {halo(luz * 0.22)}
+      </mesh>
+      <Monitor id={id} color={estilo.color} activo={nivel === 2} apagado={nivel === 0} />
       <mesh position={[0, 0.755, 0.0]}>
         <boxGeometry args={[0.42, 0.015, 0.14]} />
-        <meshStandardMaterial color={GRIS_OSCURO} />
+        <meshStandardMaterial color={GRIS_OSCURO} emissive={estilo.color} emissiveIntensity={luz * 0.25} />
       </mesh>
 
       {/* Zona de toque amplia e invisible: facilita seleccionar al agente en pantallas táctiles */}
@@ -388,45 +271,18 @@ function Puesto({ id, seleccionado, onSeleccion, estado, vivo }: { id: AgenteId;
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
-      {/* Agente */}
-      <group ref={cuerpo} position={[0, 0, 0.5]}>
-        <mesh position={[0, 0.42, 0]}>
-          <cylinderGeometry args={[0.16, 0.2, 0.08, 24]} />
-          <meshStandardMaterial color={GRIS_OSCURO} metalness={0.6} roughness={0.4} />
-        </mesh>
-        <mesh position={[0, 0.78, 0]} castShadow>
-          <capsuleGeometry args={[0.17, 0.36, 8, 20]} />
-          <meshStandardMaterial color={vivo ? '#6a707b' : GRIS} metalness={0.7} roughness={0.3} />
-        </mesh>
-        {/* LED en la espalda y en el pecho, del color del agente (lo que se ve desde atrás de la sala). */}
-        {[0.172, -0.172].map((z) => (
-          <mesh key={z} position={[0, 0.82, z]}>
-            <boxGeometry args={[z > 0 ? 0.035 : 0.12, z > 0 ? 0.3 : 0.022, 0.01]} />
-            <meshBasicMaterial color={estilo.color} transparent opacity={vivo ? 1 : 0.12} toneMapped={false} />
-          </mesh>
-        ))}
-        <group ref={cabeza} position={[0, 1.22, 0]}>
-          <mesh castShadow>
-            <sphereGeometry args={[0.15, 32, 32]} />
-            <meshStandardMaterial color={vivo ? '#9aa0aa' : '#3a3c42'} metalness={0.75} roughness={0.22} />
-          </mesh>
-          {/* Visor */}
-          <mesh position={[0, 0.01, -0.12]} rotation={[0, Math.PI, 0]}>
-            <boxGeometry args={[0.2, 0.035, 0.06]} />
-            <meshStandardMaterial color={vivo ? estilo.color : '#3a3c40'} emissive={estilo.color} emissiveIntensity={vivo ? (seleccionado ? 3 : 1.8) : 0} toneMapped={false} />
-          </mesh>
-          <AccesorioCabeza tipo={estilo.accesorio} vivo={vivo} />
-        </group>
+      <group position={[0, 0, 0.5]}>
+        <Robot color={estilo.color} accesorio={estilo.accesorio} nivel={nivel} seleccionado={seleccionado} />
       </group>
 
-      <Html position={[0, 1.78, 0.5]} center zIndexRange={[20, 0]}>
+      <Html position={[0, 1.9, 0.5]} center zIndexRange={[20, 0]}>
         <button
           type="button"
           onClick={() => onSeleccion(id)}
-          className={`block cursor-pointer whitespace-nowrap rounded-md border text-center ${compacto ? 'px-1.5 py-1' : 'px-2.5 py-1.5'} transition-colors ${seleccionado ? 'border-white bg-white text-black' : vivo ? 'border-borde bg-black/70 text-white hover:border-plata-300' : 'border-borde-suave bg-black/60 text-plata-400 hover:border-plata-500'}`}
+          className={`block cursor-pointer whitespace-nowrap rounded-md border text-center ${compacto ? 'px-1.5 py-1' : 'px-2.5 py-1.5'} transition-colors ${seleccionado ? 'border-white bg-white text-black' : nivel ? 'border-borde bg-black/70 text-white hover:border-plata-300' : 'border-borde-suave bg-black/60 text-plata-400 hover:border-plata-500'}`}
         >
           <p className={`${compacto ? 'text-[9px]' : 'text-[11px]'} flex items-center justify-center gap-1.5 font-medium leading-none`}>
-            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: estilo.color, opacity: vivo ? 1 : 0.45 }} />
+            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: estilo.color, opacity: nivel ? 1 : 0.4, boxShadow: nivel === 2 ? `0 0 6px ${estilo.color}` : 'none' }} />
             {agente.nombre}
           </p>
           {!compacto && <p className={`mt-0.5 text-[9px] uppercase tracking-[0.14em] ${seleccionado ? 'text-black/60' : 'text-plata-500'}`}>{estado}</p>}
@@ -436,19 +292,44 @@ function Puesto({ id, seleccionado, onSeleccion, estado, vivo }: { id: AgenteId;
   );
 }
 
-/** La sala a oscuras: piso negro satinado (refleja la luz de la pantalla), la pared del fondo y las aristas del cuarto. */
+/** La sala de control: piso negro satinado que refleja las luces (en el celular, sin reflejo), paredes con tiras
+ *  de luz finas, las líneas del pasillo y las aristas del cuarto. */
 function Sala() {
   const geo = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(18, 5.2, 15)), []);
+  const tira = (opacidad: number) => <meshBasicMaterial color="#ffffff" transparent opacity={opacidad} toneMapped={false} />;
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.001, -0.5]}>
         <planeGeometry args={[18, 15]} />
-        <meshStandardMaterial color="#08080a" metalness={0.5} roughness={0.5} />
+        {MOVIL ? (
+          <meshStandardMaterial color="#08080a" metalness={0.2} roughness={0.95} />
+        ) : (
+          <MeshReflectorMaterial resolution={512} blur={[300, 80]} mixBlur={1} mixStrength={6} mirror={0.4} roughness={0.85} depthScale={0.6} minDepthThreshold={0.4} maxDepthThreshold={1.3} color="#07070a" metalness={0.6} />
+        )}
       </mesh>
       <mesh position={[0, 2.6, -7.5]}>
         <planeGeometry args={[18, 5.2]} />
         <meshStandardMaterial color="#0d0e12" roughness={0.85} />
       </mesh>
+      {[-1, 1].map((l) => (
+        <group key={l}>
+          <mesh position={[l * 9, 2.6, -0.5]} rotation={[0, -l * (Math.PI / 2), 0]}>
+            <planeGeometry args={[15, 5.2]} />
+            <meshStandardMaterial color="#0a0b0e" roughness={0.9} />
+          </mesh>
+          {[-6, -3, 0, 3, 6].map((z) => (
+            <mesh key={z} position={[l * 8.97, 1.9, z]}>
+              <boxGeometry args={[0.02, 2.8, 0.025]} />
+              {tira(0.16)}
+            </mesh>
+          ))}
+          {/* Líneas del pasillo en el suelo */}
+          <mesh position={[l * 1.75, 0.004, -0.2]}>
+            <boxGeometry args={[0.015, 0.002, 11.5]} />
+            {tira(0.12)}
+          </mesh>
+        </group>
+      ))}
       <lineSegments geometry={geo} position={[0, 2.6, -0.5]}>
         <lineBasicMaterial color="#ffffff" transparent opacity={0.06} />
       </lineSegments>
@@ -462,40 +343,86 @@ function AjusteCamara() {
   const { camera, size } = useThree();
   useEffect(() => {
     // En el celular se acerca más de la cuenta: se ven el centro y la pantalla; los lados, girando con el dedo.
-    const factor = Math.max(1, 1.75 / (size.width / size.height)) ** 0.55;
+    const factor = Math.max(1, 1.75 / (size.width / size.height)) ** 0.42;
     camera.position.set(0, 0.9 + 7.6 * factor, -1.8 + 12.3 * factor);
     camera.lookAt(...MIRA);
   }, [camera, size.width, size.height]);
   return null;
 }
 
-export default function SalaAgentes3D({ seleccion, onSeleccion, estados, muro, activos }: Props) {
-  const vivo = (a: (typeof AGENTES)[number]) => activos?.[a.id] ?? a.real;
+/** Al acercarse de más con el zoom se entra caminando: donde estaba la cámara (dentro de la sala), mirando al centro. */
+const ENTRAR_A = 5.4;
+const entradaDesde = (c: THREE.Camera): Inicio => {
+  const x = Math.max(-7, Math.min(7, c.position.x));
+  const z = Math.max(-5, Math.min(6.4, c.position.z));
+  return { x, z, yaw: Math.atan2(-(MIRA[0] - x), -(MIRA[2] - z)) };
+};
+const boton: CSSProperties = { pointerEvents: 'auto', background: 'rgba(0,0,0,.72)', border: '1px solid rgba(255,255,255,.22)', color: '#fff', borderRadius: 8, padding: '7px 12px', fontSize: 12, backdropFilter: 'none' };
+
+export default function SalaAgentes3D({ seleccion, onSeleccion, estados, muro, niveles }: Props) {
+  const nivelDe = (a: (typeof AGENTES)[number]): Nivel => niveles?.[a.id] ?? (a.real ? 1 : 0);
   // Fuera de la vista (scroll u otra pestaña), la sala no se dibuja: cero GPU.
   const [lienzo, setLienzo] = useState<HTMLCanvasElement | null>(null);
   const [enVista, setEnVista] = useState(true);
+  const [fp, setFp] = useState<Inicio | null>(null);
+  const avance = useRef(0);
   useEffect(() => {
     if (!lienzo) return;
     const o = new IntersectionObserver(([e]) => setEnVista(e.isIntersecting));
     o.observe(lienzo);
     return () => o.disconnect();
   }, [lienzo]);
+  useEffect(() => {
+    if (!fp) return;
+    const salir = (e: KeyboardEvent) => e.key === 'Escape' && setFp(null);
+    window.addEventListener('keydown', salir);
+    return () => window.removeEventListener('keydown', salir);
+  }, [fp]);
+  const pedal = (v: number) => ({ onPointerDown: () => (avance.current = v), onPointerUp: () => (avance.current = 0), onPointerLeave: () => (avance.current = 0), onPointerCancel: () => (avance.current = 0) });
+
   return (
-    <Canvas frameloop={enVista ? 'always' : 'never'} onCreated={({ gl }) => setLienzo(gl.domElement)} camera={{ position: [0, 8.5, 10.5], fov: 46 }} dpr={[1, MOVIL ? 1 : 1.5]} gl={{ antialias: !MOVIL, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }}>
-      <AjusteCamara />
-      <fog attach="fog" args={['#000000', 18, 40]} />
-      <ambientLight intensity={0.3} />
-      <directionalLight position={[0, 8, 9]} intensity={1} />
-      <Sala />
-      <Grid position={[0, 0.002, 0]} args={[20, 20]} cellSize={0.5} cellThickness={0.4} cellColor="#16171a" sectionSize={2} sectionThickness={0.7} sectionColor="#26282d" fadeDistance={16} fadeStrength={1.5} infiniteGrid />
-      <ContactShadows position={[0, 0.005, 0]} opacity={0.7} scale={16} blur={2.4} far={3} frames={1} />
-      <NucleoDatos />
-      <FlujoPaquetes vivo={vivo} />
-      {muro && <MuroSala datos={muro} posicion={MURO} />}
-      {AGENTES.map((a) => (
-        <Puesto key={a.id} id={a.id} seleccionado={seleccion === a.id} onSeleccion={onSeleccion} estado={estados[a.id]} vivo={vivo(a)} />
-      ))}
-      <OrbitControls target={MIRA} enablePan={false} minDistance={5} maxDistance={24} minPolarAngle={0.5} maxPolarAngle={1.35} enableDamping />
-    </Canvas>
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <Canvas frameloop={enVista ? 'always' : 'never'} onCreated={({ gl }) => setLienzo(gl.domElement)} camera={{ position: [0, 8.5, 10.5], fov: 50 }} dpr={[1, MOVIL ? 1 : 1.5]} gl={{ antialias: !MOVIL, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }}>
+        {!fp && <AjusteCamara />}
+        <fog attach="fog" args={['#000000', 18, 40]} />
+        <hemisphereLight args={['#cdd5ff', '#040405', 0.55]} />
+        <ambientLight intensity={0.15} />
+        <directionalLight position={[3, 9, 8]} intensity={1.15} />
+        <directionalLight position={[-7, 4, -3]} intensity={0.35} color="#9fb0ff" />
+        <Sala />
+        <Grid position={[0, 0.002, 0]} args={[20, 20]} cellSize={0.5} cellThickness={0.4} cellColor="#16171a" sectionSize={2} sectionThickness={0.7} sectionColor="#26282d" fadeDistance={16} fadeStrength={1.5} infiniteGrid />
+        <ContactShadows position={[0, 0.005, 0]} opacity={0.7} scale={16} blur={2.4} far={3} frames={1} />
+        <NucleoDatos />
+        <FlujoPaquetes vivo={(a) => nivelDe(a) === 2} />
+        {muro && <MuroSala datos={muro} posicion={MURO} />}
+        {AGENTES.map((a) => (
+          <Puesto key={a.id} id={a.id} seleccionado={seleccion === a.id} onSeleccion={onSeleccion} estado={estados[a.id]} nivel={nivelDe(a)} />
+        ))}
+        {fp ? (
+          <PrimeraPersona inicio={fp} obstaculos={OBSTACULOS} avance={avance} />
+        ) : (
+          <OrbitControls target={MIRA} enablePan={false} minDistance={5} maxDistance={24} minPolarAngle={0.5} maxPolarAngle={1.35} enableDamping onEnd={(e) => {
+            const c = e?.target as Orbita | undefined;
+            if (c && c.getDistance() < ENTRAR_A) setFp(entradaDesde(c.object));
+          }} />
+        )}
+      </Canvas>
+      <div style={{ position: 'absolute', left: 10, right: 10, bottom: 10, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8, pointerEvents: 'none', zIndex: 30 }}>
+        {fp ? (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+              <button type="button" style={boton} onClick={() => setFp(null)}>◀ Vista general</button>
+              <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,.6)', background: 'rgba(0,0,0,.5)', padding: '3px 7px', borderRadius: 6 }}>{MOVIL ? 'Arrastra para mirar · pellizca o ▲ ▼ para caminar' : 'Arrastra para mirar · rueda, W A S D o flechas para caminar · Esc para salir'}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <button type="button" aria-label="Avanzar" style={{ ...boton, padding: '10px 16px', touchAction: 'none' }} {...pedal(1)}>▲</button>
+              <button type="button" aria-label="Retroceder" style={{ ...boton, padding: '10px 16px', touchAction: 'none' }} {...pedal(-1)}>▼</button>
+            </div>
+          </>
+        ) : (
+          <button type="button" style={{ ...boton, marginLeft: 'auto' }} onClick={() => setFp({ x: 0, z: 5.6, yaw: 0 })}>{MOVIL ? 'Primera persona' : 'Entrar a la sala · primera persona'}</button>
+        )}
+      </div>
+    </div>
   );
 }

@@ -28,6 +28,14 @@ export interface MetricasFlujo {
   ventaPorSeg: number;
 }
 
+/** Lo grabado antes de un reinicio, hasta `hasta` (ms): la sesión del CVD (delta y volumen desde su inicio) y el
+ *  día UTC del VWAP (apertura, Σ precio × volumen y volumen desde las 00:00). Cada parte, null si no está completa. */
+export interface BaseSesion {
+  hasta: number;
+  cvd: { inicioSesion: number; delta: number; volumen: number } | null;
+  dia: { inicio: number; apertura: number; nocional: number; volumen: number } | null;
+}
+
 export class MotorMercado {
   readonly cvd: SessionCVDEngine;
   readonly bigTrades: BigTradeDetector;
@@ -69,6 +77,9 @@ export class MotorMercado {
   private readonly idsVistos = new Map<string, true>();
   private ghostsVistos = new Map<string, true>();
   private sesionUtc = -1;
+  private base: BaseSesion | null = null;
+  private cvdBase = 0;
+  private volumenBase = 0;
   private nocionalSesion = 0;
   private volumenSesion = 0;
   // Métricas por segundo (anillo de 10 s).
@@ -83,12 +94,20 @@ export class MotorMercado {
     if (t.timestamp > this.ahora) this.ahora = t.timestamp;
     this.ultimoPrecio = t.price;
     const r = this.cvd.processTick({ timestamp: t.timestamp, price: t.price, volume: t.quantity, isBuyerMaker: t.buyerIsMaker, id: t.aggTradeId });
-    this.cvdSesion = r.cvd;
     const sesion = this.cvd.getState(r.session);
-    this.cvdVolumenSesion = sesion.buyVolume + sesion.sellVolume;
     const auto = pickAutoSession(t.timestamp);
     this.cvdActivo = auto.active;
-    if (r.isReset) this.cvdCompleto = t.timestamp - auto.startMs <= MARGEN_INICIO_MS;
+    if (r.isReset) {
+      // Tras un reinicio a mitad de sesión: lo grabado desde su inicio (sin cortes y hasta hace nada) la completa.
+      const b = this.base?.cvd && this.base.cvd.inicioSesion === auto.startMs && t.timestamp - this.base.hasta <= MARGEN_INICIO_MS ? this.base.cvd : null;
+      if (this.base) this.base.cvd = null;
+      const sirve = !!b;
+      this.cvdBase = b?.delta ?? 0;
+      this.volumenBase = b?.volumen ?? 0;
+      this.cvdCompleto = sirve || t.timestamp - auto.startMs <= MARGEN_INICIO_MS;
+    }
+    this.cvdSesion = r.cvd + this.cvdBase;
+    this.cvdVolumenSesion = sesion.buyVolume + sesion.sellVolume + this.volumenBase;
 
     const dia = Math.floor(t.timestamp / 86_400_000);
     if (dia !== this.sesionUtc) {
@@ -97,6 +116,12 @@ export class MotorMercado {
       this.nocionalSesion = 0;
       this.volumenSesion = 0;
       this.vwapCompleto = t.timestamp - dia * 86_400_000 <= MARGEN_INICIO_MS;
+      // Tras un reinicio: el día ya grabado desde las 00:00 (sin cortes y hasta hace nada) lo completa.
+      const d = this.base?.dia;
+      if (d && d.inicio === dia * 86_400_000 && t.timestamp - this.base!.hasta <= MARGEN_INICIO_MS) {
+        [this.aperturaSesion, this.nocionalSesion, this.volumenSesion, this.vwapCompleto] = [d.apertura, d.nocional, d.volumen, true];
+      }
+      if (this.base) this.base.dia = null;
     }
     this.nocionalSesion += t.price * t.quantity;
     this.volumenSesion += t.quantity;
@@ -266,6 +291,11 @@ export class MotorMercado {
   }
 
   /** Hubo un corte de datos: el CVD y el VWAP de la sesión en curso ya no están completos. */
+  /** Lo grabado antes de reiniciar (se usa en el primer trade si encaja; ver trade()). */
+  sembrar(b: BaseSesion): void {
+    this.base = { ...b };
+  }
+
   marcarHueco(): void {
     this.cvdCompleto = false;
     this.vwapCompleto = false;

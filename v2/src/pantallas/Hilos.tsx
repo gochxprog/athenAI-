@@ -1,8 +1,9 @@
 // Encima del cerebro: líneas finas desde cada tarjeta, destellos que corren por ellas (entran desde las fuentes y
 // salen hacia las métricas) y el anillo con los agentes. Canvas 2D, un solo bucle, sin re-renders de React.
 import { useEffect, useRef } from 'react';
+import type { Nivel } from '@/motores/agentes/sala';
 
-export interface AgenteAnillo { nombre: string; activo: boolean; color: string }
+export interface AgenteAnillo { nombre: string; nivel: Nivel; color: string }
 interface Destello { linea: number; t: number; vel: number }
 
 export default function Hilos({ agentes, pulsos }: { agentes: AgenteAnillo[]; pulsos: number }) {
@@ -115,19 +116,21 @@ export default function Hilos({ agentes, pulsos }: { agentes: AgenteAnillo[]; pu
         const px = centro.x + Math.cos(f) * ra;
         const py = centro.y + Math.sin(f) * ra * 0.92;
         x.beginPath();
-        // Trabajando: se enciende con el color de su agente (el de la sala) y late; apagado: anillo hueco gris.
+        // Trabajando: su color (el de la sala) y late. Listo: su color, quieto y con poco halo. Apagado: hueco gris.
         const latido = 0.75 + 0.25 * Math.sin(ahora / 400 + i);
-        x.arc(px, py, a.activo ? 4 : 3, 0, Math.PI * 2);
-        x.fillStyle = a.activo ? a.color : '#000';
-        x.strokeStyle = a.activo ? a.color : 'rgba(255,255,255,0.35)';
-        if (a.activo) {
+        x.arc(px, py, a.nivel ? 4 : 3, 0, Math.PI * 2);
+        x.fillStyle = a.nivel ? a.color : '#000';
+        x.strokeStyle = a.nivel ? a.color : 'rgba(255,255,255,0.35)';
+        x.globalAlpha = a.nivel === 1 ? 0.7 : 1;
+        if (a.nivel) {
           x.shadowColor = a.color;
-          x.shadowBlur = 14 * latido;
+          x.shadowBlur = a.nivel === 2 ? 14 * latido : 5;
         }
         x.fill();
         x.stroke();
         x.shadowBlur = 0;
-        x.fillStyle = a.activo ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)';
+        x.globalAlpha = 1;
+        x.fillStyle = a.nivel === 2 ? 'rgba(255,255,255,0.85)' : a.nivel ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.3)';
         x.fillText(a.nombre.toUpperCase(), px, py - 9);
       });
     };

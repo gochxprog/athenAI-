@@ -14,8 +14,10 @@ import { FuenteBinance } from '../src/motores/fuentes/binance';
 import { Pipeline } from '../src/motores/nucleo/pipeline';
 import { inferirTick, parametrosParaSimbolo, parametrosPorDefecto, type ParametrosSimbolo } from '../src/motores/nucleo/parametros';
 import { EVENTOS_PREDEFINIDOS } from '../src/motores/nucleo/calendario';
+import type { BaseSesion } from '../src/motores/nucleo/motorMercado';
+import { pickAutoSession } from '../src/motores/flujo/order-flow/session-cvd';
 import type { MensajeMercado } from '../src/motores/nucleo/tipos';
-import { AlmacenDisco, RECIENTES } from './almacenDisco';
+import { AlmacenDisco, RECIENTES, type FilaDisco } from './almacenDisco';
 import { resumenHistoria } from './importador';
 import { atenderJuez, cargarVelas, crearLaboratorio } from './laboratorioVps';
 import { crearAvisos } from './avisosVps';
@@ -79,6 +81,32 @@ export function leerOCrearClave(datos: string): string {
   return clave;
 }
 
+/**
+ * Lo que ya se grabó de la sesión del CVD y del día del VWAP antes de un reinicio (o de recalibrar): las sumas de
+ * las filas desde su inicio. Cada parte solo si esas filas la cubren desde el inicio, sin cortes y en una misma
+ * corrida de la grabadora (sus ids de sesión son consecutivos); si no, esa medida espera a la próxima sesión o día.
+ * El VWAP usa el cierre de cada barra como su precio (las barras duran segundos: la diferencia es mínima).
+ */
+export function baseSesion(almacen: AlmacenDisco, simbolo: string, ahora: number): BaseSesion | null {
+  const dia = Math.floor(ahora / 86_400_000) * 86_400_000;
+  const sesion = pickAutoSession(ahora).startMs;
+  const todas = almacen.leer(simbolo, Math.min(dia, sesion) - 60_000, 1_000_000).filas;
+  if (!todas.length) return null;
+  const desde = (inicio: number) => {
+    const xs = todas.filter((f) => f.cierre >= inicio);
+    if (!xs.length || xs[0].inicio > inicio + 60_000 || xs.some((f) => f.valores.hueco === 1)) return null;
+    const [a, b] = xs.reduce(([x, y], f) => [Math.min(x, f.sesion), Math.max(y, f.sesion)], [Infinity, -Infinity]);
+    return b - a > 1_000 ? null : xs;
+  };
+  const suma = (xs: FilaDisco[], f: (x: FilaDisco) => number) => xs.reduce((s, x) => s + f(x), 0);
+  const [c, d] = [desde(sesion), desde(dia)];
+  return {
+    hasta: todas[todas.length - 1].cierre,
+    cvd: c && { inicioSesion: sesion, delta: suma(c, (x) => x.delta ?? 0), volumen: suma(c, (x) => x.volumen ?? 0) },
+    dia: d && { inicio: dia, apertura: d[0].open ?? d[0].close, nocional: suma(d, (x) => x.close * (x.volumen ?? 0)), volumen: suma(d, (x) => x.volumen ?? 0) },
+  };
+}
+
 export function iniciarGrabadora(o: OpcionesGrabadora) {
   const log = o.log ?? ((t: string) => console.log(`[${new Date().toISOString()}] ${t}`));
   const almacen = new AlmacenDisco(path.join(o.datos));
@@ -91,6 +119,8 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
   const crear = (simbolo: string, p: ParametrosSimbolo, calibrado: boolean, previo?: Activo): Activo => {
     const pipeline = new Pipeline(p);
     pipeline.calendario = EVENTOS_PREDEFINIDOS;
+    const base = baseSesion(almacen, simbolo, Date.now());
+    if (base) pipeline.mercado.sembrar(base);
     if (previo) {
       pipeline.conexion = previo.pipeline.conexion;
       pipeline.detalleConexion = previo.pipeline.detalleConexion;
@@ -214,12 +244,17 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
   // La historia (lee todos los días importados) y las velas, recordadas: los sondeos de cada pantalla no releen el disco.
   const historiaDisco = recordar(() => resumenHistoria(o.datos), 20_000);
   // Velas del gráfico: si la ventana cabe en la memoria de filas recientes, se arman de ahí (sin tocar el disco).
+  // Las filas en orden de tiempo, sin repetir (como cargarVelas): una fila fuera de orden rompería las velas.
+  const crecientes = <T extends { cierre: number }>(xs: T[]) => {
+    let u = -Infinity;
+    return xs.filter((f) => f.cierre > u && ((u = f.cierre), true));
+  };
   const velasDisco = recordar((s: string, serie: Serie, n: number) => {
     if (serie === 'dollar') return [];
     const ms = MS_SERIE[serie];
     const desde = Math.floor((Date.now() - (n + 1) * ms) / ms) * ms;
     const m = almacen.leerUltimas(s, RECIENTES);
-    const velas = m.length && m[0].cierre <= desde ? armarVelas(m.filter((f) => f.cierre > desde), serie) : cargarVelas(o.datos, s, serie, 'todo', Date.now() - 3 * (n + 2) * ms);
+    const velas = m.length && m[0].cierre <= desde ? armarVelas(crecientes(m.filter((f) => f.cierre > desde)), serie) : cargarVelas(o.datos, s, serie, 'todo', Date.now() - 3 * (n + 2) * ms);
     return velas.slice(-n);
   }, 20_000);
   // Trabajos propios de los agentes (A2), en proceso aparte. Esperan a que el Juez termine: un trabajo pesado a la vez.

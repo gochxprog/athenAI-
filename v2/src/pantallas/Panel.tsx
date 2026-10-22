@@ -2,6 +2,7 @@
 // con el ojo: cada fila nueva que graba el VPS es un golpe. Alrededor, el anillo de agentes y los hilos a las tarjetas.
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { AGENTES, ESTILO_AGENTE } from '@/data/agentes';
+import { nivelAgente } from '@/motores/agentes/sala';
 import { deHoy, movimientos, useVps, type Fila, type Vps } from '../vps';
 import Hilos from './Hilos';
 import './panel.css';
@@ -61,9 +62,9 @@ export default function Panel() {
   const activos = v.bots.filter((b) => b.estado === 'activo').length;
   const hoy = deHoy(v.ops);
   const pnl = hoy.reduce((s, o) => s + o.pnl, 0);
-  // Encendido solo el agente que el orquestador del VPS ve trabajando de verdad.
-  const trabajando = Object.fromEntries((v.agentes?.agentes ?? []).map((a) => [a.id, a.estado === 'trabajando']));
-  const agentes = AGENTES.map((a) => ({ nombre: a.nombre, activo: !!trabajando[a.id], color: ESTILO_AGENTE[a.id].color }));
+  // Cada punto del anillo como lo ve el orquestador del VPS: late si trabaja, encendido si está listo, hueco si no existe.
+  const nivel = Object.fromEntries((v.agentes?.agentes ?? []).map((a) => [a.id, nivelAgente(a.estado)]));
+  const agentes = AGENTES.map((a) => ({ nombre: a.nombre, nivel: nivel[a.id] ?? 0, color: ESTILO_AGENTE[a.id].color }));
 
   return (
     <div className="panel">

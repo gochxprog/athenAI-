@@ -52,10 +52,15 @@ export interface ResultadoEjecucion {
   antiFuturo: ResultadoAntiFuturo;
 }
 
-/** Filas en el formato que ve la estrategia: cierre, close y cada Feature como clave. */
-export function filasParaPython(filas: readonly FilaFeatures[]): Record<string, number | null>[] {
-  return filas.map(({ inicio, cierre, open, high, low, close, volumen, delta, valores }) => ({ inicio, cierre, open: open ?? close, high: high ?? close, low: low ?? close, close, volumen: volumen ?? null, delta: delta ?? null, ...valores }));
+/** Las velas por COLUMNAS (una lista por campo: cierre, close, cada Feature…), que es como viajan a Python: sin
+ *  repetir los nombres en cada vela, el texto y la memoria son varias veces menores. */
+export function columnasParaPython(filas: readonly FilaFeatures[], claves = clavesFeatures(filas)): Record<string, (number | null)[]> {
+  const base = (x: FilaFeatures, k: string) => (k === 'open' || k === 'high' || k === 'low' ? x[k] ?? x.close : (x as unknown as Record<string, number | undefined>)[k]);
+  // Como antes por vela ({...base, ...valores}): si una Feature se llama igual que un campo base, manda la Feature.
+  return Object.fromEntries([...BASE, ...claves.filter((k) => !BASE.includes(k))].map((k) => [k, filas.map((x) => (k in x.valores ? x.valores[k] : base(x, k)) ?? null)]));
 }
+const BASE = ['inicio', 'cierre', 'open', 'high', 'low', 'close', 'volumen', 'delta'];
+const clavesFeatures = (filas: readonly FilaFeatures[]) => [...new Set(filas.flatMap((f) => Object.keys(f.valores)))].filter((k) => k !== 'volume');
 
 /** Valida GESTION: stop en ATR > 0, RR > 0 y un modo conocido. Cualquier otra cosa es un error claro. */
 export function leerGestion(g: unknown): ReglasSalida | null {
@@ -88,18 +93,20 @@ export function ejecutarEstrategia(py: PyodideMinimo, codigo: string, filas: rea
   const prueba = o.antiFuturo !== false;
   py.runPython(ARNES);
   py.globals.set('_athenai_codigo', codigo);
-  py.globals.set('_athenai_filas', JSON.stringify(filasParaPython(filas)));
+  const claves = clavesFeatures(filas);
+  py.globals.set('_athenai_filas', JSON.stringify(columnasParaPython(filas, claves)));
   const nCarga = prueba ? Math.max(1, Math.floor(n * CORTES_ANTIFUTURO[0]) - 1) : n;
   const cargado = JSON.parse(String(py.runPython(`_athenai_cargar(_athenai_codigo, _athenai_filas, ${nCarga})`))) as { combos: Combo[]; gestion: unknown; forma: string };
+  py.globals.set('_athenai_filas', '');
   aviso?.(`El motor reconoció tu código como: ${FORMAS[cargado.forma] ?? cargado.forma}.`);
   const { combos } = cargado;
   const gestion = leerGestion(cargado.gestion);
   if (combos.length > MAX_COMBOS) throw new Error(`PARAMETROS genera ${combos.length} combinaciones; el máximo es ${MAX_COMBOS} (más variantes = más riesgo de sobreajuste)`);
   const correr = (p: Combo, hasta: number, alterada?: readonly FilaFeatures[]) => {
     py.globals.set('_athenai_p', JSON.stringify(p));
-    if (alterada) py.globals.set('_athenai_alt', JSON.stringify(filasParaPython(alterada)));
-    const r = alterada ? py.runPython('_athenai_correr_filas(_athenai_p, _athenai_alt)') : py.runPython(`_athenai_correr(_athenai_p, ${hasta})`);
-    return normalizarPosiciones(JSON.parse(String(r)) as unknown[], hasta < 0 ? n : hasta);
+    if (alterada) py.globals.set('_athenai_alt', JSON.stringify(columnasParaPython(alterada.slice(hasta), claves)));
+    const r = alterada ? py.runPython(`_athenai_correr_alterada(_athenai_p, ${hasta}, _athenai_alt)`) : py.runPython(`_athenai_correr(_athenai_p, ${hasta})`);
+    return normalizarPosiciones(JSON.parse(String(r)) as unknown[], hasta < 0 || alterada ? n : hasta);
   };
 
   // Motor 9 · Anti-futuro: recorte y alteración en cada corte, para TODAS las variantes, antes de la corrida completa.
@@ -113,7 +120,7 @@ export function ejecutarEstrategia(py: PyodideMinimo, codigo: string, filas: rea
       combos.forEach((c, k) => {
         if (!cortesDe(k).includes(frac)) return;
         pruebas.push({ k, hasta, tipo: 'recorte', pos: correr(c, hasta) });
-        pruebas.push({ k, hasta, tipo: 'alteración', pos: correr(c, n, alterarDesde(filas, hasta, 1_000 + hasta)).slice(0, hasta) });
+        pruebas.push({ k, hasta, tipo: 'alteración', pos: correr(c, hasta, alterarDesde(filas, hasta, 1_000 + hasta)).slice(0, hasta) });
       });
     }
   }

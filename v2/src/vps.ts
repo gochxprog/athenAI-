@@ -20,6 +20,8 @@ export interface Vps {
   almacen: { simbolo: string; filas: number; desde: number | null; hasta: number | null; bytes: number }[];
   historia: Historia[];
   bots: Bot[];
+  /** Tu cuenta a mano de la Terminal (una por mercado). */
+  manuales: Bot[];
   /** Apagado de emergencia activo y reglas del Guardián (de /api/paper). */
   apagado: boolean;
   reglas: ReglasGuardian | null;
@@ -37,7 +39,7 @@ const LENTO = 6;
 const VENTANA_MS = 1_800_000;
 let vuelta = 0;
 let forzar = true;
-let actual: Vps = { listo: false, sinSesion: false, caido: false, inicio: null, version: '', mercados: [], almacen: [], historia: [], bots: [], apagado: false, reglas: null, bitacora: [], ops: [], filas: {}, agentes: null };
+let actual: Vps = { listo: false, sinSesion: false, caido: false, inicio: null, version: '', mercados: [], almacen: [], historia: [], bots: [], manuales: [], apagado: false, reglas: null, bitacora: [], ops: [], filas: {}, agentes: null };
 const oyentes = new Set<(v: Vps) => void>();
 let reloj: ReturnType<typeof setTimeout> | null = null;
 /** La grabadora respondió que no tiene bots (BOTS=0): no se vuelve a preguntar. */
@@ -82,7 +84,7 @@ async function sondear(): Promise<void> {
     const mismasFilas = Object.keys(filas).length === Object.keys(actual.filas).length && Object.entries(filas).every(([k, f]) => actual.filas[k] === f);
     actual = { listo: true, sinSesion: false, caido: false, inicio: e.inicio, version: e.version, mercados: e.simbolos, almacen: e.almacen, historia: h ? igual(h.mercados, actual.historia) : actual.historia,
       // Tu cuenta a mano (Terminal) no es un bot: va aparte.
-      bots: igual((p?.bots ?? []).filter((b) => b.origen !== 'manual'), actual.bots), apagado: p?.apagado ?? false, reglas: igual(p?.reglas ?? null, actual.reglas), bitacora: igual(p?.bitacora ?? [], actual.bitacora), ops: o ? igual(o.operaciones, actual.ops) : actual.ops, filas: mismasFilas ? actual.filas : filas, agentes: ag };
+      bots: igual((p?.bots ?? []).filter((b) => b.origen !== 'manual'), actual.bots), manuales: igual((p?.bots ?? []).filter((b) => b.origen === 'manual'), actual.manuales), apagado: p?.apagado ?? false, reglas: igual(p?.reglas ?? null, actual.reglas), bitacora: igual(p?.bitacora ?? [], actual.bitacora), ops: o ? igual(o.operaciones, actual.ops) : actual.ops, filas: mismasFilas ? actual.filas : filas, agentes: ag };
   } catch (err) {
     actual = { ...actual, listo: true, sinSesion: (err as Error).message === 'sin-sesion', caido: (err as Error).message !== 'sin-sesion' };
   }

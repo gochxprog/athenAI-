@@ -73,7 +73,7 @@ export function crearSala(o: { datos: string; reloj?: () => number; recursos?: (
   const tareas = new Map<AgenteId, Tarea & { ultima: number }>();
   const fila: { espera: AgenteId[]; actual: { id: AgenteId; desde: number } | null } = { espera: [], actual: null };
   // Lo visto en el latido anterior (para anotar solo los cambios).
-  const previo = { conexion: new Map<string, string>(), filas: new Map<string, number>(), hora: Math.floor(ahora() / HORA_MS), filasHora: new Map<string, number>(), bitacora: notas.length ? Math.max(...notas.map((n) => n.t)) : -1, importando: new Set<string>() };
+  const previo = { conexion: new Map<string, string>(), filas: new Map<string, number>(), hora: Math.floor(ahora() / HORA_MS), filasHora: new Map<string, number>(), bitacora: notas.length ? Math.max(...notas.map((n) => n.t)) : -1, importando: new Set<string>(), riesgo: null as string | null };
   let sucio = false;
   let guardado = 0;
 
@@ -92,6 +92,7 @@ export function crearSala(o: { datos: string; reloj?: () => number; recursos?: (
     sucio = false;
     guardado = ahora();
   };
+  const recursos = o.recursos ?? (() => recursosVps(o.datos));
   const poner = (id: AgenteId, estado: EstadoAgente, texto: string, siguiente: string | null = null) => (vivo[id] = { estado, ahora: texto, siguiente });
 
   /** La fila de trabajos pesados: uno a la vez. */
@@ -167,9 +168,15 @@ export function crearSala(o: { datos: string; reloj?: () => number; recursos?: (
     if (p && juzgando) poner('juez', 'trabajando', `«${p.nombre}» ${p.simbolo} ${p.serie}: ${p.paso}`);
     else poner('juez', 'esperando', 'espera una prueba del Laboratorio');
 
-    // Guardián y Ejecutor: los bots de Paper (la bitácora nueva va a la radio).
+    // Guardián: el riesgo del VPS (memoria y disco) siempre; el de los bots cuando hay. Ejecutor: los bots de Paper.
+    const r = recursos();
+    const mem = 1 - r.memLibre / r.memTotal;
+    const riesgo = mem > 0.9 ? `memoria del VPS al ${Math.round(mem * 100)} %` : r.discoLibre !== null && r.discoLibre < 5 * 1024 ** 3 ? `quedan ${(r.discoLibre / 1024 ** 3).toFixed(1)} GB de disco` : null;
+    if (riesgo !== previo.riesgo && riesgo) notar('guardian', `Riesgo en el VPS: ${riesgo}.`, true);
+    previo.riesgo = riesgo;
+    const vps = `memoria ${Math.round(mem * 100)} %${r.discoLibre !== null ? ` · disco ${(r.discoLibre / 1024 ** 3).toFixed(0)} GB libres` : ''}`;
     if (!b) {
-      poner('guardian', 'dormido', 'los bots están apagados en esta grabadora');
+      poner('guardian', riesgo ? 'alerta' : 'trabajando', riesgo ? `riesgo: ${riesgo}` : `vigila el VPS · ${vps}`);
       poner('ejecutor', 'dormido', 'los bots están apagados en esta grabadora');
     } else {
       // La primera vez (sin notas guardadas) solo marca hasta dónde ya se vio: no repite lo viejo en la radio.
@@ -177,7 +184,8 @@ export function crearSala(o: { datos: string; reloj?: () => number; recursos?: (
       for (const e of [...b.bitacora].filter((e) => e.t > previo.bitacora).sort((x, y) => x.t - y.t)) notar(e.grave ? 'guardian' : 'ejecutor', `${e.nombre}: ${e.texto}`, e.grave, e.t);
       previo.bitacora = Math.max(previo.bitacora, ...b.bitacora.map((e) => e.t));
       if (b.apagado) poner('guardian', 'alerta', 'apagado de emergencia activo');
-      else poner('guardian', b.total ? 'trabajando' : 'esperando', b.total ? `vigila ${b.total} bots · caída del día y pérdidas seguidas` : 'sin bots que vigilar');
+      else if (riesgo) poner('guardian', 'alerta', `riesgo: ${riesgo}`);
+      else poner('guardian', 'trabajando', b.total ? `vigila ${b.total} bots y el VPS · ${vps}` : `vigila el VPS · ${vps}`);
       poner('ejecutor', b.activos ? 'trabajando' : 'esperando', b.activos ? `${b.activos} bots en Paper · ${b.enPosicion} en posición` : 'sin bots activos');
     }
 
@@ -215,7 +223,7 @@ export function crearSala(o: { datos: string; reloj?: () => number; recursos?: (
         acciones: tareas.has(a.id) ? [pausados.has(a.id) ? 'reanudar' : 'pausar', 'correr'] : [],
       }));
       const nombre = (id: AgenteId) => tareas.get(id)?.nombre ?? id;
-      return { t, desde, agentes, notas: notas.slice(0, NOTAS_API), fila: { actual: fila.actual && { ...fila.actual, nombre: nombre(fila.actual.id) }, espera: fila.espera.map((id) => ({ id, nombre: nombre(id) })) }, recursos: (o.recursos ?? (() => recursosVps(o.datos)))() };
+      return { t, desde, agentes, notas: notas.slice(0, NOTAS_API), fila: { actual: fila.actual && { ...fila.actual, nombre: nombre(fila.actual.id) }, espera: fila.espera.map((id) => ({ id, nombre: nombre(id) })) }, recursos: recursos() };
     },
     async accion(nombre, cuerpo) {
       const id = String(cuerpo.id) as AgenteId;

@@ -1,78 +1,41 @@
 // Mercado (v2): velas del VPS (historia + grabado) con las entradas y salidas de los bots, y debajo lo que lee cada
 // motor ahora mismo, un mercado al lado del otro. Ligero: sin footprint ni heatmap.
 import { useEffect, useMemo, useState } from 'react';
-import { armarVelas, MS_SERIE, type Serie } from '@/motores/laboratorio/velas';
-import type { FilaFeatures } from '@/motores/nucleo/features';
-import { tieneObjetivo } from '@/motores/paper/manual';
-import { pedir } from '../../api';
-import { num, usd } from '../../formato';
+import { MS_SERIE } from '@/motores/laboratorio/velas';
+import { num } from '../../formato';
 import { useVps } from '../../vps';
-import Velas, { type Linea, type Marca, type VelaG } from './Velas';
+import Velas from './Velas';
+import { marcasYLineas, SERIES_G, useVelasVps, type SerieG } from './grafico';
 import { eventos, MOTORES } from './motores';
 import '../laboratorio/lab.css';
 import './mercado.css';
 
-const SERIES_G = ['1m', '5m', '15m', '1h', '4h'] as const satisfies readonly Exclude<Serie, 'dollar'>[];
 const CLAVE = 'athenai.v2.mercado';
 const hora = (t: number) => new Date(t).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 const corto = (s: string) => s.replace(/USDT$/, '');
 
 export default function Mercado() {
   const v = useVps();
-  const [sel, setSel] = useState<{ simbolo: string; serie: (typeof SERIES_G)[number] }>(() => {
+  const [sel, setSel] = useState<{ simbolo: string; serie: SerieG }>(() => {
     try {
-      return JSON.parse(localStorage.getItem(CLAVE) ?? '') as { simbolo: string; serie: (typeof SERIES_G)[number] };
+      return JSON.parse(localStorage.getItem(CLAVE) ?? '') as { simbolo: string; serie: SerieG };
     } catch {
       return { simbolo: 'BTCUSDT', serie: '5m' };
     }
   });
-  const [velas, setVelas] = useState<VelaG[]>([]);
-  const [error, setError] = useState('');
   const [abierto, setAbierto] = useState<string | null>(null);
   const ms = MS_SERIE[sel.serie];
   const clave = `${sel.simbolo}-${sel.serie}`;
-
+  const { velas, vivas, error } = useVelasVps(sel.simbolo, sel.serie);
   useEffect(() => {
     try {
       localStorage.setItem(CLAVE, JSON.stringify(sel));
     } catch {
       // sin almacenamiento: se queda en BTC 5m
     }
-    let vivo = true;
-    setVelas([]);
-    const cargar = () =>
-      pedir<{ velas: VelaG[] }>(`/api/velas?simbolo=${sel.simbolo}&serie=${sel.serie}&n=600`).then(
-        (x) => vivo && (setVelas(x.velas), setError('')),
-        (e: Error) => vivo && setError(e.message),
-      );
-    void cargar();
-    const id = setInterval(cargar, 120_000);
-    return () => ((vivo = false), clearInterval(id));
   }, [sel]);
-
-  // Las últimas velas, con las filas que el VPS acaba de grabar (se actualizan cada 5 s).
-  const vivas = useMemo<VelaG[]>(() => armarVelas((v.filas[sel.simbolo] ?? []) as unknown as FilaFeatures[], sel.serie).map((x) => [x.inicio, x.open, x.high, x.low, x.close]), [v.filas, sel]);
-
   // Bots en este mercado: entradas/salidas cerradas y la posición abierta (entrada, stop y objetivo).
-  const { marcas, lineas } = useMemo(() => {
-    const balde = (t: number) => Math.floor(t / ms) * ms;
-    const ops = v.ops.filter((o) => o.simbolo === sel.simbolo).slice(-40);
-    const marcas: Marca[] = ops.flatMap((o) => [
-      { t: balde(o.entradaT), lado: o.lado, tipo: 'entrada' as const, texto: o.lado > 0 ? 'L' : 'C' },
-      { t: balde(o.salidaT), lado: o.lado, tipo: 'salida' as const, texto: usd(o.pnl).replace(' USD', ''), gana: o.pnl >= 0 },
-    ]);
-    const lineas: Linea[] = v.bots
-      .filter((b) => b.simbolo === sel.simbolo && b.posicion)
-      .flatMap((b) => {
-        const g = b.gestion?.posicion;
-        return [
-          { precio: b.posicion!.precioEntrada, titulo: `${b.nombre} ${b.posicion!.lado > 0 ? '▲' : '▼'}`, tipo: 'entrada' as const },
-          ...(g ? [{ precio: g.stop, titulo: 'stop', tipo: 'stop' as const }] : []),
-          ...(g && tieneObjetivo(g.objetivo) ? [{ precio: g.objetivo, titulo: 'objetivo', tipo: 'objetivo' as const }] : []),
-        ];
-      });
-    return { marcas, lineas };
-  }, [v.ops, v.bots, sel.simbolo, ms]);
+  const { marcas, lineas } = useMemo(() => marcasYLineas(v.ops, v.bots, sel.simbolo, ms), [v.ops, v.bots, sel.simbolo, ms]);
 
   const ultima = vivas.at(-1) ?? velas.at(-1);
   const primera = velas.at(-Math.round(86_400_000 / ms)) ?? velas[0];

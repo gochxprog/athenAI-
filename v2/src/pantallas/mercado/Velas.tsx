@@ -45,7 +45,10 @@ export default function Velas({ velas, vivas, marcas, lineas, clave }: { velas: 
   useEffect(() => {
     const g = grafico.current;
     if (!g || !velas.length) return;
-    g.serie.setData(velas.map(([t, o, h, l, c]) => ({ time: local(t), open: o, high: h, low: l, close: c })));
+    // En orden y sin repetir: una vela fuera de orden rompe el gráfico entero.
+    let previa = -Infinity;
+    const datos = velas.filter(([t]) => t > previa && ((previa = t), true));
+    g.serie.setData(datos.map(([t, o, h, l, c]) => ({ time: local(t), open: o, high: h, low: l, close: c })));
     if (vista.current === clave) return;
     vista.current = clave;
     // Pocas velas: que llenen el ancho; muchas: las últimas, a la derecha.

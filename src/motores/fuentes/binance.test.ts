@@ -33,6 +33,10 @@ function montar(snapshotId = 100, opciones: { ws?: string; restCaido?: boolean }
     const json = (x: unknown) => ({ ok: true, status: 200, json: async () => x }) as Response;
     if (url.includes('exchangeInfo')) return json({ symbols: [{ symbol: 'BTCUSDT', status: 'TRADING', filters: [{ filterType: 'PRICE_FILTER', tickSize: '0.10' }] }] });
     if (url.includes('ticker/24hr')) return json({ lastPrice: '84700.0', quoteVolume: '18000000000' });
+    if (url.includes('aggTrades')) {
+      const desde = Number(new URL(url).searchParams.get('fromId'));
+      return json(Array.from({ length: 1000 }, (_, i) => ({ a: desde + i, p: '84700.0', q: '0.100', T: 2000 + desde + i, m: i % 2 === 0 })));
+    }
     if (url.includes('openInterest')) return json({ symbol: 'BTCUSDT', openInterest: '81240.123', time: 5 });
     if (url.includes('depth')) {
       await new Promise<void>((ok) => (resolverSnapshot = ok));
@@ -92,6 +96,22 @@ describe('FuenteBinance (protocolo de Binance USD-M Futures)', () => {
       ],
     });
     expect(mensajes.some((x) => x.m.tipo === 'conexion' && x.m.estado === 'en-vivo')).toBe(true);
+    fuente.detener();
+  });
+
+  it('trades perdidos en una reconexión: los pide por REST y los publica en orden antes de seguir (sin hueco)', async () => {
+    const { fuente, sockets, mensajes, pedidos } = montar();
+    await fuente.iniciar();
+    const trade = (a: number) => sockets[1].emitir({ stream: 'btcusdt@aggTrade', data: { e: 'aggTrade', s: 'BTCUSDT', a, p: '84700.0', q: '0.100', T: 2000 + a, m: false } });
+    trade(10);
+    vi.advanceTimersByTime(100);
+    trade(25);
+    vi.advanceTimersByTime(100);
+    for (let i = 0; i < 5; i++) await esperar();
+    vi.advanceTimersByTime(100);
+    expect(pedidos.some((u) => u.includes('aggTrades?symbol=BTCUSDT&fromId=11'))).toBe(true);
+    const ids = mensajes.flatMap((x) => (x.m.tipo === 'trades' ? x.m.trades.map((t) => t.aggTradeId) : []));
+    expect(ids).toEqual(Array.from({ length: 16 }, (_, i) => 10 + i));
     fuente.detener();
   });
 

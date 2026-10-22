@@ -74,6 +74,11 @@ stats = bt.run()
     expect(r.antiFuturo.ok).toBe(true);
   });
 
+  it('cada vela se usa como un dict: leer, asignar, get, dict() y DataFrame', () => {
+    const r = ejecutarEstrategia(py, `def estrategia(velas, p):\n    for v in velas: v["mio"] = v["close"] - v.get("open", 0)\n    d = dict(velas[0])\n    assert "absorcion_bid" in d and d["mio"] == 0 and len(velas[0]) == len(d)\n    return [1 if v["mio"] >= 0 and v["absorcion_bid"] > 3 else 0 for v in velas]\n`, filas);
+    expect(r.posiciones[0].slice(0, 6)).toEqual([0, 0, 0, 0, 1, 1]);
+  });
+
   it('mensajes claros cuando no se entiende la salida', () => {
     expect(() => ejecutarEstrategia(py, `def estrategia(velas, p):\n    return [1, 0]\n`, filas)).toThrow(/2 señales para \d+ velas/);
     expect(() => ejecutarEstrategia(py, `x = 1\n`, filas)).toThrow(/No encontré tus señales/);

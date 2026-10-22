@@ -1,5 +1,6 @@
 // Lectura de cada motor a partir de las últimas filas que grabó el VPS (≈ 30 min). Solo lee los valores que ya
 // calcularon los motores: aquí no se calcula nada nuevo. `lado`: 1 compradores · −1 vendedores · 0 neutro.
+import { EVENTOS_PREDEFINIDOS, proximoEvento } from '@/motores/nucleo/calendario';
 import type { Fila } from '../../vps';
 
 export interface Lectura { texto: string; lado: -1 | 0 | 1; fuerza: number }
@@ -30,7 +31,8 @@ export const MOTORES: Motor[] = [
     explica: 'Delta acumulado de la sesión sobre el volumen: si en toda la sesión mandan los compradores o los vendedores.',
     leer: (f) => {
       const x = v(f.at(-1), 'cvd_sesion_ratio');
-      return x === null ? nada : { texto: `${x >= 0 ? 'Compradores' : 'Vendedores'} ${pct(x)}`, lado: Math.abs(x) < 0.05 ? 0 : x > 0 ? 1 : -1, fuerza: Math.min(1, Math.abs(x) * 4) };
+      // Solo se mide una sesión vista desde su inicio (Asia, Londres o Nueva York): tras reiniciar, espera la próxima.
+      return x === null ? { texto: 'Espera el inicio de la próxima sesión', lado: 0, fuerza: 0 } : { texto: `${x >= 0 ? 'Compradores' : 'Vendedores'} ${pct(x)}`, lado: Math.abs(x) < 0.05 ? 0 : x > 0 ? 1 : -1, fuerza: Math.min(1, Math.abs(x) * 4) };
     },
   },
   {
@@ -92,7 +94,15 @@ export const MOTORES: Motor[] = [
   {
     id: 'evento', nombre: 'Eventos fuertes', clave: ['ventana_evento'],
     explica: 'FOMC, CPI, NFP… En la ventana de un evento fuerte los bots no deberían abrir: el mercado se vuelve loco.',
-    leer: (f) => (v(f.at(-1), 'ventana_evento') ? { texto: 'Dentro de la ventana · no operar', lado: -1, fuerza: 1 } : { texto: 'Sin eventos ahora', lado: 0, fuerza: 0 }),
+    leer: (f) => {
+      if (v(f.at(-1), 'ventana_evento')) return { texto: 'Dentro de la ventana · no operar', lado: -1, fuerza: 1 };
+      // Fuera de la ventana: cuál es el próximo y cuánto falta (las fechas se conocen de antemano).
+      const e = proximoEvento(EVENTOS_PREDEFINIDOS, Date.now());
+      if (!e) return { texto: 'Sin eventos cargados', lado: 0, fuerza: 0 };
+      const h = (e.t - Date.now()) / 3_600_000;
+      const fecha = new Date(e.t).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      return { texto: `Próximo: ${e.nombre.split(' · ')[0]} · ${fecha} (en ${h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} d`})`, lado: 0, fuerza: Math.max(0, Math.min(1, 1 - h / 168)) };
+    },
   },
 ];
 

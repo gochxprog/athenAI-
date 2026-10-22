@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { AlmacenDisco } from './almacenDisco';
 import { cargadorPython } from './botsVps';
+import { cederMemoria } from './trabajosVps';
 import { armarVelas, SERIES, type Serie, type VelaLab } from '../src/motores/laboratorio/velas';
 export type { Fuente, PedidoPrueba, ResultadoPrueba, Trabajo };
 import { ejecutarEstrategia, mensajeError, prepararPython, type PyodideMinimo } from '../src/motores/laboratorio/python';
@@ -76,6 +77,7 @@ export function correrPrueba(p: PedidoPrueba, datos: string, py: PyodideMinimo, 
 
 /** Proceso hijo (`node grabadora.mjs --juez`): recibe un pedido, lo corre y contesta. */
 export function atenderJuez(): void {
+  cederMemoria();
   process.once('message', async (m: { pedido: PedidoPrueba; datos: string; pyodide: string | null }) => {
     const enviar = (x: Mensaje, fin = false) => process.send?.(x, undefined, {}, () => fin && process.disconnect?.());
     try {
@@ -105,7 +107,7 @@ function validar(c: Record<string, unknown>): PedidoPrueba {
 /** En la grabadora: lanza las pruebas (una a la vez) y guarda sus estados (las últimas 20). */
 export function crearLaboratorio(o: { datos: string; pyodide: string | null; log?: (t: string) => void; lanzar?: () => ChildProcess; alTerminar?: (p: PedidoPrueba, r: ResultadoPrueba) => void; alFin?: (t: Trabajo) => void }): ApiLaboratorio {
   const trabajos = new Map<string, Trabajo>();
-  const lanzar = o.lanzar ?? (() => fork(process.argv[1], ['--juez'], { execArgv: ['--max-old-space-size=2048'] }));
+  const lanzar = o.lanzar ?? (() => fork(process.argv[1], ['--juez'], { execArgv: ['--max-old-space-size=1024'] }));
   let activo: { id: string; hijo: ChildProcess; reloj: ReturnType<typeof setTimeout> } | null = null;
   const terminar = (t: Trabajo, cambio: Partial<Trabajo>) => {
     if (t.estado !== 'corriendo') return;

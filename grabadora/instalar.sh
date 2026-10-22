@@ -92,7 +92,10 @@ Environment=PYODIDE=$APP/pyodide
 ExecStart=$(command -v node) $APP/grabadora.mjs
 Restart=always
 RestartSec=5
-MemoryMax=1500M
+# Tope de TODO el servicio (grabadora + Juez + trabajos). OOMPolicy=continue: si una prueba se pasa, el sistema
+# corta solo esa prueba (se ofrece primero, ver cederMemoria) y la grabadora sigue grabando.
+MemoryMax=2600M
+OOMPolicy=continue
 
 [Install]
 WantedBy=multi-user.target

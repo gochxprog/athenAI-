@@ -48,8 +48,23 @@ describe('orquestador en el VPS', () => {
     expect(ficha('flujo').estado).toBe('trabajando');
     for (const id of ['rastreador', 'etiquetador', 'lector', 'sintetizador']) expect(ficha(id).estado).toBe('dormido');
     expect(ficha('lector').ahora).toMatch(/A3/);
-    expect(ficha('guardian').estado).toBe('dormido');
+    // Sin bots, el Guardián vigila el VPS (memoria y disco), y avisa si hay riesgo.
+    expect(ficha('guardian').estado).toBe('trabajando');
+    expect(ficha('guardian').ahora).toMatch(/vigila el VPS · memoria \d+ %/);
     expect(ficha('juez').estado).toBe('esperando');
+  });
+
+  it('Guardián: memoria del VPS por encima del 90 % → alerta y nota grave una vez', () => {
+    let libre = 0.05;
+    const s = crearSala({ datos: temporal(), reloj: () => 1_000, recursos: () => ({ memTotal: 100, memLibre: libre * 100, rss: 1, carga: 0, nucleos: 4, discoLibre: null, discoTotal: null }) });
+    s.latir(lectura());
+    s.latir(lectura());
+    const g = () => s.estado().agentes.find((a) => a.id === 'guardian')!;
+    expect(g().estado).toBe('alerta');
+    expect(s.estado().notas.filter((n) => n.id === 'guardian' && n.grave)).toHaveLength(1);
+    libre = 0.5;
+    s.latir(lectura());
+    expect(g().estado).toBe('trabajando');
   });
 
   it('Vigía anota los cortes (grave) y la vuelta; queda en alerta mientras un mercado no está en vivo', () => {

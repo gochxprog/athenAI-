@@ -21,9 +21,9 @@ export const MENU: { seccion: string; items: Item[] }[] = [
     items: [
       { id: 'paper', nombre: 'Paper', icono: Wallet },
       { id: 'real', nombre: 'Real', icono: DollarSign, fase: 9 },
-      { id: 'terminal', nombre: 'Terminal', icono: ListOrdered, fase: 3 },
+      { id: 'terminal', nombre: 'Terminal', icono: ListOrdered },
       { id: 'mercado', nombre: 'Mercado', icono: CandlestickChart },
-      { id: 'riesgo', nombre: 'Riesgo', icono: Shield, fase: 3 },
+      { id: 'riesgo', nombre: 'Riesgo', icono: Shield },
       { id: 'diario', nombre: 'Diario', icono: CalendarDays },
     ],
   },
@@ -31,7 +31,7 @@ export const MENU: { seccion: string; items: Item[] }[] = [
     seccion: 'Sistema',
     items: [
       { id: 'datos', nombre: 'Datos', icono: Database },
-      { id: 'calendario', nombre: 'Calendario', icono: CalendarClock, fase: 3 },
+      { id: 'calendario', nombre: 'Calendario', icono: CalendarClock },
       { id: 'sistema', nombre: 'Sistema', icono: Server },
     ],
   },

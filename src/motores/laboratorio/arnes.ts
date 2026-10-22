@@ -11,6 +11,7 @@
 // posición anterior. Los datos que el código intente cargar (pd.read_csv, yfinance) se reemplazan por los del VPS.
 export const ARNES = String.raw`
 import json, itertools, sys, types, inspect
+from collections.abc import Mapping
 
 _TXT = {"buy": 1, "long": 1, "compra": 1, "comprar": 1, "largo": 1, "sell": -1, "short": -1, "venta": -1, "vender": -1, "corto": -1,
         "exit": 0, "close": 0, "flat": 0, "cerrar": 0, "salir": 0, "fuera": 0, "neutral": 0}
@@ -48,22 +49,33 @@ def _posiciones(salida, n):
         out.append(prev)
     return out
 
-def _velas(filas):
-    out = []
-    for f in filas:
-        v = dict(f)
-        v["volume"] = v.get("volumen")
-        out.append(v)
-    return out
+class _Vela(Mapping):
+    """Una vela que se lee como dict (v["close"], v.get, dict(v)) pero apunta a las columnas: nada se copia, así
+    100 mil velas con 40 Features caben en poca memoria. Lo que el código le asigne queda solo en esa vela."""
+    __slots__ = ("_c", "_i", "_e")
+    def __init__(s, c, i): s._c, s._i, s._e = c, i, None
+    def __getitem__(s, k):
+        if s._e is not None and k in s._e: return s._e[k]
+        return s._c[k][s._i]
+    def __setitem__(s, k, x):
+        if s._e is None: s._e = {}
+        s._e[k] = x
+    def __iter__(s): return iter({**s._c, **(s._e or {})})
+    def __len__(s): return len({**s._c, **(s._e or {})})
+    def __repr__(s): return repr(dict(s))
 
-def _df(filas):
+def _velas(cols):
+    return [_Vela(cols, i) for i in range(len(cols["cierre"]))]
+
+def _df(cols):
     import pandas as pd
-    df = pd.DataFrame(filas)
-    for a, b in (("open", "Open"), ("high", "High"), ("low", "Low"), ("close", "Close"), ("volumen", "Volume")):
+    df = pd.DataFrame({k: v for k, v in cols.items() if k != "volume"})
+    for a, b in (("open", "Open"), ("high", "High"), ("low", "Low"), ("close", "Close"), ("volumen", "Volume"), ("volumen", "volume")):
         df[b] = df[a]
-    df["volume"] = df["volumen"]
     df.index = pd.to_datetime(df["cierre"], unit="ms")
     return df
+
+def _cortar(cols, n): return {k: v[:n] for k, v in cols.items()}
 
 class _Historia:
     """Las velas hasta la actual (nada del futuro): historia[-1] es la vela de ahora."""
@@ -104,19 +116,17 @@ class _Arr:
     def tolist(s): return list(s)
 
 class _Datos:
-    def __init__(s, filas, r):
-        s._r, s._cols = r, {}
-        claves = set().union(*[f.keys() for f in filas]) if filas else set()
-        for k in claves: s._cols[k] = [f.get(k) for f in filas]
-        for a, b in (("open", "Open"), ("high", "High"), ("low", "Low"), ("close", "Close"), ("volumen", "Volume"), ("volumen", "volume")):
-            s._cols[b] = s._cols.get(a, [])
-        s._filas = filas
+    def __init__(s, cols, r):
+        s._r, s._cols, s._n = r, dict(cols), len(cols["cierre"])
+        for a, b in (("open", "Open"), ("high", "High"), ("low", "Low"), ("close", "Close"), ("volumen", "Volume")):
+            s._cols[b] = cols[a]
+        s._filas = cols
     def __getattr__(s, k):
         if k.startswith("_"): raise AttributeError(k)
         if k == "df": return _df(s._filas)
         if k not in s._cols: raise AttributeError(f"Los datos no tienen «{k}»")
         return _Arr(s._cols[k], s._r)
-    def __len__(s): return len(s._filas) if s._r.init else s._r.i + 1
+    def __len__(s): return s._n if s._r.init else s._r.i + 1
 
 class _Posicion:
     def __init__(s, e): s._e = e
@@ -210,14 +220,15 @@ def _por_vela(f, filas, p):
     return out
 
 def _clase(cls, filas, p):
-    r = types.SimpleNamespace(i=len(filas) - 1, init=True)
+    n = len(filas["cierre"])
+    r = types.SimpleNamespace(i=n - 1, init=True)
     st = cls.__new__(cls)
-    Strategy._armar(st, _Datos(_velas(filas), r), r)
+    Strategy._armar(st, _Datos(filas, r), r)
     for k, v in p.items(): setattr(st, k, v)
     st.init()
     r.init = False
     out = []
-    for i in range(len(filas)):
+    for i in range(n):
         r.i = i
         st.next()
         out.append(st._pos)
@@ -253,18 +264,19 @@ def _detectar(ns):
     if len(propias) == 1: return ("lista", propias[0])
     return ("script", None)
 
-def _athenai_cargar(codigo, filas_json, n_carga):
+def _athenai_cargar(codigo, cols_json, n_carga):
     """Lee el código con solo las primeras n_carga velas (menos que el primer corte del anti-futuro): ni al cargar
     puede guardar el futuro en algún rincón de Python."""
     global _filas, _CODIGO, _PANDAS
     _CODIGO = codigo
-    _filas = json.loads(filas_json)
+    _filas = json.loads(cols_json)
+    _filas["volume"] = _filas["volumen"]
     _modulos()
     _PANDAS = "pandas" in sys.modules or _usa_pandas(codigo)
     if _PANDAS:
         try: import pandas
         except ImportError: raise ValueError("Tu código usa pandas y no está instalado en el VPS: vuelve a correr instalar.sh")
-    ns = _espacio(_filas[:n_carga])
+    ns = _espacio(_cortar(_filas, n_carga))
     forma = _detectar(ns)[0]
     params = ns.get("PARAMETROS", ns.get("PARAMS", {})) or {}
     if not isinstance(params, dict): raise ValueError("PARAMETROS debe ser un diccionario {nombre: [valores]}")
@@ -277,10 +289,16 @@ def _correr(filas, p):
     ns = _espacio(filas, p)
     tipo, f = _detectar(ns)
     salida = _llamar(f, filas, p) if tipo == "lista" else _por_vela(f, filas, p) if tipo == "vela" else _clase(f, filas, p) if tipo == "clase" else _script(ns, filas)
-    return json.dumps(_posiciones(salida, len(filas)))
+    return json.dumps(_posiciones(salida, len(filas["cierre"])))
 
-def _athenai_correr_filas(p_json, filas_json): return _correr(json.loads(filas_json), dict(json.loads(p_json)))
-def _athenai_correr(p_json, hasta): return _correr(_filas if hasta < 0 else _filas[:hasta], dict(json.loads(p_json)))
+def _athenai_correr(p_json, hasta):
+    # Siempre columnas propias (aunque sea la serie completa): ninguna corrida puede tocar las de otra.
+    return _correr(_cortar(_filas, len(_filas["cierre"]) if hasta < 0 else hasta), dict(json.loads(p_json)))
+def _athenai_correr_alterada(p_json, hasta, alt_json):
+    """Las velas hasta «hasta» tal cual y desde ahí las alteradas (solo viaja la parte alterada)."""
+    alt = json.loads(alt_json)
+    alt["volume"] = alt["volumen"]
+    return _correr({k: v[:hasta] + alt[k] for k, v in _filas.items()}, dict(json.loads(p_json)))
 `;
 
 /** Nombre de la forma que reconoció el motor (para mostrarlo en el Laboratorio). */

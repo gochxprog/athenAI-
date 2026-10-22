@@ -109,8 +109,19 @@ function escribir(archivo: string, x: unknown) {
   fs.writeFileSync(archivo, JSON.stringify(x));
 }
 
+/** Los procesos hijos (Juez, trabajos) se ofrecen primero si el VPS se queda sin memoria: así cae la prueba y no
+ *  la grabadora. */
+export function cederMemoria(): void {
+  try {
+    fs.writeFileSync('/proc/self/oom_score_adj', '800');
+  } catch {
+    // fuera de Linux no existe: no pasa nada
+  }
+}
+
 /** Proceso hijo (`node grabadora.mjs --trabajo`): recibe un pedido, lo corre y contesta. */
 export function atenderTrabajo(): void {
+  cederMemoria();
   process.once('message', (p: Pedido) => {
     try {
       const r = p.tipo === 'rastreador' ? rastrear(p.datos, p.simbolos) : etiquetarHistoria(p.datos, p.simbolos);
@@ -121,8 +132,8 @@ export function atenderTrabajo(): void {
   });
 }
 
-/** En la grabadora: lanza el trabajo en un proceso aparte (tope ~1,2 GB) y espera su resultado. */
-export function correrTrabajo(tipo: Pedido['tipo'], datos: string, simbolos: string[], lanzar = () => fork(process.argv[1], ['--trabajo'], { execArgv: ['--max-old-space-size=1200'] })): Promise<Resultado> {
+/** En la grabadora: lanza el trabajo en un proceso aparte (tope ~1 GB) y espera su resultado. */
+export function correrTrabajo(tipo: Pedido['tipo'], datos: string, simbolos: string[], lanzar = () => fork(process.argv[1], ['--trabajo'], { execArgv: ['--max-old-space-size=1024'] })): Promise<Resultado> {
   return new Promise((ok, mal) => {
     const hijo = lanzar();
     let listo = false;
