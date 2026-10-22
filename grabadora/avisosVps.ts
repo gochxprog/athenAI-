@@ -4,12 +4,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { canalesActivos, CONFIG_NOTIF_POR_DEFECTO, peticion, resultadoEnvio, type Aviso, type ConfigNotificaciones } from '../src/motores/notificaciones/canales';
+import { Notificador } from '../src/motores/notificaciones/notificador';
+import { EVENTOS_PREDEFINIDOS } from '../src/motores/nucleo/calendario';
+import type { EstadoFeed } from '../src/motores/worker/protocolo';
 
 export interface ApiAvisos {
   accion(nombre: string, cuerpo: Record<string, unknown>): Promise<unknown>;
   /** Qué canales están activos (sin credenciales). */
   estado(): { canales: string[]; tipos: ConfigNotificaciones['tipos'] };
   enviar(a: Aviso): Promise<void>;
+  /** Fallos de los mercados (y su recuperación) y eventos fuertes: llamar cada pocos segundos con los feeds. */
+  revisar(feeds: readonly EstadoFeed[]): void;
 }
 
 const texto = (x: unknown, max = 500) => (typeof x === 'string' ? x.trim().slice(0, max) : '');
@@ -29,7 +34,7 @@ function limpiar(c: Record<string, unknown>): ConfigNotificaciones {
   };
 }
 
-export function crearAvisos(o: { datos: string; log: (t: string) => void; fetchImpl?: typeof fetch }): ApiAvisos {
+export function crearAvisos(o: { datos: string; log: (t: string) => void; fetchImpl?: typeof fetch; reloj?: () => number }): ApiAvisos {
   const archivo = path.join(o.datos, 'avisos.json');
   const pedir = o.fetchImpl ?? fetch;
   let config: ConfigNotificaciones;
@@ -38,6 +43,9 @@ export function crearAvisos(o: { datos: string; log: (t: string) => void; fetchI
   } catch {
     config = CONFIG_NOTIF_POR_DEFECTO;
   }
+  // El mismo notificador de la plataforma (tipos, anti-spam, gracia de 60 s en los fallos), siempre «visible».
+  const n = new Notificador(pedir, null, o.reloj ?? Date.now, () => true);
+  n.guardar(config);
   /** Envía por cada canal activo; devuelve el resultado de cada uno. */
   const mandar = (a: Aviso) =>
     Promise.all(
@@ -56,11 +64,16 @@ export function crearAvisos(o: { datos: string; log: (t: string) => void; fetchI
   return {
     estado: () => ({ canales: canalesActivos(config), tipos: config.tipos }),
     async enviar(a) {
-      if (config.tipos[a.tipo]) await mandar(a);
+      await n.enviar(a);
+    },
+    revisar(feeds) {
+      n.revisarFeeds(feeds);
+      n.revisarCalendario(EVENTOS_PREDEFINIDOS);
     },
     async accion(nombre, cuerpo) {
       if (nombre === 'guardar') {
         config = limpiar(cuerpo);
+        n.guardar(config);
         fs.mkdirSync(o.datos, { recursive: true });
         fs.writeFileSync(archivo, JSON.stringify(config), { mode: 0o600 });
         return { ok: true, canales: canalesActivos(config) };

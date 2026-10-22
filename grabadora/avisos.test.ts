@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { crearAvisos } from './avisosVps';
+import type { EstadoFeed } from '../src/motores/worker/protocolo';
 
 const carpetas: string[] = [];
 const temporal = () => {
@@ -54,6 +55,29 @@ describe('Avisos 24/7 del VPS', () => {
     expect(urls[1]).toMatch(/^https:\/\/ntfy.sh\/mi-tema\?/);
     await a.enviar({ tipo: 'juez', clave: 'y', titulo: 'Juez', texto: '—', prioridad: 'normal' });
     expect(urls).toHaveLength(2);
+  });
+
+  it('fallos de un mercado desde el VPS: tras 60 s sin datos avisa, y avisa al volver (sin repetir)', async () => {
+    const { f, urls } = espia();
+    let ahora = Date.UTC(2026, 9, 22, 12);
+    const a = crearAvisos({ datos: temporal(), log: () => undefined, fetchImpl: f, reloj: () => ahora });
+    await a.accion('guardar', { ntfy: { activo: true, servidor: 'https://ntfy.sh', tema: 'mi-tema' } });
+    const feed = (conexion: string) => ({ simbolo: 'BTCUSDT', proveedor: 'binance', conexion, detalle: '' }) as unknown as EstadoFeed;
+    a.revisar([feed('reconectando')]);
+    ahora += 30_000;
+    a.revisar([feed('reconectando')]);
+    expect(urls).toHaveLength(0); // aún en la gracia de 60 s
+    ahora += 40_000;
+    a.revisar([feed('reconectando')]);
+    a.revisar([feed('reconectando')]);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(urls).toHaveLength(1);
+    expect(new URL(urls[0]).searchParams.get('title')).toContain('sin datos');
+    ahora += 5_000;
+    a.revisar([feed('en-vivo')]);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(urls).toHaveLength(2);
+    expect(new URL(urls[1]).searchParams.get('title')).toContain('recuperado');
   });
 
   it('la prueba dice qué canal falló; sin canales, avisa claro', async () => {

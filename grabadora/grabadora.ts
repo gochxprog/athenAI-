@@ -145,6 +145,8 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
   });
   // Bots de Paper 24/7: el mismo motor que la plataforma, con su libro en {datos}/paper.
   const avisos = crearAvisos({ datos: o.datos, log });
+  // Avisos 24/7 de fallos (un mercado sin datos más de 60 s, y cuando vuelve) y de eventos fuertes.
+  const vigilaAvisos = setInterval(() => avisos.revisar([...activos].map(([s, a]) => feedDe(s, a.pipeline, a.filas, a.calibrado, a.cortes))), 5_000);
   let motorBots: MotorPaper | null = null;
   const biblioteca = crearBiblioteca({ datos: o.datos, paper: () => motorBots });
   let latido: ReturnType<typeof setInterval> | null = null;
@@ -188,6 +190,7 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
     if (latido) clearInterval(latido);
     clearInterval(escritura);
     clearInterval(resumen);
+    clearInterval(vigilaAvisos);
     fuente.detener();
     almacen.vaciar();
     servidor.close();
