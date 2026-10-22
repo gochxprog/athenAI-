@@ -79,6 +79,8 @@ def en_cada_vela(v, ctx):
 
 ## 6. Enchufes (nada depende de un proveedor)
 - **Datos:** Binance hoy → la fuente que compres (Rithmic, Databento…) mañana. Se cambia el enchufe y nada más.
+- **Historia de Bybit (gratis):** Bybit publica archivos con los trades uno por uno y el libro (L2) de sus contratos de cripto. Un **importador** los convierte al mismo formato de la grabadora, y así el Juez tiene **meses o años de BTC** para probar desde ya, sin esperar a que la grabadora junte datos.
+  - **Ojo con oro, Nasdaq y S&P 500 en Bybit:** son contratos propios de Bybit (desde abril de 2026). El precio sigue al mercado real, pero el order flow es el de los clientes de Bybit, no el de la CME. Sirven para estrategias de precio; para order flow serio de esos mercados hace falta la CME (Rithmic). Lo mismo pasa con el oro de Binance que se graba hoy.
 - **Órdenes:** Paper hoy → tu broker mañana. Los bots no saben dónde operan.
 - **Tamaño:** en contratos o lotes según la ficha de cada mercado.
 
@@ -111,7 +113,7 @@ flowchart LR
 | # | Pantalla | Qué tiene |
 |---|---|---|
 | 1 | **Panel** | Resumen del día: mercados, bots, alertas. Cerebro 3D |
-| 2 | **Laboratorio** | Editor de código libre y el Juez |
+| 2 | **Laboratorio** | Editor de código libre y **el Juez completo, como está hoy**: Walk-Forward, Monte Carlo, prueba de suerte, robustez, DSR/PBO, anti-futuro y veredicto, con todas sus vistas. **Nada de eso se pierde**; solo se mejora el diseño (animaciones, 3D donde sume) |
 | 3 | **Biblioteca** | Estrategias aprobadas por el Juez |
 | 4 | **Paper** | Bots en prueba, cada uno con su porqué (cuenta propia + demo del broker) |
 | 5 | **Real** | Bots que pasaron Paper (bloqueado hasta conectar broker) |
@@ -136,7 +138,7 @@ La plataforma actual sigue funcionando hasta que la nueva la reemplace. La graba
 | Fase | Qué | Cómo se sabe que está lista |
 |---|---|---|
 | 0 | Este croquis | Lo apruebas |
-| 1 | Esqueleto nuevo: menú, diseño, carga de datos grabados | Abre rápido y lee tus datos del VPS |
+| 1 | Esqueleto nuevo: menú, diseño, carga de datos grabados + **importador de la historia de Bybit (BTC)** | Abre rápido, lee tus datos del VPS y tiene meses de BTC importados |
 | 2 | **Motor de estrategias + Juez** | Una estrategia de ejemplo pasa por el Juez de punta a punta |
 | 3 | Biblioteca, Paper, Terminal (lista) y Diario | Un bot corre 24/7 en Paper con stop y objetivo, y se ve en la lista |
 | 4 | Investigación y ML (armado, sin entrenar) | Con datos de prueba, el buscador propone y el Juez filtra |
