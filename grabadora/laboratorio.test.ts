@@ -48,6 +48,8 @@ describe('Laboratorio en el VPS', () => {
     expect(v.every((x, i) => i === 0 || x.cierre > v[i - 1].cierre)).toBe(true);
     expect(cargarVelas(datos, 'BTCUSDT', '1m', 'grabado')).toHaveLength(1_500);
     expect(cargarVelas(datos, 'BTCUSDT', '15m', 'historia')).toHaveLength(200);
+    // Con `desde` solo lee los días desde ese día (gráfico y señal en vivo de los bots).
+    expect(cargarVelas(datos, 'BTCUSDT', '1m', 'todo', T0 + 2 * 86_400_000).length).toBe(4_000 - 2 * 1_440);
   });
 
   it('corre la prueba completa: estrategia con GESTION, anti-futuro y Juez sobre velas de 5 min', () => {

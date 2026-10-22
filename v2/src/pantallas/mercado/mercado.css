@@ -1,0 +1,21 @@
+/* Mercado v2 · velas en negro y tarjetas de motores; verde/rojo suaves solo en cifras y barritas. */
+.mercado-v2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; animation: entrar .35s ease; }
+.mercado-v2 h1 { font-weight: 300; font-size: 24px; letter-spacing: -.01em; margin-top: 4px; font-family: var(--mono); }
+.mercado-v2 h1 small { font-size: 12px; margin-left: 8px; }
+.mercado-v2 .sube { color: var(--vivo); } .mercado-v2 .baja { color: var(--baja); }
+.grafico-caja { padding: 0; overflow: hidden; }
+.barra-graf { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--borde); }
+.pista-g { margin-left: auto; font-size: 10px; color: var(--apagado); }
+.velas { height: 380px; width: 100%; touch-action: none; }
+.motores-v2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 10px; }
+.motor { padding: 12px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: border-color .2s; }
+.motor:hover, .motor.abierto { border-color: var(--borde2); }
+.lectura-m { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 2px 8px; align-items: baseline; }
+.lectura-m small { color: var(--apagado); font-size: 10px; }
+.lectura-m b { font-weight: 500; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fuerza { grid-column: 2; height: 2px; background: var(--borde); border-radius: 2px; overflow: hidden; display: block; }
+.fuerza i { display: block; height: 100%; background: var(--tenue); transition: width .6s ease; }
+.fuerza i.sube { background: var(--vivo); } .fuerza i.baja { background: var(--baja); }
+.explica { border-top: 1px solid var(--borde); padding-top: 8px; font-size: 11.5px; color: var(--tenue); line-height: 1.5; display: flex; flex-direction: column; gap: 4px; }
+.explica .ev { font-size: 10px; color: var(--apagado); }
+@media (max-width: 760px) { .velas { height: 300px; } .pista-g { display: none; } }

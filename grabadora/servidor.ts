@@ -9,6 +9,7 @@
 //   POST /api/paper/{crear|pausar|reanudar|borrar|apagar|rearmar|reglas|orden|cerrar}  cuerpo JSON (con clave)
 //   GET  /api/avisos                   → canales activos de los avisos 24/7 (sin credenciales)  (con clave)
 //   POST /api/avisos/{guardar|probar}  configuración de Discord/Telegram/ntfy en el VPS        (con clave)
+//   GET  /api/velas?simbolo=&serie=5m&n=500 → velas [inicio, o, h, l, c, vol] (historia + grabado) (con clave)
 //   GET  /api/biblioteca               → pruebas guardadas e intentos totales                   (con clave)
 //   GET  /api/biblioteca/resultado?id= → resultado completo de una prueba                      (con clave)
 //   POST /api/biblioteca/{paper|borrar} cuerpo { id, capital?, exposicion? }                   (con clave)
@@ -26,6 +27,7 @@ import type { ApiPaper } from './botsVps';
 import type { ApiLaboratorio } from './laboratorioVps';
 import type { ApiAvisos } from './avisosVps';
 import type { ApiBiblioteca } from './bibliotecaVps';
+import { SERIES, type Serie, type VelaLab } from '../src/motores/laboratorio/velas';
 import { esMercadoId, partesMercado } from '../src/motores/mercado/mercadoId';
 
 export interface EstadoSimbolo {
@@ -54,11 +56,14 @@ export interface OpcionesServidor {
   avisos?: ApiAvisos | null;
   /** Pruebas guardadas y paso a Paper (bibliotecaVps.ts). */
   biblioteca?: ApiBiblioteca | null;
+  /** Últimas `n` velas de una serie (historia + grabado) para el gráfico. */
+  velas?: (simbolo: string, serie: Serie, n: number) => VelaLab[];
   /** Reloj (pruebas). */
   reloj?: () => number;
 }
 
 export const LIMITE_FILAS = 5_000;
+export const MAX_VELAS_GRAFICO = 1_500;
 export const COOKIE = 'athenai_sesion';
 export const DURACION_SESION_MS = 30 * 86_400_000;
 export const MAX_FALLOS = 5;
@@ -205,6 +210,14 @@ export function crearServidor(o: OpcionesServidor): http.Server {
           if (!o.paper) return json(503, { error: 'Los bots no están activos en esta grabadora' });
           void o.paper.operaciones(url.searchParams.get('bot') || undefined).then((ops) => json(200, { operaciones: ops }), (e) => json(500, { error: e instanceof Error ? e.message : String(e) }));
           return;
+        }
+        if (url.pathname === '/api/velas') {
+          const simbolo = simboloPedido(url) ?? '';
+          const serie = url.searchParams.get('serie') as Serie;
+          if (!o.velas || !/^[A-Z0-9]{2,20}$/.test(simbolo) || !SERIES.includes(serie) || serie === 'dollar') return json(400, { error: 'Pide simbolo y serie (1m, 5m, 15m, 1h o 4h).' });
+          const n = Math.min(MAX_VELAS_GRAFICO, Math.max(10, Number(url.searchParams.get('n')) || 500));
+          // Compacto: [inicio, open, high, low, close, volumen] por vela.
+          return json(200, { velas: o.velas(simbolo, serie, n).map((v) => [v.inicio, v.open, v.high, v.low, v.close, Math.round(v.volumen * 1e4) / 1e4]) });
         }
         if (url.pathname === '/api/filas') {
           const simbolo = simboloPedido(url) ?? '';

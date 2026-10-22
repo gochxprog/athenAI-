@@ -20,6 +20,7 @@ import { resumenHistoria } from './importador';
 import { atenderJuez, cargarVelas, crearLaboratorio } from './laboratorioVps';
 import { crearAvisos } from './avisosVps';
 import { crearBiblioteca } from './bibliotecaVps';
+import { MS_SERIE } from '../src/motores/laboratorio/velas';
 import { crearServidor, type EstadoSimbolo } from './servidor';
 import { almacenLocalDisco, cargadorPython, crearApiPaper, feedDe, LibroPaperDisco, senalesDisco } from './botsVps';
 import { MotorPaper } from '../src/motores/paper/motorPaper';
@@ -177,7 +178,7 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
       }, 1_000);
     });
   }
-  const servidor = crearServidor({ almacen, clave, estado, web: o.web, paper: motorBots ? crearApiPaper(motorBots) : null, historia: () => resumenHistoria(o.datos), laboratorio: crearLaboratorio({ datos: o.datos, pyodide: o.pyodide ?? null, log, alTerminar: (p, r) => biblioteca.guardar(p, r) }), avisos, biblioteca });
+  const servidor = crearServidor({ almacen, clave, estado, web: o.web, paper: motorBots ? crearApiPaper(motorBots) : null, historia: () => resumenHistoria(o.datos), laboratorio: crearLaboratorio({ datos: o.datos, pyodide: o.pyodide ?? null, log, alTerminar: (p, r) => biblioteca.guardar(p, r) }), avisos, biblioteca, velas: (s, serie, n) => (serie === 'dollar' ? [] : cargarVelas(o.datos, s, serie, 'todo', Date.now() - 3 * (n + 2) * MS_SERIE[serie]).slice(-n)) });
   const alEscuchar = () => log(`Grabadora ${VERSION} escuchando en ${o.host ?? 'todas las interfaces'}, puerto ${o.puerto} · símbolos: ${o.simbolos.join(', ')} · datos en ${o.datos}`);
   if (o.host) servidor.listen(o.puerto, o.host, alEscuchar);
   else servidor.listen(o.puerto, alEscuchar);
