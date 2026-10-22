@@ -38,6 +38,8 @@ export interface OpcionesServidor {
   web?: string | null;
   /** Bots de Paper 24/7 (botsVps.ts). */
   paper?: ApiPaper | null;
+  /** Resumen de la historia importada (importador.ts). */
+  historia?: () => unknown;
   /** Reloj (pruebas). */
   reloj?: () => number;
 }
@@ -166,6 +168,7 @@ export function crearServidor(o: OpcionesServidor): http.Server {
           const e = o.estado();
           return json(200, { ...e, almacen: o.almacen.resumen() });
         }
+        if (url.pathname === '/api/historia') return json(200, { mercados: o.historia?.() ?? [] });
         if (url.pathname === '/api/sesiones') {
           const simbolo = simboloPedido(url);
           return json(200, { sesiones: o.almacen.sesiones(simbolo === null ? undefined : simbolo) });
@@ -195,6 +198,8 @@ export function crearServidor(o: OpcionesServidor): http.Server {
     if (o.web) {
       const rel = path.normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, '');
       let archivo = path.resolve(o.web, `.${rel === '/' || rel === '\\' ? '/index.html' : rel}`);
+      // Carpeta con su propio index.html (p. ej. /v2/, la versión nueva): se sirve ese.
+      if (archivo.startsWith(path.resolve(o.web)) && fs.existsSync(archivo) && fs.statSync(archivo).isDirectory()) archivo = path.join(archivo, 'index.html');
       if (!archivo.startsWith(path.resolve(o.web)) || !fs.existsSync(archivo) || fs.statSync(archivo).isDirectory()) archivo = path.join(o.web, 'index.html');
       if (fs.existsSync(archivo)) {
         res.writeHead(200, { 'Content-Type': TIPOS[path.extname(archivo)] ?? 'application/octet-stream' });

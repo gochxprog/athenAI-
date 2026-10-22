@@ -1,0 +1,46 @@
+.panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; animation: entrar .35s ease; }
+.panel h1 { font-weight: 300; font-size: 26px; letter-spacing: -.01em; margin-top: 4px; }
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.tarjeta { background: #000; border: 1px solid var(--borde2); border-radius: 10px; padding: 11px 13px; min-width: 0; }
+.tarjeta .fila { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-top: 7px; }
+.tarjeta .valor { font-size: 19px; font-weight: 500; white-space: nowrap; }
+.tarjeta .nota { color: var(--tenue); font-size: 10.5px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kpis .tarjeta .fila { flex-direction: column; align-items: flex-start; gap: 2px; }
+.kpis .tarjeta .nota { color: var(--apagado); text-align: left; }
+.barra { height: 3px; border-radius: 2px; background: var(--borde2); margin-top: 9px; overflow: hidden; }
+.barra i { display: block; height: 100%; background: var(--txt); }
+.linea { width: 100%; height: 22px; margin-top: 6px; } .linea polyline { fill: none; stroke: var(--tenue); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+/* Escena: fondo liso (sin cuadrícula) con un brillo suave detrás del cerebro. */
+.escena { position: relative; min-height: 480px; overflow: hidden; background: radial-gradient(ellipse at center, rgba(255, 255, 255, .035), transparent 55%), #000; }
+.cerebro { position: absolute; inset: 14px 250px 70px; }
+.hilos { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+.col { position: absolute; top: 20px; bottom: 70px; width: 220px; display: flex; flex-direction: column; justify-content: space-around; gap: 10px; z-index: 2; }
+.col.izq { left: 18px; } .col.der { right: 18px; }
+.col .tarjeta { background: #000; border-color: var(--borde2); }
+.lectura { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); text-align: center; z-index: 2; width: min(560px, 50%); }
+.lectura b { display: block; font-weight: 300; font-size: 21px; letter-spacing: -.01em; margin-top: 4px; }
+.abajo-panel { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; }
+.bloque { padding: 12px 14px; }
+.estaciones { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 10px; }
+.estacion { position: relative; border: 1px solid var(--borde2); border-radius: 9px; padding: 10px 12px; background: var(--panel2); display: flex; flex-direction: column; }
+.estacion b { font-size: 22px; font-weight: 500; margin: 6px 0 2px; } .estacion small { color: var(--tenue); font-size: 10.5px; }
+.estacion.on { border-color: var(--txt); box-shadow: 0 0 0 1px var(--txt), 0 0 22px -8px #fff; } .estacion.on .et { color: var(--txt); }
+.estacion.bloq { opacity: .45; }
+.estacion:not(:last-child)::after { content: '→'; position: absolute; right: -6px; top: 50%; transform: translate(50%, -50%); color: var(--apagado); font-size: 11px; }
+.registro { font-size: 11px; line-height: 1.95; color: var(--tenue); overflow: hidden; }
+.registro b { color: var(--txt); font-weight: 500; } .registro .quien { color: var(--txt); }
+.registro > div:not(.et) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } .abajo-panel { grid-template-columns: minmax(0, 1fr); } .cerebro { inset: 14px 200px 70px; } .col { width: 180px; } }
+@media (max-width: 760px) {
+  .panel h1 { font-size: 21px; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); order: 2; } .kpis .tarjeta:last-child { grid-column: span 2; }
+  .escena { order: 1; } .abajo-panel { order: 3; }
+  /* Celular: el cerebro arriba, la lectura debajo y las tarjetas una tras otra. */
+  .escena { min-height: 0; display: flex; flex-direction: column; }
+  .cerebro { position: relative; inset: auto; height: 340px; order: 0; }
+  .lectura { position: relative; left: auto; bottom: auto; transform: none; width: auto; padding: 0 14px 14px; order: 1; }
+  .lectura b { font-size: 18px; }
+  .col, .col.izq, .col.der { position: relative; inset: auto; width: auto; padding: 0 12px 12px; gap: 8px; order: 2; }
+  .estaciones { grid-template-columns: repeat(5, minmax(108px, 1fr)); overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
+  .estacion { scroll-snap-align: start; }
+}

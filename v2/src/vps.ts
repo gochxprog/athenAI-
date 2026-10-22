@@ -1,0 +1,85 @@
+// Datos reales de la grabadora (VPS), en la misma dirección que la página. Un solo sondeo para toda la app.
+import { useEffect, useState } from 'react';
+import type { Bot, OperacionPaper } from '@/motores/paper/ejecutor';
+import type { EventoPaper } from '@/motores/paper/motorPaper';
+
+export interface Mercado { simbolo: string; conexion: string; filasSesion: number; ultimoCierre: number | null; cortes: number }
+export interface Fila { cierre: number; close: number; valores: Record<string, number | null> }
+export interface Historia { carpeta: string; dias: number; desde: string | null; hasta: string | null; bytes: number; importando: boolean }
+export interface Vps {
+  listo: boolean;
+  /** La página se abrió sin entrar con la clave. */
+  sinSesion: boolean;
+  /** La grabadora no responde. */
+  caido: boolean;
+  inicio: number | null;
+  mercados: Mercado[];
+  almacen: { simbolo: string; filas: number; desde: number | null }[];
+  historia: Historia[];
+  bots: Bot[];
+  bitacora: EventoPaper[];
+  ops: OperacionPaper[];
+  /** Últimas filas (≈ 30 min) de cada mercado: precio y Features recién calculadas. */
+  filas: Record<string, Fila[]>;
+}
+
+const CADA_MS = 5_000;
+let actual: Vps = { listo: false, sinSesion: false, caido: false, inicio: null, mercados: [], almacen: [], historia: [], bots: [], bitacora: [], ops: [], filas: {} };
+const oyentes = new Set<(v: Vps) => void>();
+let reloj: ReturnType<typeof setTimeout> | null = null;
+/** La grabadora respondió que no tiene bots (BOTS=0): no se vuelve a preguntar. */
+let sinBots = false;
+
+async function pedir<T>(ruta: string): Promise<T | null> {
+  if (sinBots && ruta.startsWith('/api/paper')) return null;
+  const r = await fetch(ruta, { credentials: 'same-origin' });
+  if (r.status === 401) throw new Error('sin-sesion');
+  if (r.status === 503 && ruta.startsWith('/api/paper')) sinBots = true;
+  return r.ok ? ((await r.json()) as T) : null;
+}
+
+async function sondear(): Promise<void> {
+  try {
+    const [e, h, p, o] = await Promise.all([
+      pedir<{ inicio: number; simbolos: Mercado[]; almacen: Vps['almacen'] }>('/api/estado'),
+      pedir<{ mercados: Historia[] }>('/api/historia').catch(() => null),
+      pedir<{ bots: Bot[]; bitacora: EventoPaper[] }>('/api/paper').catch(() => null),
+      pedir<{ operaciones: OperacionPaper[] }>('/api/paper/operaciones').catch(() => null),
+    ]);
+    if (!e) throw new Error('caido');
+    const filas = Object.fromEntries(
+      await Promise.all(
+        e.simbolos.filter((m) => m.ultimoCierre).map(async (m) => [m.simbolo, (await pedir<{ filas: Fila[] }>(`/api/filas?simbolo=${m.simbolo}&desde=${m.ultimoCierre! - 1_800_000}&limite=400`).catch(() => null))?.filas ?? actual.filas[m.simbolo] ?? []] as const),
+      ),
+    );
+    actual = { listo: true, sinSesion: false, caido: false, inicio: e.inicio, mercados: e.simbolos, almacen: e.almacen, historia: h?.mercados ?? [], bots: p?.bots ?? [], bitacora: p?.bitacora ?? [], ops: o?.operaciones ?? [], filas };
+  } catch (err) {
+    actual = { ...actual, listo: true, sinSesion: (err as Error).message === 'sin-sesion', caido: (err as Error).message !== 'sin-sesion' };
+  }
+  oyentes.forEach((f) => f(actual));
+  reloj = oyentes.size ? setTimeout(sondear, CADA_MS) : null;
+}
+
+export function useVps(): Vps {
+  const [v, setV] = useState(actual);
+  useEffect(() => {
+    oyentes.add(setV);
+    if (!reloj) void sondear();
+    return () => void oyentes.delete(setV);
+  }, []);
+  return v;
+}
+
+/** Operaciones cerradas hoy (hora local). */
+export const deHoy = (ops: OperacionPaper[]) => {
+  const hoy = new Date().toDateString();
+  return ops.filter((o) => new Date(o.salidaT).toDateString() === hoy);
+};
+
+/** Lo último que pasó (bots, Guardián, grabadora): alimenta la cinta y el registro del día. */
+export function movimientos(v: Vps): { t: number; quien: string; texto: string }[] {
+  const bots = v.bitacora.map((e) => ({ t: e.t, quien: e.nombre.toUpperCase(), texto: e.texto }));
+  const mercados = v.mercados.map((m) => ({ t: m.ultimoCierre ?? 0, quien: 'GRABADORA', texto: `${m.simbolo} ${m.conexion} · ${m.filasSesion.toLocaleString('es')} filas en esta sesión${m.cortes ? ` · ${m.cortes} cortes` : ''}` }));
+  const historia = v.historia.filter((h) => h.dias).map((h) => ({ t: 0, quien: 'HISTORIA', texto: `${h.carpeta.replace('binance_', '').toUpperCase()} · ${h.dias} días importados${h.importando ? ' · importando…' : ''}` }));
+  return [...bots, ...mercados, ...historia].sort((a, b) => b.t - a.t);
+}

@@ -219,7 +219,10 @@ export async function importar(o: OpcionesImportador): Promise<ResultadoImportac
   let tramo: { pipeline: Pipeline; sesion: number; ultimo: string } | null = null;
   const funding = new Map<string, { t: number; tasa: number }[]>();
 
+  const progreso = (dia: string | null, fin = false) =>
+    fs.writeFileSync(path.join(dirMercado, 'progreso.json'), JSON.stringify({ desde: o.desde, hasta: o.hasta, dia, hechos: res.dias, total: pendientes.length, fin, t: Date.now() }));
   for (const dia of pendientes) {
+    progreso(dia);
     if (libre() < MINIMO_LIBRE) {
       log(`Me detengo: queda poco disco libre en el VPS. Importado hasta ${tramo?.ultimo ?? '—'}.`);
       break;
@@ -311,8 +314,32 @@ export async function importar(o: OpcionesImportador): Promise<ResultadoImportac
     }
   }
   fs.rmSync(tmp, { recursive: true, force: true });
+  progreso(null, true);
   log(`Listo: ${res.dias} días, ${res.filas.toLocaleString('es')} filas${res.saltados.length ? ` · sin datos: ${res.saltados.join(', ')}` : ''}.`);
   return res;
+}
+
+/** Resumen de la historia importada por mercado (para la plataforma): días hechos, rango, disco y progreso. */
+export function resumenHistoria(datos: string) {
+  const raiz = path.join(datos, 'historia', 'mercados');
+  if (!fs.existsSync(raiz)) return [];
+  return fs.readdirSync(raiz).map((carpeta) => {
+    const dir = path.join(raiz, carpeta);
+    const leer = <T>(f: string, x: T): T => {
+      try {
+        return JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')) as T;
+      } catch {
+        return x;
+      }
+    };
+    const dias = leer<string[]>('importados.json', []).sort();
+    const filas = path.join(dir, 'filas');
+    const bytes = fs.existsSync(filas) ? fs.readdirSync(filas).reduce((s, f) => s + fs.statSync(path.join(filas, f)).size, 0) : 0;
+    const p = leer<{ fin: boolean; t: number; dia: string | null; hechos: number; total: number } | null>('progreso.json', null);
+    // «Importando» si no terminó y escribió progreso hace poco (un día de BTC tarda ~1–2 min).
+    const importando = !!p && !p.fin && Date.now() - p.t < 10 * 60_000;
+    return { carpeta, dias: dias.length, desde: dias[0] ?? null, hasta: dias[dias.length - 1] ?? null, bytes, importando, progreso: p };
+  });
 }
 
 // Arranque como programa: node importar.mjs BTCUSDT 2026-04-01 2026-10-20

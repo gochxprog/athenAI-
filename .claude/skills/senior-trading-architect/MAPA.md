@@ -1,14 +1,14 @@
 # Mapa del código · AthenAI
 
-Generado por `scripts/mapa.mjs` (220 archivos). Leer esto antes de explorar.
+Generado por `scripts/mapa.mjs` (221 archivos). Leer esto antes de explorar.
 Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 
 ## grabadora
 - `almacenDisco.ts` → mercadoId.ts, features.ts, parametros.ts · ← botsVps.ts, grabadora.ts, importador.ts, servidor.ts · 🧪 bots.test.ts, cliente.test.ts, grabadora.test.ts, importador.test.ts
 - `botsVps.ts` → almacenDisco.ts, protocolo.ts, python.ts, pipeline.ts, almacenPaper.ts, ejecutor.ts, motorPaper.ts, protocolo.ts · ← grabadora.ts, servidor.ts · 🧪 bots.test.ts
 - `build.mjs`
-- `grabadora.ts` → almacenDisco.ts, botsVps.ts, servidor.ts, binance.ts, calendario.ts, parametros.ts, pipeline.ts, tipos.ts, motorPaper.ts · 🧪 grabadora.test.ts
-- `importador.ts` → almacenDisco.ts, mercadoId.ts, calendario.ts, parametros.ts, pipeline.ts, tipos.ts · 🧪 importador.test.ts
+- `grabadora.ts` → almacenDisco.ts, botsVps.ts, importador.ts, servidor.ts, binance.ts, calendario.ts, parametros.ts, pipeline.ts, tipos.ts, motorPaper.ts · 🧪 grabadora.test.ts
+- `importador.ts` → almacenDisco.ts, mercadoId.ts, calendario.ts, parametros.ts, pipeline.ts, tipos.ts · ← grabadora.ts · 🧪 importador.test.ts
 - `servidor.ts` → almacenDisco.ts, botsVps.ts, mercadoId.ts · ← grabadora.ts · 🧪 bots.test.ts, cliente.test.ts, grabadora.test.ts
 
 ## src
@@ -73,8 +73,9 @@ Formato: `archivo` → importa · ← lo importan · 🧪 prueba
 - `comun.ts` → format.ts, cliente.ts, ejecutor.ts, iniciar.ts, motorCliente.ts · ← 9 archivos
 
 ## components/three
-- `EsferaCerebro.tsx` · ← DashboardView.tsx
+- `EsferaCerebro.tsx` → ojo.ts · ← DashboardView.tsx
 - `SalaAgentes3D.tsx` → pantallas.ts, agentes.ts · ← AgentesView.tsx
+- `ojo.ts` · ← EsferaCerebro.tsx
 - `pantallas.ts` → agentes.ts · ← SalaAgentes3D.tsx
 
 ## components/ui

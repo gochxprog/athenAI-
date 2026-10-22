@@ -1,0 +1,25 @@
+/* AthenAI v2 · gris cemento sobre negro (maqueta A). Un solo lugar para colores, letras y piezas base. */
+:root {
+  --bg: #000; --panel: #000; --panel2: #050506; --borde: #1e1e21; --borde2: #2c2c30;
+  --txt: #f2f3f5; --tenue: #8e929a; --apagado: #565a62;
+  --vivo: #7ee2a8; --baja: #e5848b;
+  --mono: 'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, monospace;
+  --radio: 11px;
+}
+* { box-sizing: border-box; margin: 0; }
+html, body, #raiz { height: 100%; }
+body { background: var(--bg); color: var(--txt); font: 13px/1.45 Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+.mono, .cifra { font-family: var(--mono); }
+.cifra { font-variant-numeric: tabular-nums; }
+.et { font: 600 9.5px/1.2 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--tenue); }
+.tenue { color: var(--tenue); } .apagado { color: var(--apagado); } .vivo { color: var(--vivo); } .baja { color: var(--baja); }
+.caja { background: var(--panel); border: 1px solid var(--borde); border-radius: var(--radio); }
+.punto { width: 6px; height: 6px; border-radius: 50%; background: var(--apagado); flex: none; }
+.punto.on { background: var(--vivo); box-shadow: 0 0 8px var(--vivo); animation: latido 2.4s ease-in-out infinite; }
+@keyframes latido { 50% { opacity: .35; } }
+@keyframes cinta { to { transform: translateX(-50%); } }
+@keyframes entrar { from { opacity: 0; transform: translateY(6px); } }
+/* Lo que usa el cerebro 3D (escrito con clases de Tailwind en la versión actual). */
+.relative { position: relative; } .h-full { height: 100%; } .w-full { width: 100%; }

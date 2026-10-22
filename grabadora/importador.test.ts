@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
-import { diasEntre, entradaZip, fundingDeCsv, importar, lineasZip, oiDeCsv, tradeDeCsv, urlFunding, urlMetricas, urlTrades } from './importador';
+import { diasEntre, entradaZip, fundingDeCsv, importar, lineasZip, oiDeCsv, resumenHistoria, tradeDeCsv, urlFunding, urlMetricas, urlTrades } from './importador';
 import { leerLineas, type FilaDisco } from './almacenDisco';
 import { Pipeline } from '../src/motores/nucleo/pipeline';
 import { parametrosPorDefecto } from '../src/motores/nucleo/parametros';
@@ -199,6 +199,17 @@ describe('Importador de la historia de Binance', () => {
     await importar({ simbolo: 'BTCUSDT', desde: '2026-07-01', hasta: '2026-07-03', datos, bajar, log: silencio, libre: () => Infinity });
     expect(pedidas.some((u) => u.includes('2026-07-01'))).toBe(false);
     expect(leerHistoria(datos).length).toBe(total);
+  });
+
+  it('resume la historia para la plataforma: días, rango, disco y si terminó', async () => {
+    const datos = temporal();
+    expect(resumenHistoria(datos)).toEqual([]);
+    const { bajar } = binanceFalso({ '2026-07-01': { trades: tradesDia(0) }, '2026-07-02': { trades: tradesDia(1) } });
+    await importar({ simbolo: 'BTCUSDT', desde: '2026-07-01', hasta: '2026-07-02', datos, bajar, log: silencio, libre: () => Infinity });
+    const [r] = resumenHistoria(datos);
+    expect(r).toMatchObject({ carpeta: 'binance_btcusdt', dias: 2, desde: '2026-07-01', hasta: '2026-07-02', importando: false });
+    expect(r.bytes).toBeGreaterThan(0);
+    expect(r.progreso).toMatchObject({ fin: true, hechos: 2, total: 2 });
   });
 
   it('se detiene si el disco del VPS se está llenando', async () => {

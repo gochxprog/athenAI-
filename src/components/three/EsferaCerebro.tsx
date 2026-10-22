@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { crearOjo } from './ojo';
 
 // -----------------------------------------------------------------------------
 // Cerebro de Deep Learning: red de partículas (nodos = neuronas, líneas = sinapsis) dentro de una membrana
@@ -364,10 +365,14 @@ interface Props {
   onListo?: (info: { nodos: number; sinapsis: number }) => void;
   /** Contador de eventos reales (absorción, iceberg, liquidación…): cada aumento es un golpe fuerte. */
   eventos?: number;
+  /** Ojo dentro del cerebro (versión 2): sigue los golpes, mira hacia donde entra el dato y parpadea. */
+  ojo?: boolean;
+  /** false oculta los haces de entrada/salida (la versión 2 dibuja sus propias líneas finas hacia las tarjetas). */
+  haces?: boolean;
   className?: string;
 }
 
-export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer = [0.62, 0, -0.62], actividad = 1, onListo, eventos = 0, className = '' }: Props) {
+export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer = [0.62, 0, -0.62], actividad = 1, onListo, eventos = 0, ojo: conOjo = false, haces = true, className = '' }: Props) {
   const contRef = useRef<HTMLDivElement>(null);
   const anclas = useRef({ izq: anclasIzq, der: anclasDer, rehacer: () => {} });
   const actividadRef = useRef(actividad);
@@ -511,6 +516,8 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
     const nucleo = new THREE.Sprite(new THREE.SpriteMaterial({ map: halo, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
     nucleo.scale.setScalar(RADIO * 1.7);
     escena.add(nucleo);
+    const ojo = conOjo ? crearOjo() : null;
+    if (ojo) escena.add(ojo.grupo);
 
     // Haces de entrada / salida
     const matEntrada = new THREE.LineBasicMaterial({ color: 0xb8bbc2, transparent: true, opacity: 0.3, depthWrite: false });
@@ -535,6 +542,7 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
     const senales = new THREE.Points(geoSenal, matSenal);
     senales.frustumCulled = false;
     escena.add(senales);
+    lineasEntrada.visible = lineasSalida.visible = senales.visible = haces;
 
     // Impulsos internos: recorren sinapsis de nodo en nodo (espacio local del cerebro)
     const posImp = new Float32Array(POOL_IMPULSOS * 3);
@@ -834,6 +842,7 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
       attrBrillo.needsUpdate = true;
       nucleo.material.opacity = 0.7 + Math.sin(t * 1.4) * 0.18;
 
+      ojo?.actualizar(dt, t, golpes, cerebro.quaternion);
       renderer.render(escena, camara);
     };
     tick();
@@ -857,7 +866,7 @@ export default function EsferaCerebro({ anclasIzq = [0.62, 0, -0.62], anclasDer 
       renderer.dispose();
       canvas.remove();
     };
-  }, []);
+  }, [conOjo, haces]);
 
   return <div ref={contRef} className={`relative h-full w-full ${className}`} />;
 }

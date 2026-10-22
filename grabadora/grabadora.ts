@@ -16,6 +16,7 @@ import { inferirTick, parametrosParaSimbolo, parametrosPorDefecto, type Parametr
 import { EVENTOS_PREDEFINIDOS } from '../src/motores/nucleo/calendario';
 import type { MensajeMercado } from '../src/motores/nucleo/tipos';
 import { AlmacenDisco } from './almacenDisco';
+import { resumenHistoria } from './importador';
 import { crearServidor, type EstadoSimbolo } from './servidor';
 import { almacenLocalDisco, cargadorPython, crearApiPaper, feedDe, LibroPaperDisco, senalesDisco } from './botsVps';
 import { MotorPaper } from '../src/motores/paper/motorPaper';
@@ -168,7 +169,7 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
       }, 1_000);
     });
   }
-  const servidor = crearServidor({ almacen, clave, estado, web: o.web, paper: motorBots ? crearApiPaper(motorBots) : null });
+  const servidor = crearServidor({ almacen, clave, estado, web: o.web, paper: motorBots ? crearApiPaper(motorBots) : null, historia: () => resumenHistoria(o.datos) });
   const alEscuchar = () => log(`Grabadora ${VERSION} escuchando en ${o.host ?? 'todas las interfaces'}, puerto ${o.puerto} · símbolos: ${o.simbolos.join(', ')} · datos en ${o.datos}`);
   if (o.host) servidor.listen(o.puerto, o.host, alEscuchar);
   else servidor.listen(o.puerto, alEscuchar);

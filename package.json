@@ -8,11 +8,13 @@
     "build": "tsc --noEmit -p tsconfig.app.json && vitest run && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "v2:dev": "vite --config v2/vite.config.ts",
+    "v2:build": "vite build --config v2/vite.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p grabadora/tsconfig.json",
     "test": "vitest run",
     "grabadora:build": "node grabadora/build.mjs",
     "grabadora": "node grabadora/build.mjs && node grabadora/dist/grabadora.mjs",
-    "grabadora:paquete": "vite build && node grabadora/build.mjs && bash grabadora/empaquetar.sh"
+    "grabadora:paquete": "vite build && vite build --config v2/vite.config.ts && node grabadora/build.mjs && bash grabadora/empaquetar.sh"
   },
   "dependencies": {
     "@react-three/drei": "^9.117.3",
