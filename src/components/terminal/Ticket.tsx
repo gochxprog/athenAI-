@@ -3,6 +3,7 @@
 // La vista previa dibuja la «regla de R»: dónde quedan el stop, la entrada y el objetivo, y cuánto vale 1R.
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import Pildora from '@/components/ui/Pildora';
 import { useFeeds } from '@/components/orderflow/OrderFlowChart';
 import { motorOrderFlow } from '@/motores/worker/motorCliente';
 import { mercadoDe, CAPITAL_MANUAL, idManual } from '@/motores/paper/motorPaper';
@@ -89,7 +90,7 @@ export default function Ticket() {
       <div className="relative grid grid-cols-2 gap-1 rounded-xl border border-borde p-1" role="radiogroup" aria-label="Lado">
         {([1, -1] as const).map((l) => (
           <button key={l} role="radio" aria-checked={lado === l} onClick={() => setLado(l)} className={`relative rounded-lg py-2.5 text-xs font-medium transition-colors ${lado === l ? 'text-black' : 'text-plata-300 hover:text-white'}`} data-lado={l}>
-            {lado === l && <motion.span layoutId="ticket-lado" className="absolute inset-0 rounded-lg bg-white" transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
+            {lado === l && <Pildora id="ticket-lado" className="absolute inset-0 rounded-lg bg-white" rigidez={420} />}
             <span className="relative">
               {l === 1 ? '▲ Comprar' : '▼ Vender'} <span className="cifra font-light opacity-70">{l === 1 ? num(m?.ask ?? m?.precio ?? 0, 2) : num(m?.bid ?? m?.precio ?? 0, 2)}</span>
             </span>

@@ -1,10 +1,12 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { EstadoGrafico } from '@/motores/nucleo/pipeline';
 import { decimalesDe, num } from '@/lib/format';
 import { AGRUPACIONES, agruparLibro, escalon } from './agruparLibro';
 
 /** Alto de cada fila (17 px + 1 px arriba y abajo): para centrar el spread al desplazarse. */
 const ALTO_FILA = 19;
+/** Filas extra dibujadas arriba y abajo de lo visible (solo se dibuja lo que se ve: 400 filas a 5 Hz traban el celular). */
+const MARGEN_FILAS = 12;
 const fmtQ = (v: number) => (v === 0 ? '' : v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2));
 
 /**
@@ -18,6 +20,7 @@ export default function DomEscalera({ estado }: { estado: EstadoGrafico | null }
   const [seguir, setSeguir] = useState(true);
   const lista = useRef<HTMLDivElement>(null);
   const programado = useRef(false);
+  const [vista, setVista] = useState({ arriba: 0, alto: 600 });
 
   const { filas, nAsks, paso } = useMemo(() => {
     const libro = estado?.libro;
@@ -50,12 +53,22 @@ export default function DomEscalera({ estado }: { estado: EstadoGrafico | null }
   useLayoutEffect(() => {
     const el = lista.current;
     if (!el || !seguir || !filas.length) return;
-    const objetivo = Math.max(0, nAsks * ALTO_FILA - el.clientHeight / 2);
-    if (Math.abs(el.scrollTop - objetivo) > 1) {
+    const objetivo = Math.max(0, Math.min(nAsks * ALTO_FILA - vista.alto / 2, filas.length * ALTO_FILA - vista.alto));
+    if (Math.abs(vista.arriba - objetivo) > 1) {
       programado.current = true;
       el.scrollTop = objetivo;
     }
-  }, [filas, nAsks, seguir]);
+  }, [filas, nAsks, seguir, vista]);
+  // Alto visible de la lista (sin medir en cada actualización: medir obliga al navegador a recalcular la página).
+  useEffect(() => {
+    const el = lista.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setVista((v) => ({ ...v, alto: el.clientHeight })));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const desde = Math.max(0, Math.floor(vista.arriba / ALTO_FILA) - MARGEN_FILAS);
+  const hasta = Math.min(filas.length, Math.ceil((vista.arriba + vista.alto) / ALTO_FILA) + MARGEN_FILAS);
   useEffect(() => setSeguir(true), [factor, estado?.simbolo]);
 
   const libro = estado?.libro;
@@ -96,31 +109,46 @@ export default function DomEscalera({ estado }: { estado: EstadoGrafico | null }
       </div>
       <div
         ref={lista}
-        className="min-h-0 flex-1 overflow-y-auto font-mono text-[10.5px]"
+        className="min-h-0 flex-1 overflow-y-auto font-mono text-[10.5px] [contain:strict]"
         data-dom-niveles={filas.length}
-        onScroll={() => {
+        onScroll={(e) => {
+          const arriba = e.currentTarget.scrollTop;
+          setVista((v) => (v.arriba === arriba ? v : { ...v, arriba }));
           if (programado.current) programado.current = false;
           else setSeguir(false);
         }}
       >
         {filas.length === 0 && <p className="p-4 text-center text-plata-500">Sin libro todavía</p>}
-        {filas.map((f, i) => {
+        {desde > 0 && <div style={{ height: desde * ALTO_FILA }} />}
+        {filas.slice(desde, hasta).map((f, j) => {
+          const i = desde + j;
           const mejor = (f.lado === 'ask' && i === nAsks - 1) || (f.lado === 'bid' && i === nAsks);
-          return (
-            <div key={`${f.lado}${f.p}`} className={`grid grid-cols-[1fr_1fr_64px_1fr_1fr] items-center px-1 ${mejor ? 'bg-white/[0.05]' : ''} ${f.lado === 'bid' && i === nAsks ? 'border-t border-plata-500' : ''}`}>
-              <Celda pct={f.pctVenta} valor={fmtQ(f.venta)} derecha />
-              {f.lado === 'bid' ? <Celda pct={f.pct} valor={fmtQ(f.tam)} derecha fuerte={f.imb} tendencia={f.tendencia} /> : <span />}
-              <span className={`py-[3px] text-center ${mejor ? 'text-white' : 'text-plata-300'}`}>{num(f.p, dp)}</span>
-              {f.lado === 'ask' ? <Celda pct={f.pct} valor={fmtQ(f.tam)} fuerte={f.imb} tendencia={f.tendencia} /> : <span />}
-              <Celda pct={f.pctCompra} valor={fmtQ(f.compra)} />
-            </div>
-          );
+          return <FilaDom key={`${f.lado}${f.p}`} f={f} mejor={mejor} borde={f.lado === 'bid' && i === nAsks} dp={dp} />;
         })}
+        {hasta < filas.length && <div style={{ height: (filas.length - hasta) * ALTO_FILA }} />}
       </div>
       <p className="border-t border-borde-suave px-3 py-1.5 text-[9.5px] leading-snug text-plata-500">{Math.floor(filas.length / 2)} niveles por lado · ▲ stacking · ▼ pulling · borde = nivel ≥ 3× el siguiente</p>
     </div>
   );
 }
+
+type Fila = { p: number; tam: number; tendencia: number; lado: 'ask' | 'bid'; compra: number; venta: number; pct: number; pctCompra: number; pctVenta: number; imb: boolean };
+
+/** Una fila del DOM; con `memo` solo se vuelve a dibujar si cambió su nivel. */
+const FilaDom = memo(
+  function FilaDom({ f, mejor, borde, dp }: { f: Fila; mejor: boolean; borde: boolean; dp: number }) {
+    return (
+      <div className={`grid grid-cols-[1fr_1fr_64px_1fr_1fr] items-center px-1 ${mejor ? 'bg-white/[0.05]' : ''} ${borde ? 'border-t border-plata-500' : ''}`}>
+        <Celda pct={f.pctVenta} valor={fmtQ(f.venta)} derecha />
+        {f.lado === 'bid' ? <Celda pct={f.pct} valor={fmtQ(f.tam)} derecha fuerte={f.imb} tendencia={f.tendencia} /> : <span />}
+        <span className={`py-[3px] text-center ${mejor ? 'text-white' : 'text-plata-300'}`}>{num(f.p, dp)}</span>
+        {f.lado === 'ask' ? <Celda pct={f.pct} valor={fmtQ(f.tam)} fuerte={f.imb} tendencia={f.tendencia} /> : <span />}
+        <Celda pct={f.pctCompra} valor={fmtQ(f.compra)} />
+      </div>
+    );
+  },
+  (a, b) => a.mejor === b.mejor && a.borde === b.borde && a.dp === b.dp && (Object.keys(a.f) as (keyof Fila)[]).every((k) => a.f[k] === b.f[k]),
+);
 
 function Dato({ k, v }: { k: string; v: string }) {
   return (

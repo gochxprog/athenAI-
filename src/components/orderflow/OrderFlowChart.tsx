@@ -180,7 +180,7 @@ export default function OrderFlowChart({ estado, marcas }: { estado: EstadoGrafi
             Arrastrar: mover · dos dedos o rueda: zoom · eje de precio: estirar · doble toque: volver al vivo
           </span>
         </div>
-        <div className={`border-t border-borde-suave lg:min-h-0 lg:border-l lg:border-t-0 ${completa ? 'hidden lg:block' : 'min-h-[420px]'}`}>
+        <div className={`border-t border-borde-suave lg:min-h-0 lg:border-l lg:border-t-0 ${completa ? 'hidden lg:block' : 'h-[420px] lg:h-auto'}`}>
           <DomEscalera estado={estado} />
         </div>
       </div>

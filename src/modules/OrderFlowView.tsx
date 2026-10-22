@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import Pildora from '@/components/ui/Pildora';
 import { Activity, BookOpen, Brain, Cpu, Download, ListTree, Table2 } from 'lucide-react';
 import Encabezado from '@/components/ui/Encabezado';
 import Panel from '@/components/ui/Panel';
@@ -64,7 +64,7 @@ export default function OrderFlowView() {
           ] as const
         ).map(([id, titulo, Icono]) => (
           <button key={id} onClick={() => setPestana(id)} className={`relative flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-xs ${pestana === id ? 'text-black' : 'text-plata-300 hover:text-white'}`}>
-            {pestana === id && <motion.span layoutId="pestana-of" className="absolute inset-0 rounded-lg bg-white" transition={{ type: 'spring', stiffness: 400, damping: 34 }} />}
+            {pestana === id && <Pildora id="pestana-of" className="absolute inset-0 rounded-lg bg-white" />}
             <Icono size={13} className="relative" />
             <span className="relative">{titulo}</span>
           </button>

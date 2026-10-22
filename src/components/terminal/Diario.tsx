@@ -2,6 +2,7 @@
 // todas las métricas y el detalle de cada día. Sale de las operaciones cerradas de Paper (bots y a mano), en tu hora.
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
+import Pildora from '@/components/ui/Pildora';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Panel from '@/components/ui/Panel';
 import { fichaDeOperacion } from '@/motores/diario/desdePaper';
@@ -67,7 +68,7 @@ export default function Diario({ ops }: { ops: OperacionPaper[] }) {
         <div className="ml-auto flex rounded-lg border border-borde p-0.5 text-[11px]" role="radiogroup" aria-label="Vista">
           {(['mes', 'anio'] as const).map((v) => (
             <button key={v} role="radio" aria-checked={vista === v} onClick={() => setVista(v)} className={`relative rounded-md px-3 py-1 ${vista === v ? 'text-black' : 'text-plata-300 hover:text-white'}`}>
-              {vista === v && <motion.span layoutId="diario-vista" className="absolute inset-0 rounded-md bg-white" transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
+              {vista === v && <Pildora id="diario-vista" className="absolute inset-0 rounded-md bg-white" rigidez={420} />}
               <span className="relative">{v === 'mes' ? 'Mes' : 'Año'}</span>
             </button>
           ))}

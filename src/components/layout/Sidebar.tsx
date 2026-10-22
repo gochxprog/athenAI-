@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import Pildora from '@/components/ui/Pildora';
 import { Lock, Menu, X } from 'lucide-react';
 import { MENU } from '@/data/menu';
 import { AGENTES } from '@/data/agentes';
@@ -71,11 +72,7 @@ export default function Sidebar({ activo, onSeleccion }: Props) {
                       }`}
                     >
                       {sel && (
-                        <motion.span
-                          layoutId="menu-activo"
-                          className="absolute inset-0 rounded-lg border border-borde-fuerte bg-white/[0.06]"
-                          transition={{ type: 'spring', stiffness: 380, damping: 34 }}
-                        />
+                        <Pildora id="menu-activo" className="absolute inset-0 rounded-lg border border-borde-fuerte bg-white/[0.06]" rigidez={380} />
                       )}
                       <Icono size={16} strokeWidth={1.5} className={`relative ${sel ? 'text-white' : 'text-plata-500 group-hover:text-plata-300'}`} />
                       <span className="relative flex-1 text-left">{it.etiqueta}</span>

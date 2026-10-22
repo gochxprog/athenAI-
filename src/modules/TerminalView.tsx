@@ -4,6 +4,7 @@
 // Reemplaza la antigua pantalla de Paper Trading: todo lo que hacía sigue aquí.
 import { useMemo, useState, useSyncExternalStore } from 'react';
 import { motion } from 'framer-motion';
+import Pildora from '@/components/ui/Pildora';
 import { Bot as IconoBot, CalendarDays, CandlestickChart, Crosshair, Layers } from 'lucide-react';
 import Encabezado from '@/components/ui/Encabezado';
 import Panel from '@/components/ui/Panel';
@@ -76,7 +77,7 @@ export default function TerminalView() {
           const sel = p.id === pestana;
           return (
             <button key={p.id} role="tab" aria-selected={sel} data-pestana-terminal={p.id} onClick={() => setPestana(p.id)} className={`relative flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs transition-colors ${sel ? 'text-black' : 'text-plata-300 hover:text-white'}`}>
-              {sel && <motion.span layoutId="pestana-terminal" className="absolute inset-0 rounded-lg bg-white" transition={{ type: 'spring', stiffness: 400, damping: 34 }} />}
+              {sel && <Pildora id="pestana-terminal" className="absolute inset-0 rounded-lg bg-white" />}
               <Icono size={13} className="relative" />
               <span className="relative">{p.titulo}</span>
             </button>
