@@ -22,6 +22,8 @@ const LIMITE_MS = 30 * 60_000;
 export interface ApiLaboratorio {
   accion(nombre: string, cuerpo: Record<string, unknown>): Promise<unknown>;
   trabajo(id: string): Trabajo | { error: string };
+  /** La prueba que corre ahora (para la sala de agentes), o null. */
+  enCurso(): Trabajo | null;
 }
 type Mensaje = { tipo: 'paso'; texto: string } | { tipo: 'listo'; resultado: ResultadoPrueba } | { tipo: 'error'; mensaje: string };
 
@@ -100,7 +102,7 @@ function validar(c: Record<string, unknown>): PedidoPrueba {
 }
 
 /** En la grabadora: lanza las pruebas (una a la vez) y guarda sus estados (las últimas 20). */
-export function crearLaboratorio(o: { datos: string; pyodide: string | null; log?: (t: string) => void; lanzar?: () => ChildProcess; alTerminar?: (p: PedidoPrueba, r: ResultadoPrueba) => void }): ApiLaboratorio {
+export function crearLaboratorio(o: { datos: string; pyodide: string | null; log?: (t: string) => void; lanzar?: () => ChildProcess; alTerminar?: (p: PedidoPrueba, r: ResultadoPrueba) => void; alFin?: (t: Trabajo) => void }): ApiLaboratorio {
   const trabajos = new Map<string, Trabajo>();
   const lanzar = o.lanzar ?? (() => fork(process.argv[1], ['--juez'], { execArgv: ['--max-old-space-size=2048'] }));
   let activo: { id: string; hijo: ChildProcess; reloj: ReturnType<typeof setTimeout> } | null = null;
@@ -112,6 +114,7 @@ export function crearLaboratorio(o: { datos: string; pyodide: string | null; log
       activo.hijo.kill();
       activo = null;
     }
+    o.alFin?.(t);
     o.log?.(`Laboratorio · ${t.pedido.nombre ?? 'prueba'} ${t.pedido.simbolo} ${t.pedido.serie}: ${cambio.resultado ? cambio.resultado.juez.veredicto : `error · ${cambio.error}`}`);
   };
   return {
@@ -147,5 +150,6 @@ export function crearLaboratorio(o: { datos: string; pyodide: string | null; log
       return { id: t.id };
     },
     trabajo: (id) => trabajos.get(id) ?? { error: 'No existe esa prueba.' },
+    enCurso: () => (activo ? trabajos.get(activo.id) ?? null : null),
   };
 }

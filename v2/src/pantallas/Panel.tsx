@@ -60,8 +60,8 @@ export default function Panel() {
   const activos = v.bots.filter((b) => b.estado === 'activo').length;
   const hoy = deHoy(v.ops);
   const pnl = hoy.reduce((s, o) => s + o.pnl, 0);
-  // Encendidos solo los agentes que ya trabajan en la versión 2 (el resto llega con sus fases).
-  const trabajando: Record<string, boolean> = { vigia: vivos > 0, flujo: vivos > 0, ejecutor: activos > 0, guardian: v.bots.length > 0 };
+  // Encendido solo el agente que el orquestador del VPS ve trabajando de verdad.
+  const trabajando = Object.fromEntries((v.agentes?.agentes ?? []).map((a) => [a.id, a.estado === 'trabajando']));
   const agentes = AGENTES.map((a) => ({ nombre: a.nombre, activo: !!trabajando[a.id], color: ESTILO_AGENTE[a.id].color }));
 
   return (

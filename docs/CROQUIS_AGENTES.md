@@ -29,6 +29,22 @@ ideas solos, las 24 horas. Nada pasa a Paper sin el Juez y sin tu OK.
 - API: `GET /api/agentes` (todos), `GET /api/agentes/{id}` (bitácora), `POST /api/agentes/{id}/{pausar|reanudar|correr}`.
 - En el Panel, cada punto del anillo se enciende con el color del agente **solo si de verdad está trabajando** (ya hecho).
 
+**Hecho (A1):** el orquestador vive en la grabadora (`grabadora/agentesVps.ts`). Cada 5 s lee los motores, saca el
+estado real de cada agente, anota en la radio (bitácora) y cuenta su actividad por hora; los trabajos propios van en
+fila de uno en uno. `GET /api/agentes` · `POST /api/agentes/{pausar|reanudar|correr}`. Pantalla **Agentes** en la v2.
+
+### Qué vive dónde
+| Vive en el VPS (24/7, aunque cierres todo) | Vive fuera (tu navegador) |
+|---|---|
+| Grabadora: Binance → Vigía → Flujo → 39 Features, en disco | Las pantallas: solo muestran y mandan órdenes al VPS |
+| Historia importada (importar.sh) | El editor del Laboratorio (escribes ahí; la prueba corre en el VPS) |
+| Juez y Programador (cada prueba en un proceso aparte) | La sala 3D y la pantalla gigante (se dibujan en tu equipo) |
+| Bots de Paper, Guardián, Ejecutor | La versión vieja (en `/`): sus motores corren en el navegador, solo como respaldo |
+| Avisos (Discord, Telegram, ntfy, WhatsApp) | |
+| Biblioteca (cada intento cuenta) | |
+| Orquestador de los agentes (estado, radio, fila) | |
+| **Desde A2/A3:** Rastreador, Etiquetador, Lector (Python real) y Sintetizador | |
+
 ## 3. El Lector: cómo aprende la máquina (por etapas)
 
 1. **Dataset:** cada fila = las 39 Features en ese momento (sin mirar al futuro) + su **etiqueta** (qué pasó después: tocó objetivo, stop o se acabó el tiempo). Por mercado.
@@ -56,7 +72,7 @@ ideas solos, las 24 horas. Nada pasa a Paper sin el Juez y sin tu OK.
 ## 6. Orden de construcción
 | Fase | Qué | Resultado |
 |---|---|---|
-| **A1** | Orquestador + estado de los 10 agentes + pantalla **Agentes** | Ves a los agentes trabajar de verdad |
+| **A1** ✓ | Orquestador + estado de los 10 agentes + pantalla **Agentes** | Ves a los agentes trabajar de verdad |
 | **A2** | Rastreador y Etiquetador viviendo en el VPS | Régimen y etiquetas cada noche, con historia |
 | **A3** | Dataset + bóveda + Python real + Lector (ML clásico) + pantalla **Red neuronal** | Primeros modelos y Features útiles |
 | **A4** | Buscador de edge → Juez · Sintetizador + **Investigación** | La máquina propone ideas y el Juez las juzga |

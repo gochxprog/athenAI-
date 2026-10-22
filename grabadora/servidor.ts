@@ -13,6 +13,8 @@
 //   GET  /api/biblioteca               → pruebas guardadas e intentos totales                   (con clave)
 //   GET  /api/biblioteca/resultado?id= → resultado completo de una prueba                      (con clave)
 //   POST /api/biblioteca/{paper|borrar} cuerpo { id, capital?, exposicion? }                   (con clave)
+//   GET  /api/agentes                  → estado de los 10 agentes, notas, fila y recursos del VPS (con clave)
+//   POST /api/agentes/{pausar|reanudar|correr} cuerpo { id }                                  (con clave)
 // La clave va en la cabecera «Authorization: Bearer <clave>». CORS abierto: la clave es la que protege los datos.
 // La PLATAFORMA (web) pide contraseña antes de mostrar nada: /entrar (la clave de la grabadora) crea una sesión
 // con cookie HttpOnly + SameSite=Strict (+ Secure detrás de HTTPS), válida 30 días; /salir la cierra. Con
@@ -27,6 +29,7 @@ import type { ApiPaper } from './botsVps';
 import type { ApiLaboratorio } from './laboratorioVps';
 import type { ApiAvisos } from './avisosVps';
 import type { ApiBiblioteca } from './bibliotecaVps';
+import type { ApiAgentes } from './agentesVps';
 import { SERIES, type Serie, type VelaLab } from '../src/motores/laboratorio/velas';
 import { esMercadoId, partesMercado } from '../src/motores/mercado/mercadoId';
 
@@ -56,6 +59,8 @@ export interface OpcionesServidor {
   avisos?: ApiAvisos | null;
   /** Pruebas guardadas y paso a Paper (bibliotecaVps.ts). */
   biblioteca?: ApiBiblioteca | null;
+  /** Sala de agentes: el orquestador (agentesVps.ts). */
+  agentes?: ApiAgentes | null;
   /** Últimas `n` velas de una serie (historia + grabado) para el gráfico. */
   velas?: (simbolo: string, serie: Serie, n: number) => VelaLab[];
   /** Reloj (pruebas). */
@@ -152,12 +157,12 @@ export function crearServidor(o: OpcionesServidor): http.Server {
     }
     if (url.pathname === '/entrar') return conSesion ? html(303, '', { Location: '/' }) : html(200, paginaEntrar());
     // Acciones (POST, solo JSON): bots de Paper, pruebas del Laboratorio y avisos.
-    const modulo = req.method === 'POST' ? (['paper', 'laboratorio', 'avisos', 'biblioteca'] as const).find((m) => url.pathname.startsWith(`/api/${m}/`)) : undefined;
+    const modulo = req.method === 'POST' ? (['paper', 'laboratorio', 'avisos', 'biblioteca', 'agentes'] as const).find((m) => url.pathname.startsWith(`/api/${m}/`)) : undefined;
     if (modulo) {
       const bearer = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
       if (!conSesion && !claveCorrecta(bearer, o.clave)) return json(401, { error: 'Clave incorrecta' });
       const destino = o[modulo];
-      if (!destino) return json(503, { error: `${{ paper: 'Los bots', laboratorio: 'El Laboratorio', avisos: 'Los avisos', biblioteca: 'La Biblioteca' }[modulo]} no están activos en esta grabadora` });
+      if (!destino) return json(503, { error: `${{ paper: 'Los bots', laboratorio: 'El Laboratorio', avisos: 'Los avisos', biblioteca: 'La Biblioteca', agentes: 'Los agentes' }[modulo]} no están activos en esta grabadora` });
       // Solo JSON: un formulario de otra página no puede disparar acciones con la cookie.
       if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return json(415, { error: 'Solo JSON' });
       const accion = url.pathname.slice(`/api/${modulo}/`.length);
@@ -196,6 +201,7 @@ export function crearServidor(o: OpcionesServidor): http.Server {
           const r = o.biblioteca?.resultado(url.searchParams.get('id') ?? '');
           return r ? json(200, r) : json(404, { error: 'Ese resultado ya no está guardado.' });
         }
+        if (url.pathname === '/api/agentes') return o.agentes ? json(200, o.agentes.estado()) : json(503, { error: 'Los agentes no están activos en esta grabadora' });
         if (url.pathname === '/api/avisos') return o.avisos ? json(200, o.avisos.estado()) : json(503, { error: 'Los avisos no están activos en esta grabadora' });
         if (url.pathname === '/api/laboratorio/trabajo') return o.laboratorio ? json(200, o.laboratorio.trabajo(url.searchParams.get('id') ?? '')) : json(503, { error: 'El Laboratorio no está activo en esta grabadora' });
         if (url.pathname === '/api/sesiones') {

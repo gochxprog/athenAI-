@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { Bot, OperacionPaper } from '@/motores/paper/ejecutor';
 import type { EventoPaper } from '@/motores/paper/motorPaper';
 import type { ReglasGuardian } from '@/motores/paper/guardian';
+import type { EstadoSala } from '@/motores/agentes/sala';
 
 export interface Mercado { simbolo: string; conexion: string; detalle: string; filasSesion: number; ultimoCierre: number | null; cortes: number; tradesPerdidos: number }
 export interface Fila { cierre: number; close: number; valores: Record<string, number | null> }
@@ -26,10 +27,12 @@ export interface Vps {
   ops: OperacionPaper[];
   /** Últimas filas (≈ 30 min) de cada mercado: precio y Features recién calculadas. */
   filas: Record<string, Fila[]>;
+  /** La sala de agentes del VPS (estados reales, radio, fila y recursos); null si la grabadora es vieja. */
+  agentes: EstadoSala | null;
 }
 
 const CADA_MS = 5_000;
-let actual: Vps = { listo: false, sinSesion: false, caido: false, inicio: null, version: '', mercados: [], almacen: [], historia: [], bots: [], apagado: false, reglas: null, bitacora: [], ops: [], filas: {} };
+let actual: Vps = { listo: false, sinSesion: false, caido: false, inicio: null, version: '', mercados: [], almacen: [], historia: [], bots: [], apagado: false, reglas: null, bitacora: [], ops: [], filas: {}, agentes: null };
 const oyentes = new Set<(v: Vps) => void>();
 let reloj: ReturnType<typeof setTimeout> | null = null;
 /** La grabadora respondió que no tiene bots (BOTS=0): no se vuelve a preguntar. */
@@ -45,11 +48,12 @@ async function pedir<T>(ruta: string): Promise<T | null> {
 
 async function sondear(): Promise<void> {
   try {
-    const [e, h, p, o] = await Promise.all([
+    const [e, h, p, o, ag] = await Promise.all([
       pedir<{ inicio: number; version: string; simbolos: Mercado[]; almacen: Vps['almacen'] }>('/api/estado'),
       pedir<{ mercados: Historia[] }>('/api/historia').catch(() => null),
       pedir<{ bots: Bot[]; bitacora: EventoPaper[]; apagado: boolean; reglas: ReglasGuardian }>('/api/paper').catch(() => null),
       pedir<{ operaciones: OperacionPaper[] }>('/api/paper/operaciones').catch(() => null),
+      pedir<EstadoSala>('/api/agentes').catch(() => null),
     ]);
     if (!e) throw new Error('caido');
     const filas = Object.fromEntries(
@@ -59,7 +63,7 @@ async function sondear(): Promise<void> {
     );
     actual = { listo: true, sinSesion: false, caido: false, inicio: e.inicio, version: e.version, mercados: e.simbolos, almacen: e.almacen, historia: h?.mercados ?? [],
       // Tu cuenta a mano (Terminal) no es un bot: va aparte.
-      bots: (p?.bots ?? []).filter((b) => b.origen !== 'manual'), apagado: p?.apagado ?? false, reglas: p?.reglas ?? null, bitacora: p?.bitacora ?? [], ops: o?.operaciones ?? [], filas };
+      bots: (p?.bots ?? []).filter((b) => b.origen !== 'manual'), apagado: p?.apagado ?? false, reglas: p?.reglas ?? null, bitacora: p?.bitacora ?? [], ops: o?.operaciones ?? [], filas, agentes: ag };
   } catch (err) {
     actual = { ...actual, listo: true, sinSesion: (err as Error).message === 'sin-sesion', caido: (err as Error).message !== 'sin-sesion' };
   }

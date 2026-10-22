@@ -20,6 +20,7 @@ import { resumenHistoria } from './importador';
 import { atenderJuez, cargarVelas, crearLaboratorio } from './laboratorioVps';
 import { crearAvisos } from './avisosVps';
 import { crearBiblioteca } from './bibliotecaVps';
+import { crearSala, type Lectura } from './agentesVps';
 import { MS_SERIE } from '../src/motores/laboratorio/velas';
 import { crearServidor, type EstadoSimbolo } from './servidor';
 import { almacenLocalDisco, cargadorPython, crearApiPaper, feedDe, LibroPaperDisco, senalesDisco } from './botsVps';
@@ -180,7 +181,39 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
       }, 1_000);
     });
   }
-  const servidor = crearServidor({ almacen, clave, estado, web: o.web, paper: motorBots ? crearApiPaper(motorBots) : null, historia: () => resumenHistoria(o.datos), laboratorio: crearLaboratorio({ datos: o.datos, pyodide: o.pyodide ?? null, log, alTerminar: (p, r) => biblioteca.guardar(p, r) }), avisos, biblioteca, velas: (s, serie, n) => (serie === 'dollar' ? [] : cargarVelas(o.datos, s, serie, 'todo', Date.now() - 3 * (n + 2) * MS_SERIE[serie]).slice(-n)) });
+  // Sala de agentes: el orquestador lee cada 5 s lo que hacen los motores (la historia, cada 30 s: lee el disco).
+  const sala = crearSala({ datos: o.datos, log });
+  const laboratorio = crearLaboratorio({
+    datos: o.datos,
+    pyodide: o.pyodide ?? null,
+    log,
+    alTerminar: (p, r) => biblioteca.guardar(p, r),
+    alFin: (t) => {
+      const quien = `«${t.pedido.nombre ?? 'prueba'}» ${t.pedido.simbolo} ${t.pedido.serie}`;
+      if (t.resultado) {
+        sala.notar('programador', `${quien}: corrió en Python (${t.resultado.combos.length} variantes, ${t.resultado.velas.total.toLocaleString('es-ES')} velas).`);
+        sala.notar('juez', `${quien}: ${t.resultado.juez.veredicto}.`, t.resultado.juez.veredicto === 'RECHAZADA');
+      } else sala.notar(/Error en tu código/.test(t.error ?? '') ? 'programador' : 'juez', `${quien}: ${t.error}`, true);
+    },
+  });
+  let historia: Lectura['historia'] = [];
+  let latidos = 0;
+  const vigilaSala = setInterval(() => {
+    try {
+      if (latidos++ % 6 === 0) historia = resumenHistoria(o.datos).map((h) => ({ carpeta: h.carpeta, importando: h.importando, dia: h.progreso?.dia ?? null, hechos: h.progreso?.hechos ?? 0, total: h.progreso?.total ?? 0 }));
+      const enCurso = laboratorio.enCurso();
+      const bots = motorBots?.bots.filter((b) => b.origen !== 'manual') ?? [];
+      sala.latir({
+        mercados: estado().simbolos,
+        bots: motorBots && { total: bots.length, activos: bots.filter((b) => b.estado === 'activo').length, enPosicion: bots.filter((b) => b.posicion).length, apagado: motorBots.apagado, bitacora: motorBots.bitacora },
+        prueba: enCurso && { nombre: enCurso.pedido.nombre ?? 'prueba', simbolo: enCurso.pedido.simbolo, serie: enCurso.pedido.serie, paso: enCurso.pasos.at(-1) ?? 'empezando' },
+        historia,
+      });
+    } catch (e) {
+      log(`Agentes: ${e instanceof Error ? e.message : e}`);
+    }
+  }, 5_000);
+  const servidor = crearServidor({ almacen, clave, estado, web: o.web, paper: motorBots ? crearApiPaper(motorBots) : null, historia: () => resumenHistoria(o.datos), laboratorio, avisos, biblioteca, agentes: sala, velas: (s, serie, n) => (serie === 'dollar' ? [] : cargarVelas(o.datos, s, serie, 'todo', Date.now() - 3 * (n + 2) * MS_SERIE[serie]).slice(-n)) });
   const alEscuchar = () => log(`Grabadora ${VERSION} escuchando en ${o.host ?? 'todas las interfaces'}, puerto ${o.puerto} · símbolos: ${o.simbolos.join(', ')} · datos en ${o.datos}`);
   if (o.host) servidor.listen(o.puerto, o.host, alEscuchar);
   else servidor.listen(o.puerto, alEscuchar);
@@ -191,11 +224,13 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
     clearInterval(escritura);
     clearInterval(resumen);
     clearInterval(vigilaAvisos);
+    clearInterval(vigilaSala);
+    sala.guardar();
     fuente.detener();
     almacen.vaciar();
     servidor.close();
   };
-  return { clave, almacen, servidor, detener, estado, motorBots };
+  return { clave, almacen, servidor, detener, estado, motorBots, sala };
 }
 
 // Arranque como programa (no al importarlo desde las pruebas).
