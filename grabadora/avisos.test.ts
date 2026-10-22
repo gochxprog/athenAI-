@@ -41,6 +41,10 @@ describe('Avisos 24/7 del VPS', () => {
     const guardado = JSON.parse(fs.readFileSync(archivo, 'utf8')) as Record<string, unknown>;
     expect(guardado).not.toHaveProperty('colado');
     expect(JSON.stringify(a.estado())).not.toContain('123:abc');
+    expect(a.estado().config.telegram).toMatchObject({ token: '••••:abc', chatId: '42' });
+    // Guardar con la clave tapada (sin tocar) la conserva; una nueva la cambia.
+    await a.accion('guardar', { ...CONFIG, telegram: { activo: true, token: '••••:abc', chatId: '43' } });
+    expect((JSON.parse(fs.readFileSync(archivo, 'utf8')) as { telegram: { token: string; chatId: string } }).telegram).toEqual({ activo: true, token: '123:abc', chatId: '43' });
     // Al reiniciar la grabadora, sigue configurado.
     expect(crearAvisos({ datos, log: () => undefined }).estado().canales).toEqual(['telegram', 'ntfy']);
   });

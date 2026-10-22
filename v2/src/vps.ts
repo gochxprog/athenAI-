@@ -4,9 +4,9 @@ import type { Bot, OperacionPaper } from '@/motores/paper/ejecutor';
 import type { EventoPaper } from '@/motores/paper/motorPaper';
 import type { ReglasGuardian } from '@/motores/paper/guardian';
 
-export interface Mercado { simbolo: string; conexion: string; filasSesion: number; ultimoCierre: number | null; cortes: number }
+export interface Mercado { simbolo: string; conexion: string; detalle: string; filasSesion: number; ultimoCierre: number | null; cortes: number; tradesPerdidos: number }
 export interface Fila { cierre: number; close: number; valores: Record<string, number | null> }
-export interface Historia { carpeta: string; dias: number; desde: string | null; hasta: string | null; bytes: number; importando: boolean }
+export interface Historia { carpeta: string; dias: number; desde: string | null; hasta: string | null; bytes: number; importando: boolean; progreso: { dia: string | null; hechos: number; total: number; fin: boolean } | null }
 export interface Vps {
   listo: boolean;
   /** La página se abrió sin entrar con la clave. */
@@ -14,8 +14,9 @@ export interface Vps {
   /** La grabadora no responde. */
   caido: boolean;
   inicio: number | null;
+  version: string;
   mercados: Mercado[];
-  almacen: { simbolo: string; filas: number; desde: number | null }[];
+  almacen: { simbolo: string; filas: number; desde: number | null; hasta: number | null; bytes: number }[];
   historia: Historia[];
   bots: Bot[];
   /** Apagado de emergencia activo y reglas del Guardián (de /api/paper). */
@@ -28,7 +29,7 @@ export interface Vps {
 }
 
 const CADA_MS = 5_000;
-let actual: Vps = { listo: false, sinSesion: false, caido: false, inicio: null, mercados: [], almacen: [], historia: [], bots: [], apagado: false, reglas: null, bitacora: [], ops: [], filas: {} };
+let actual: Vps = { listo: false, sinSesion: false, caido: false, inicio: null, version: '', mercados: [], almacen: [], historia: [], bots: [], apagado: false, reglas: null, bitacora: [], ops: [], filas: {} };
 const oyentes = new Set<(v: Vps) => void>();
 let reloj: ReturnType<typeof setTimeout> | null = null;
 /** La grabadora respondió que no tiene bots (BOTS=0): no se vuelve a preguntar. */
@@ -45,7 +46,7 @@ async function pedir<T>(ruta: string): Promise<T | null> {
 async function sondear(): Promise<void> {
   try {
     const [e, h, p, o] = await Promise.all([
-      pedir<{ inicio: number; simbolos: Mercado[]; almacen: Vps['almacen'] }>('/api/estado'),
+      pedir<{ inicio: number; version: string; simbolos: Mercado[]; almacen: Vps['almacen'] }>('/api/estado'),
       pedir<{ mercados: Historia[] }>('/api/historia').catch(() => null),
       pedir<{ bots: Bot[]; bitacora: EventoPaper[]; apagado: boolean; reglas: ReglasGuardian }>('/api/paper').catch(() => null),
       pedir<{ operaciones: OperacionPaper[] }>('/api/paper/operaciones').catch(() => null),
@@ -56,7 +57,7 @@ async function sondear(): Promise<void> {
         e.simbolos.filter((m) => m.ultimoCierre).map(async (m) => [m.simbolo, (await pedir<{ filas: Fila[] }>(`/api/filas?simbolo=${m.simbolo}&desde=${m.ultimoCierre! - 1_800_000}&limite=400`).catch(() => null))?.filas ?? actual.filas[m.simbolo] ?? []] as const),
       ),
     );
-    actual = { listo: true, sinSesion: false, caido: false, inicio: e.inicio, mercados: e.simbolos, almacen: e.almacen, historia: h?.mercados ?? [],
+    actual = { listo: true, sinSesion: false, caido: false, inicio: e.inicio, version: e.version, mercados: e.simbolos, almacen: e.almacen, historia: h?.mercados ?? [],
       // Tu cuenta a mano (Terminal) no es un bot: va aparte.
       bots: (p?.bots ?? []).filter((b) => b.origen !== 'manual'), apagado: p?.apagado ?? false, reglas: p?.reglas ?? null, bitacora: p?.bitacora ?? [], ops: o?.operaciones ?? [], filas };
   } catch (err) {

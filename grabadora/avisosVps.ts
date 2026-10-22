@@ -3,21 +3,34 @@
 // canales) se guarda solo en el VPS, en {datos}/avisos.json con permisos 600, y nunca se devuelve por la API.
 import fs from 'node:fs';
 import path from 'node:path';
-import { canalesActivos, CONFIG_NOTIF_POR_DEFECTO, peticion, resultadoEnvio, type Aviso, type ConfigNotificaciones } from '../src/motores/notificaciones/canales';
+import { canalesActivos, chatsTelegram, CONFIG_NOTIF_POR_DEFECTO, peticion, resultadoEnvio, type Aviso, type ConfigNotificaciones } from '../src/motores/notificaciones/canales';
 import { Notificador } from '../src/motores/notificaciones/notificador';
 import { EVENTOS_PREDEFINIDOS } from '../src/motores/nucleo/calendario';
 import type { EstadoFeed } from '../src/motores/worker/protocolo';
 
 export interface ApiAvisos {
   accion(nombre: string, cuerpo: Record<string, unknown>): Promise<unknown>;
-  /** Qué canales están activos (sin credenciales). */
-  estado(): { canales: string[]; tipos: ConfigNotificaciones['tipos'] };
+  /** Qué canales están activos y la configuración con las claves TAPADAS (••••1234). */
+  estado(): { canales: string[]; tipos: ConfigNotificaciones['tipos']; config: ConfigNotificaciones };
   enviar(a: Aviso): Promise<void>;
   /** Fallos de los mercados (y su recuperación) y eventos fuertes: llamar cada pocos segundos con los feeds. */
   revisar(feeds: readonly EstadoFeed[]): void;
 }
 
 const texto = (x: unknown, max = 500) => (typeof x === 'string' ? x.trim().slice(0, max) : '');
+const TAPA = '••••';
+/** Clave tapada: se ve que existe y sus últimos 4 caracteres, nunca entera. */
+const tapar = (x: string) => (x ? `${TAPA}${x.slice(-4)}` : '');
+/** Configuración para mostrar: las claves (webhook, token, tema de ntfy, apikey) van tapadas. */
+export const tapada = (c: ConfigNotificaciones): ConfigNotificaciones => ({
+  ...c,
+  discord: { ...c.discord, webhook: tapar(c.discord.webhook) },
+  telegram: { ...c.telegram, token: tapar(c.telegram.token) },
+  ntfy: { ...c.ntfy, tema: tapar(c.ntfy.tema) },
+  whatsapp: { ...c.whatsapp, apikey: tapar(c.whatsapp.apikey) },
+});
+/** Al guardar, una clave que llega tapada (sin tocar) se queda como estaba. */
+const conservar = (nueva: string, vieja: string) => (nueva.startsWith(TAPA) ? vieja : nueva);
 
 /** Solo los campos conocidos, con su tipo: lo que llega por la API no puede meter otra cosa en el archivo. */
 function limpiar(c: Record<string, unknown>): ConfigNotificaciones {
@@ -62,7 +75,7 @@ export function crearAvisos(o: { datos: string; log: (t: string) => void; fetchI
       }),
     );
   return {
-    estado: () => ({ canales: canalesActivos(config), tipos: config.tipos }),
+    estado: () => ({ canales: canalesActivos(config), tipos: config.tipos, config: tapada(config) }),
     async enviar(a) {
       await n.enviar(a);
     },
@@ -72,11 +85,24 @@ export function crearAvisos(o: { datos: string; log: (t: string) => void; fetchI
     },
     async accion(nombre, cuerpo) {
       if (nombre === 'guardar') {
-        config = limpiar(cuerpo);
+        const c = limpiar(cuerpo);
+        config = {
+          ...c,
+          discord: { ...c.discord, webhook: conservar(c.discord.webhook, config.discord.webhook) },
+          telegram: { ...c.telegram, token: conservar(c.telegram.token, config.telegram.token) },
+          ntfy: { ...c.ntfy, tema: conservar(c.ntfy.tema, config.ntfy.tema) },
+          whatsapp: { ...c.whatsapp, apikey: conservar(c.whatsapp.apikey, config.whatsapp.apikey) },
+        };
         n.guardar(config);
         fs.mkdirSync(o.datos, { recursive: true });
         fs.writeFileSync(archivo, JSON.stringify(config), { mode: 0o600 });
         return { ok: true, canales: canalesActivos(config) };
+      }
+      if (nombre === 'chatTelegram') {
+        // Con el token que ya está en el VPS (o uno nuevo sin guardar): a quién le escribió tu bot.
+        const token = conservar(texto(cuerpo.token, 200), config.telegram.token);
+        if (!token) throw new Error('Falta el token del bot de Telegram.');
+        return { chats: await chatsTelegram(token, pedir) };
       }
       if (nombre === 'probar') {
         if (!canalesActivos(config).length) throw new Error('No hay canales activos en el VPS: guarda primero la configuración.');

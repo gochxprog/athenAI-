@@ -1,0 +1,45 @@
+/* Datos y Sistema v2 · negro, bordes finos; verde solo para «en vivo» y canales activos. */
+.sis { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; animation: entrar .35s ease; }
+.sis h1 { font-weight: 300; font-size: 24px; letter-spacing: -.01em; margin-top: 4px; }
+.kpis-sis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.kpis-sis .dato b { font-size: 20px; }
+.bloque-sis { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.bloque-sis > .et { display: inline-flex; align-items: center; gap: 6px; }
+.bloque-sis small { font-size: 10.5px; color: var(--apagado); line-height: 1.5; }
+.tabla-sis { font-size: 11.5px; }
+.tabla-sis .fila { display: grid; grid-template-columns: 1fr 1fr .8fr .8fr .5fr .8fr; gap: 8px; padding: 6px 2px; border-bottom: 1px solid var(--borde); }
+.tabla-sis .cab { color: var(--apagado); }
+.tabla-sis .ok { color: var(--vivo); } .tabla-sis .mal { color: var(--baja); }
+.punto-sis { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-right: 6px; transform: translateY(-1px); }
+.ok .punto-sis { box-shadow: 0 0 8px currentColor; animation: latido 1.6s infinite; }
+.dos-sis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.linea-sis { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-size: 12px; color: var(--tenue); border-bottom: 1px solid var(--borde); padding-bottom: 8px; }
+.linea-sis b { color: var(--txt); font-weight: 500; min-width: 80px; }
+.avance { width: 100%; display: flex; flex-direction: column; gap: 4px; }
+.avance > i { display: block; height: 3px; border-radius: 2px; background: var(--txt); max-width: 100%; transition: width .6s; }
+.comando { color: var(--txt) !important; border: 1px solid var(--borde2); border-radius: 6px; padding: 6px 8px; align-self: flex-start; }
+.nota-sis { font-size: 11px; color: var(--apagado); display: flex; gap: 6px; align-items: center; }
+.canales-sis { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 10px; }
+.canal-sis { padding: 12px; display: flex; flex-direction: column; gap: 8px; opacity: .75; transition: opacity .2s, border-color .2s; }
+.canal-sis.on { opacity: 1; border-color: rgba(126, 226, 168, .35); }
+.canal-sis a { color: var(--txt); text-decoration: underline; }
+.interruptor { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.interruptor input { display: none; }
+.interruptor i { width: 30px; height: 17px; border-radius: 10px; background: var(--borde2); position: relative; transition: background .2s; }
+.interruptor i::after { content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #000; transition: transform .2s; }
+.interruptor input:checked + i { background: var(--vivo); } .interruptor input:checked + i::after { transform: translateX(13px); }
+.interruptor b { font-weight: 500; font-size: 13px; }
+.campo-sis { display: flex; flex-direction: column; gap: 4px; }
+.campo-sis input { background: #000; border: 1px solid var(--borde2); border-radius: 7px; padding: 7px 9px; color: var(--txt); font: 12px var(--mono); outline: none; }
+.campo-sis input:focus { border-color: var(--tenue); }
+.canal-sis .boton { align-self: flex-start; }
+.tipos-sis { display: flex; flex-direction: column; gap: 6px; font-size: 11.5px; color: var(--tenue); }
+.tipos-sis b { color: var(--txt); font-weight: 500; }
+.tipos-sis input { accent-color: #fff; margin-right: 4px; }
+.acciones-sis { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.msg-sis { font-size: 11px; color: var(--tenue); }
+.boton.salir { align-self: flex-start; }
+@media (max-width: 760px) {
+  .kpis-sis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dos-sis { grid-template-columns: minmax(0, 1fr); }
+  .tabla-sis .fila { grid-template-columns: 1fr 1fr .8fr .5fr; } .tabla-sis .fila span:nth-child(4), .tabla-sis .fila span:nth-child(6) { display: none; }
+}

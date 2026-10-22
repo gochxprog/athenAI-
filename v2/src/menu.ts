@@ -30,9 +30,9 @@ export const MENU: { seccion: string; items: Item[] }[] = [
   {
     seccion: 'Sistema',
     items: [
-      { id: 'datos', nombre: 'Datos', icono: Database, fase: 1 },
+      { id: 'datos', nombre: 'Datos', icono: Database },
       { id: 'calendario', nombre: 'Calendario', icono: CalendarClock, fase: 3 },
-      { id: 'sistema', nombre: 'Sistema', icono: Server, fase: 1 },
+      { id: 'sistema', nombre: 'Sistema', icono: Server },
     ],
   },
 ];
