@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { atrSerie, MODOS_GESTION, type ModoGestion } from '@/motores/juez/salidas';
 import { COSTOS_POR_DEFECTO } from '@/motores/juez/costos';
 import { CAPITAL_MANUAL, idManual } from '@/motores/paper/motorPaper';
-import { APALANCAMIENTOS, costosIdaVuelta, MAX_POSICIONES, previaOrden, RIESGO_MAXIMO, tieneObjetivo, type OrdenManual } from '@/motores/paper/manual';
+import { APALANCAMIENTOS, costosIdaVuelta, MAX_POSICIONES, previaOrden, tieneObjetivo, type OrdenManual } from '@/motores/paper/manual';
 import type { Bot, MercadoVivo } from '@/motores/paper/ejecutor';
 import { pedir } from '../../api';
 import { dinero, num, usd } from '../../formato';
@@ -63,10 +63,10 @@ export function Ticket({ simbolo, serie, velas }: { simbolo: string; serie: stri
       </div>
       <label>Riesgo por operación</label>
       <div className="seg">{RIESGOS.map((r) => <button key={r} className={!orden.riesgoUsd && r === orden.riesgoPct ? 'sel' : ''} onClick={() => cambiar({ riesgoPct: r, riesgoUsd: '' })}>{num(r * 100, r < 0.01 ? 2 : 0)} %</button>)}</div>
-      <input className="mono" inputMode="decimal" placeholder="o en dólares (p. ej. 1 o 0,5)" value={orden.riesgoUsd} onChange={(e) => cambiar({ riesgoUsd: e.target.value })} aria-label="Riesgo en dólares" />
+      <input className="mono" inputMode="decimal" placeholder="USD" value={orden.riesgoUsd} onChange={(e) => cambiar({ riesgoUsd: e.target.value })} aria-label="Riesgo en dólares" />
       <label>Stop {atr && !(stopPrecio > 0) ? <span className="mono">· 1 ATR {serie} = {num(atr, atr < 10 ? 2 : 0)}</span> : null}</label>
       <div className="seg">{STOPS.map((k) => <button key={k} className={!orden.stopPrecio && k === orden.stopAtr ? 'sel' : ''} onClick={() => cambiar({ stopAtr: k, stopPrecio: '' })}>{num(k, k % 1 ? 1 : 0)} ATR</button>)}</div>
-      <input className="mono" inputMode="decimal" placeholder="o un precio exacto" value={orden.stopPrecio} onChange={(e) => cambiar({ stopPrecio: e.target.value })} aria-label="Precio del stop" />
+      <input className="mono" inputMode="decimal" placeholder="precio" value={orden.stopPrecio} onChange={(e) => cambiar({ stopPrecio: e.target.value })} aria-label="Precio del stop" />
       <label>Objetivo</label>
       <div className="seg">{RRS.map((r) => <button key={r} className={r === orden.rr ? 'sel' : ''} onClick={() => cambiar({ rr: r })}>{r ? `1:${num(r, r % 1 ? 1 : 0)}` : 'Sin'}</button>)}</div>
       <label>Apalancamiento <span className="mono">· libres {num(Math.max(0, capital * orden.apalancamiento - cuenta.abierto), 0)} USD · {abiertas.length}/{MAX_POSICIONES} abiertas</span></label>
@@ -76,19 +76,17 @@ export function Ticket({ simbolo, serie, velas }: { simbolo: string; serie: stri
       {pre && (
         <div className="previa mono">
           <span>tamaño {num(pre.cantidad, 4)} · {num(pre.cantidad * pre.entrada, 0)} USD</span>
-          <span>1R = {num(pre.riesgoUsd)} USD{pre.recortada ? ` (no ${num(capital * riesgoPct)}: con ${orden.apalancamiento}× no cabe más)` : ''}</span>
+          <span>1R = {num(pre.riesgoUsd)} USD{pre.recortada ? ' · recortado' : ''}</span>
           {costos !== null && <span className={costosR !== null && costosR > 0.3 ? 'alerta-c' : ''}>costos ida y vuelta ≈ {num(costos)} USD{costosR !== null ? ` = ${num(costosR, 2)} R` : ''}</span>}
-          {costosR !== null && costosR > 0.3 && <small>Ojo: comisión y deslizamiento se llevan {num(costosR, 2)} R de cada operación. {orden.rr ? `Si llega al objetivo ganas ${num(orden.rr - costosR, 2)} R; si toca el stop pierdes ${num(1 + costosR, 2)} R. ` : ''}Con un stop más lejos pesan menos.</small>}
-        </div>
+                  </div>
       )}
       <div className="lados">
         <button className="comprar" disabled={enviando || !enVivo} onClick={() => enviar(1)}>Comprar</button>
         <button className="vender" disabled={enviando || !enVivo} onClick={() => enviar(-1)}>Vender</button>
       </div>
-      {!enVivo && <small className="nota-t">{corto(simbolo)} no está en vivo ahora: no se puede operar.</small>}
+      {!enVivo && <small className="nota-t">Sin datos en vivo</small>}
       {error && <pre className="error-lab">{error}</pre>}
-      <small className="nota-t">Riesgo máx. {num(RIESGO_MAXIMO * 100, 0)} %. El tamaño sale del riesgo y la distancia al stop; con apalancamiento, el stop tiene que quedar antes de la liquidación. Hasta {MAX_POSICIONES} posiciones a la vez por mercado, con la misma cuenta. El VPS vigila stop y objetivo a cada tick (100 ms) aunque cierres la página.</small>
-    </section>
+          </section>
   );
 }
 
@@ -121,11 +119,11 @@ export function Manuales() {
     <>
       <section className="caja bloque-t">
         <span className="et">Posiciones abiertas a mano</span>
-        {abiertas.length ? abiertas.map((b) => <Posicion key={b.id} b={b} cerrar={cerrar} />) : <p className="nota-t">Ninguna. Abre una con el ticket: verás la entrada, el stop y el objetivo en el gráfico.</p>}
+        {abiertas.length ? abiertas.map((b) => <Posicion key={b.id} b={b} cerrar={cerrar} />) : <p className="nota-t">Ninguna</p>}
         {error && <pre className="error-lab">{error}</pre>}
       </section>
       <section className="caja bloque-t">
-        <span className="et">Tus últimas operaciones · precio − costos = resultado · todas en el Diario</span>
+        <span className="et">Últimas operaciones</span>
         {ops.length ? ops.slice(-8).reverse().map((o, i) => {
           const precio = o.lado * o.cantidad * (o.precioSalida - o.precioEntrada);
           return (
@@ -135,7 +133,7 @@ export function Manuales() {
               <b className={o.pnl >= 0 ? 'sube' : 'baja'}>{dinero(precio)} − {num(o.comisiones + o.funding)} = {usd(o.pnl)}{o.gestion ? ` · ${o.gestion.r >= 0 ? '+' : ''}${num(o.gestion.r, 2)} R` : ''}</b>
             </div>
           );
-        }) : <p className="nota-t">Todavía no cerraste ninguna.</p>}
+        }) : <p className="nota-t">Ninguna</p>}
       </section>
     </>
   );

@@ -14,13 +14,11 @@ const DIAS_ML = 60;
 const num = (v: number, d = 0) => v.toLocaleString('es-ES', { minimumFractionDigits: d, maximumFractionDigits: d });
 const corto = (s: string) => s.replace(/USDT$/, '');
 
-function saludo(v: Vps) {
-  const h = new Date().getHours();
-  const hola = h < 12 ? 'Buenos días.' : h < 19 ? 'Buenas tardes.' : 'Buenas noches.';
-  if (v.sinSesion) return `${hola} Entra con tu clave para ver tus datos.`;
-  if (v.caido) return `${hola} La grabadora no responde.`;
+function estado(v: Vps) {
+  if (v.sinSesion) return 'Sin sesión';
+  if (v.caido) return 'Grabadora sin respuesta';
   const caidos = v.mercados.filter((m) => m.conexion !== 'en-vivo');
-  return `${hola} ${!v.mercados.length ? 'Conectando…' : caidos.length ? `${caidos.map((m) => corto(m.simbolo)).join(' y ')} sin conexión.` : 'Todo está grabando.'}`;
+  return !v.mercados.length ? 'Conectando…' : caidos.length ? `${caidos.map((m) => corto(m.simbolo)).join(' · ')} sin conexión` : 'Grabando';
 }
 
 function Linea({ filas }: { filas: Fila[] }) {
@@ -69,15 +67,15 @@ export default function Panel() {
   return (
     <div className="panel">
       <div>
-        <div className="et">Panel general · lo que está pasando ahora</div>
-        <h1>{saludo(v)}</h1>
+        <div className="et">Panel</div>
+        <h1>{estado(v)}</h1>
       </div>
       <div className="kpis">
         <Tarjeta titulo="Filas grabadas" valor={num(filas)} nota={`${v.almacen.length} mercados · ${num(dias, 1)} días`} />
-        <Tarjeta titulo="Historia importada" valor={`${historia} d`} nota={historia ? `BTC desde ${v.historia[0]?.desde}` : 'sin importar · importar.sh'} />
+        <Tarjeta titulo="Historia importada" valor={`${historia} d`} nota={historia ? `BTC desde ${v.historia[0]?.desde}` : 'sin importar'} />
         <Tarjeta titulo="Mercados en vivo" valor={`${vivos}/${v.mercados.length}`} nota={`${v.mercados.reduce((s, m) => s + m.cortes, 0)} cortes en la sesión`} />
         <Tarjeta titulo="Bots en Paper" valor={`${activos}/${v.bots.length}`} nota={`${hoy.length} operaciones hoy`} />
-        <Tarjeta titulo="Paper hoy" valor={`${pnl >= 0 ? '+' : ''}${num(pnl, 2)} $`} nota="sin dinero real" />
+        <Tarjeta titulo="Paper hoy" valor={`${pnl >= 0 ? '+' : ''}${num(pnl, 2)} $`} />
       </div>
 
       <section className="escena caja">
@@ -102,7 +100,7 @@ export default function Panel() {
         </div>
         <div className="col der">
           <Tarjeta lado="der" titulo="Machine learning · sin entrenar" valor={`${num(Math.min(100, (dias / DIAS_ML) * 100))} %`} nota={`${num(dias, 1)} de ${DIAS_ML} días`} barra={dias / DIAS_ML} />
-          <Tarjeta lado="der" titulo="Juez" valor="✓" nota="en el Laboratorio" barra={1} />
+          <Tarjeta lado="der" titulo="Juez" valor="✓" barra={1} />
           <Tarjeta lado="der" titulo="Bots en Paper" valor={String(activos)} nota={`${hoy.length} operaciones hoy`} barra={v.bots.length ? activos / v.bots.length : 0} />
         </div>
       </section>

@@ -78,8 +78,8 @@ export default function Laboratorio() {
   return (
     <div className="lab">
       <div>
-        <div className="et">Laboratorio · tus estrategias y el Juez</div>
-        <h1>Escribe una idea. El Juez decide si es edge o suerte.</h1>
+        <div className="et">Laboratorio</div>
+        <h1>Laboratorio</h1>
       </div>
 
       <div className="lab-arriba">
@@ -107,12 +107,11 @@ export default function Laboratorio() {
         </section>
 
         <aside className="caja guia">
-          <span className="et">Código libre</span>
-          <p>Pega tu estrategia <b>como la tengas</b>: una función con todas las velas, una función por vela, una clase de <b className="mono">backtesting.py</b> o un script con pandas. El motor la reconoce y la corre sobre los datos del VPS (si tu código lee un CSV o yfinance, recibe esos datos).</p>
-          <p>Las señales pueden ser <b>1 / -1 / 0</b>, True/False o <span className="mono">buy · sell · exit</span>.</p>
+          <span className="et">Referencia</span>
+          <p className="mono">señal: 1 · -1 · 0 · True/False · buy/sell/exit</p>
           <div className="campos mono">{['open', 'high', 'low', 'close', 'volumen', 'delta', 'flujo_5_ratio', 'absorcion_bid', 'stoprun_bajo', 'oi_delta_pct', '+ 30 Features'].map((c) => <span key={c}>{c}</span>)}</div>
-          <p><b className="mono">GESTION</b> (opcional): stop en ATR, objetivo en R y manejo <span className="mono">fija · be1R · escalonada</span>. El Juez lo prueba con el mismo motor de la Terminal. Con listas (<span className="mono">"rr": [2, 3]</span>) prueba cada una como otra variante y el bot usa la que gane.</p>
-          <p><b className="mono">PARAMETROS</b> (opcional): variantes para el Walk-Forward. Cada una cuenta como un intento.</p>
+          <p className="mono">GESTION = {'{'}"stopAtr": 1.5, "rr": [2, 3], "gestion": "be1R"{'}'}</p>
+          <p className="mono">PARAMETROS = {'{'}"n": [20, 40]{'}'}</p>
           {(corriendo || error || t?.estado === 'error') && (
             <div className="progreso">
               <span className="et">{corriendo ? 'Probando en el VPS…' : 'No se pudo probar'}</span>

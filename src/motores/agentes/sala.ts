@@ -53,7 +53,7 @@ export function frase(s: Pick<EstadoSala, 'agentes' | 'fila'>): string {
   const n = s.agentes.filter((a) => a.estado === 'trabajando').length;
   const alerta = s.agentes.find((a) => a.estado === 'alerta');
   const nombre = (id: AgenteId) => AGENTES.find((a) => a.id === id)?.nombre ?? id;
-  const quien = n === 0 ? 'Nadie está trabajando ahora.' : n === 1 ? 'Un agente trabajando.' : `${n} agentes trabajando.`;
-  const fila = s.fila.actual ? `${nombre(s.fila.actual.id)}: ${s.fila.actual.nombre.toLowerCase()}.` : 'La fila pesada está libre.';
-  return alerta ? `${quien} ${nombre(alerta.id)} levantó una alerta.` : `${quien} ${fila}`;
+  const quien = `${n} trabajando`;
+  const fila = s.fila.actual ? `${nombre(s.fila.actual.id)}: ${s.fila.actual.nombre.toLowerCase()}` : 'fila libre';
+  return alerta ? `${quien} · alerta: ${nombre(alerta.id)}` : `${quien} · ${fila}`;
 }

@@ -30,8 +30,8 @@ export default function Paper() {
   return (
     <div className="paper-v2">
       <div>
-        <div className="et">Paper · los bots operan en el VPS 24/7 · sin dinero real</div>
-        <h1>{bots.length ? `${activos} de ${bots.length} bots operando.` : 'Aún no hay bots.'}</h1>
+        <div className="et">Paper</div>
+        <h1>{bots.length ? `${activos}/${bots.length} bots activos` : 'Sin bots'}</h1>
       </div>
       <div className="cuenta">
         {([['Capital Paper', `${num(total)} USD`], ['Abierto ahora', usd(abierto)], ['Cerrado hoy', usd(hoy)], ['Bots activos', `${activos}/${bots.length}`]] as const).map(([k, x]) => (
@@ -48,7 +48,7 @@ export default function Paper() {
       {!bots.length && (
         <div className="caja vacia-paper">
           <BookMarked size={18} />
-          <p>Los bots nacen en la <a href="#/biblioteca">Biblioteca</a>: prueba una idea en el Laboratorio y, si el Juez la aprueba, «Mandar a Paper».</p>
+          <p><a href="#/biblioteca">Biblioteca</a></p>
         </div>
       )}
       <div className="bots">{bots.map((b) => <TarjetaBot key={b.id} b={b} reglas={v.reglas} accion={accion} />)}</div>
@@ -69,7 +69,7 @@ export default function Paper() {
                 </div>
               );
             })}
-            {!v.ops.length && <p className="vacio">Sin operaciones cerradas todavía.</p>}
+            {!v.ops.length && <p className="vacio">Sin operaciones</p>}
           </div>
         </section>
         <div className="col-paper">
@@ -84,14 +84,13 @@ export default function Paper() {
                 <label>Banda del Juez desde<b className="mono">{v.reglas.minOperacionesBanda} ops</b></label>
               </div>
             )}
-            <small>Si un bot cae más de eso en el día, pierde demasiadas seguidas o se sale de lo que esperaba el Juez, el Guardián lo para solo.</small>
           </section>
           <section className="caja bloque registro-paper mono">
             <span className="et">Registro</span>
             {v.bitacora.slice(0, 14).map((e, i) => (
               <div key={i} className={e.grave ? 'grave' : ''}><b>{hora(e.t)}</b> <span className="quien">{e.nombre}</span> {e.texto}</div>
             ))}
-            {!v.bitacora.length && <p className="vacio">Nada todavía.</p>}
+            {!v.bitacora.length && <p className="vacio">—</p>}
           </section>
         </div>
       </div>

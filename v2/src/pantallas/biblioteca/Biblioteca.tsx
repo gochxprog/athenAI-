@@ -69,8 +69,8 @@ export default function Biblioteca() {
   return (
     <div className="bib">
       <div>
-        <div className="et">Biblioteca · cada prueba cuenta</div>
-        <h1>Todo lo que probó el Juez. Lo aprobado pasa a Paper.</h1>
+        <div className="et">Biblioteca</div>
+        <h1>Biblioteca</h1>
       </div>
       <div className="kpis-bib">
         {([['Pruebas guardadas', n.length], ['Intentos contados', datos?.intentos ?? 0], ['Aprobadas', n.filter(aprobada).length], ['En Paper', n.filter((e) => e.botId).length]] as const).map(([k, v]) => (
@@ -83,7 +83,7 @@ export default function Biblioteca() {
       </div>
       {error && <pre className="error-lab">{error}</pre>}
       {datos && !lista.length && (
-        <div className="caja vacia-bib"><BookMarked size={18} /><p>{n.length ? 'Nada con ese filtro.' : 'Aún no hay pruebas. Cada vez que el Juez termine una en el Laboratorio, queda aquí.'}</p></div>
+        <div className="caja vacia-bib"><BookMarked size={18} /><p>{n.length ? 'Nada con ese filtro' : 'Sin pruebas'}</p></div>
       )}
       <div className="fichas">
         {lista.map((e) => (
@@ -117,7 +117,6 @@ export default function Biblioteca() {
                 <label>Exposición ×<input type="number" min={0.1} max={1} step={0.1} value={aPaper.exposicion} onChange={(x) => setAPaper({ ...aPaper, exposicion: Number(x.target.value) })} /></label>
                 <button className="boton principal" onClick={() => void mandar()}>Crear bot en el VPS</button>
                 <button className="boton" onClick={() => setAPaper(null)}>Cancelar</button>
-                <small>Usa velas de {e.serie}{e.gestion ? ' y su GESTION (stop, objetivo y manejo)' : ''}, igual que en el Juez. Sin dinero real.</small>
                 {aPaper.msg && <pre className="error-lab">{aPaper.msg}</pre>}
               </div>
             )}
@@ -126,7 +125,7 @@ export default function Biblioteca() {
       </div>
       {abierta && (
         <Suspense fallback={null}>
-          {abierta.r ? <Resultado t={{ id: abierta.id, estado: 'listo', pasos: [], inicio: 0, fin: 0, pedido: { simbolo: '', serie: abierta.r.velas.serie, fuente: abierta.r.velas.fuente }, resultado: abierta.r, error: null } satisfies Trabajo} /> : <p className="vacio">Cargando el resultado…</p>}
+          {abierta.r ? <Resultado t={{ id: abierta.id, estado: 'listo', pasos: [], inicio: 0, fin: 0, pedido: { simbolo: '', serie: abierta.r.velas.serie, fuente: abierta.r.velas.fuente }, resultado: abierta.r, error: null } satisfies Trabajo} /> : <p className="vacio">Cargando…</p>}
         </Suspense>
       )}
     </div>

@@ -60,7 +60,12 @@ export default function Hilos({ agentes, pulsos }: { agentes: AgenteAnillo[]; pu
       ultimo = ahora;
       if (!enVista) return;
       const d = datos.current;
+      // Se borra el lienzo entero en píxeles reales: con la escala puesta, si el zoom del navegador baja de 100 %
+      // (devicePixelRatio < 1) solo se borraba una parte y lo demás acumulaba cada cuadro (líneas gruesas, rastros).
+      x.save();
+      x.setTransform(1, 0, 0, 1, 0, 0);
       x.clearRect(0, 0, c.width, c.height);
+      x.restore();
       // Líneas finas.
       x.lineWidth = 1;
       for (const l of lineas) {

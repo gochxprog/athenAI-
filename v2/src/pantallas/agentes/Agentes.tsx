@@ -56,7 +56,7 @@ export default function Agentes() {
   const velas = useVelas(v.mercados.map((m) => m.simbolo));
   const [sel, setSel] = useState<AgenteId | null>(null);
   const sala = v.agentes;
-  if (!sala) return <div className="agentes-v2"><p className="vacio">{v.listo ? 'Tu grabadora todavía no tiene la sala de agentes: instala la versión nueva en el VPS.' : 'Conectando con el VPS…'}</p></div>;
+  if (!sala) return <div className="agentes-v2"><p className="vacio">{v.listo ? 'Sala no disponible en esta grabadora' : 'Conectando…'}</p></div>;
   const ficha = (id: AgenteId) => sala.agentes.find((a) => a.id === id)!;
   // En la sala, solo una palabra (el detalle va en las fichas de abajo): los rótulos no se enciman.
   const estados = Object.fromEntries(sala.agentes.map((a) => [a.id, a.estado === 'dormido' ? a.ahora.replace('llega en la fase', 'llega en') : a.estado])) as Record<AgenteId, string>;
@@ -67,7 +67,7 @@ export default function Agentes() {
   return (
     <div className="agentes-v2">
       <div>
-        <div className="et">Sala de agentes · viven en tu VPS</div>
+        <div className="et">Agentes</div>
         <h1>{frase(sala)}</h1>
       </div>
       <div className="recursos-ag mono">
@@ -78,7 +78,7 @@ export default function Agentes() {
         <span>Fila pesada <b>{sala.fila.actual ? `${nombre(sala.fila.actual.id)} · ${sala.fila.actual.nombre}` : 'libre'}{sala.fila.espera.length ? ` · ${sala.fila.espera.length} en espera` : ''}</b></span>
       </div>
       <section className="caja sala-v2 vista-v1">
-        <Suspense fallback={<p className="vacio">Abriendo la sala…</p>}>
+        <Suspense fallback={<p className="vacio">…</p>}>
           <Sala seleccion={sel} onSeleccion={elegir} estados={estados} niveles={niveles} muro={muroDe(v, sala, velas)} />
         </Suspense>
       </section>

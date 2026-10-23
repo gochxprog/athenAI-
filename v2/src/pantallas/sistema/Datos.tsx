@@ -1,5 +1,5 @@
 // Datos (v2): la salud de la grabadora. Cada mercado en vivo, lo guardado en disco y la historia importada.
-import { Database, HardDrive, History, Radio } from 'lucide-react';
+import { HardDrive, History, Radio } from 'lucide-react';
 import { num } from '../../formato';
 import { useVps } from '../../vps';
 import '../laboratorio/lab.css';
@@ -19,8 +19,8 @@ export default function Datos() {
   return (
     <div className="sis">
       <div>
-        <div className="et">Datos · lo que graba el VPS y lo que ya tiene</div>
-        <h1>{v.caido ? 'La grabadora no responde.' : `${vivos} de ${v.mercados.length} mercados grabando en vivo.`}</h1>
+        <div className="et">Datos</div>
+        <h1>{v.caido ? 'Grabadora sin respuesta' : `${vivos}/${v.mercados.length} en vivo`}</h1>
       </div>
       <div className="kpis-sis">
         {([['En vivo', `${vivos}/${v.mercados.length}`], ['Filas grabadas', num(filas, 0)], ['Historia', `${v.historia.reduce((s, h) => s + h.dias, 0)} días`], ['En disco', peso(bytes)]] as const).map(([k, x]) => (
@@ -40,7 +40,6 @@ export default function Datos() {
             </div>
           ))}
         </div>
-        <small>Un corte = se cayó la conexión con Binance y se marcó un hueco en los datos (los bots no mantienen posición a través de un hueco).</small>
       </section>
 
       <div className="dos-sis">
@@ -51,7 +50,7 @@ export default function Datos() {
               <b>{a.simbolo}</b><span className="mono">{num(a.filas, 0)} filas · {peso(a.bytes)}</span><small className="mono">{fecha(a.desde)} → {fecha(a.hasta)}</small>
             </div>
           ))}
-          {!v.almacen.length && <p className="vacio">Aún no hay nada grabado.</p>}
+          {!v.almacen.length && <p className="vacio">—</p>}
         </section>
         <section className="caja bloque-sis">
           <span className="et"><History size={12} /> Historia importada (Binance)</span>
@@ -63,12 +62,9 @@ export default function Datos() {
               )}
             </div>
           ))}
-          {!v.historia.length && <p className="vacio">Sin historia importada.</p>}
-          <small className="mono comando">sudo bash importar.sh BTCUSDT 2026-07-01 2026-10-21</small>
-          <small>Se corre en el VPS (en la carpeta del ZIP). Va de fondo; los días ya importados se saltan.</small>
+          {!v.historia.length && <p className="vacio">—</p>}
         </section>
       </div>
-      <p className="nota-sis"><Database size={12} /> Datos reales de Binance. Lo grabado y lo importado van en carpetas separadas: el Juez usa la historia y luego lo grabado desde donde ella termina, sin repetir filas.</p>
     </div>
   );
 }

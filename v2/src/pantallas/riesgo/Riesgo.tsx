@@ -43,8 +43,8 @@ export default function Riesgo() {
   return (
     <div className="riesgo-v2">
       <div>
-        <div className="et">Riesgo · lo que vigila el Guardián en tu VPS</div>
-        <h1>{v.apagado ? 'Apagado de emergencia activo: nada opera.' : `Vigila ${cuentas.length} ${cuentas.length === 1 ? 'cuenta' : 'cuentas'} y el VPS.`}</h1>
+        <div className="et">Riesgo</div>
+        <h1>{v.apagado ? 'Apagado de emergencia activo' : `${cuentas.length} ${cuentas.length === 1 ? 'cuenta' : 'cuentas'}`}</h1>
       </div>
       {v.apagado ? (
         <button className="caja emergencia on" onClick={() => void accion('rearmar', {})}><Power size={15} /> Apagado activo · Rearmar</button>
@@ -58,20 +58,19 @@ export default function Riesgo() {
           <span className="et">Reglas del Guardián</span>
           {reglas ? (
             <>
-              <label>Caída máxima del día (cierra y pausa hasta mañana)<input className="mono" type="number" min={0.5} step={0.5} value={num(reglas.ddDiarioMax * 100, 1).replace(',', '.')} onChange={(e) => setReglas({ ...reglas, ddDiarioMax: Math.max(0.005, Number(e.target.value) / 100) })} /> %</label>
+              <label>Caída máxima del día<input className="mono" type="number" min={0.5} step={0.5} value={num(reglas.ddDiarioMax * 100, 1).replace(',', '.')} onChange={(e) => setReglas({ ...reglas, ddDiarioMax: Math.max(0.005, Number(e.target.value) / 100) })} /> %</label>
               <label>Pérdidas seguidas → cuarentena<input className="mono" type="number" min={1} step={1} value={reglas.perdidasSeguidasMax} onChange={(e) => setReglas({ ...reglas, perdidasSeguidasMax: Math.max(1, Math.round(Number(e.target.value))) })} /></label>
               <label>Operaciones antes de juzgar la banda del Juez<input className="mono" type="number" min={5} step={1} value={reglas.minOperacionesBanda} onChange={(e) => setReglas({ ...reglas, minOperacionesBanda: Math.max(5, Math.round(Number(e.target.value))) })} /></label>
               <button className="boton principal" disabled={JSON.stringify(reglas) === JSON.stringify(v.reglas)} onClick={() => void accion('reglas', reglas)}>Guardar en el VPS</button>
             </>
           ) : <p className="nota-r">Cargando…</p>}
-          <p className="nota-r">Sin datos en vivo, nadie abre. Un bot por debajo del P5 de la banda del Juez se pausa. Exposición máxima: aprobada 1×, con reserva 0,5×.</p>
         </section>
 
         <section className="caja bloque-r">
-          <span className="et">Exposición abierta · {num(total)} USD en total</span>
+          <span className="et">Exposición abierta · capital {num(total)} USD</span>
           {expuesto.length ? expuesto.map(([s, n]) => (
             <div key={s} className="fila-r"><span>{corto(s)} {n >= 0 ? '▲ largo' : '▼ corto'}</span><b className="mono">{num(Math.abs(n))} USD · {num((Math.abs(n) / Math.max(total, 1)) * 100, 1)} %</b></div>
-          )) : <p className="nota-r">Nada abierto ahora.</p>}
+          )) : <p className="nota-r">—</p>}
           {r && (
             <>
               <span className="et" style={{ marginTop: 10 }}>El VPS</span>
@@ -83,7 +82,7 @@ export default function Riesgo() {
       </div>
 
       <section className="caja bloque-r">
-        <span className="et">Cada cuenta frente a sus límites</span>
+        <span className="et">Cuentas</span>
         {cuentas.length ? cuentas.map((b) => (
           <div key={b.id} className="cuenta-r">
             <b>{b.origen === 'manual' ? `A mano · ${corto(b.simbolo)}` : b.nombre}</b>
@@ -93,12 +92,12 @@ export default function Riesgo() {
             <span>Pérdidas seguidas {b.perdidasSeguidas} de {v.reglas?.perdidasSeguidasMax ?? '—'}</span>
             <Barra valor={b.perdidasSeguidas} limite={v.reglas?.perdidasSeguidasMax ?? 3} />
           </div>
-        )) : <p className="nota-r">No hay bots ni operaciones a mano todavía: crea un bot desde la Biblioteca o abre una orden en la Terminal.</p>}
+        )) : <p className="nota-r">—</p>}
       </section>
 
       <section className="caja bloque-r">
-        <span className="et">Cuando el Guardián actuó</span>
-        {graves.length ? graves.map((e, i) => <div key={i} className="fila-r mono"><span>{hora(e.t)} · {e.nombre}</span><span>{e.texto}</span></div>) : <p className="nota-r">Nunca ha tenido que actuar.</p>}
+        <span className="et">Actuaciones del Guardián</span>
+        {graves.length ? graves.map((e, i) => <div key={i} className="fila-r mono"><span>{hora(e.t)} · {e.nombre}</span><span>{e.texto}</span></div>) : <p className="nota-r">—</p>}
       </section>
     </div>
   );

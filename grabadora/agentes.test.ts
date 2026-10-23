@@ -36,7 +36,7 @@ describe('cuentas de la sala', () => {
   it('la frase dice cuántos trabajan y qué hace la fila', () => {
     const { s } = sala();
     s.latir(lectura());
-    expect(frase(s.estado())).toMatch(/^\d agentes trabajando\. La fila pesada está libre\./);
+    expect(frase(s.estado())).toMatch(/^\d trabajando · fila libre$/);
   });
 });
 

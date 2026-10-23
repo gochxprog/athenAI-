@@ -19,12 +19,11 @@ function Campo({ et, valor, cambiar, tipo = 'text', pista }: { et: string; valor
   );
 }
 
-function Canal({ nombre, activo, cambiar, children, ayuda }: { nombre: string; activo: boolean; cambiar: (v: boolean) => void; children: ReactNode; ayuda: ReactNode }) {
+function Canal({ nombre, activo, cambiar, children }: { nombre: string; activo: boolean; cambiar: (v: boolean) => void; children: ReactNode }) {
   return (
     <div className={`caja canal-sis ${activo ? 'on' : ''}`}>
       <label className="interruptor"><input type="checkbox" checked={activo} onChange={(e) => cambiar(e.target.checked)} /><i /><b>{nombre}</b></label>
       {children}
-      <small>{ayuda}</small>
     </div>
   );
 }
@@ -58,28 +57,28 @@ export default function Sistema() {
   return (
     <div className="sis">
       <div>
-        <div className="et">Sistema · avisos 24/7 y la grabadora</div>
-        <h1>{activos.length ? `Avisando por ${activos.join(', ')}.` : 'Sin canales de aviso activos.'}</h1>
+        <div className="et">Sistema</div>
+        <h1>{activos.length ? `Avisos: ${activos.join(', ')}` : 'Avisos apagados'}</h1>
       </div>
 
       <section className="caja bloque-sis">
-        <span className="et"><BellRing size={12} /> Avisos desde el VPS · llegan aunque cierres la plataforma o bloquees el teléfono</span>
+        <span className="et"><BellRing size={12} /> Avisos</span>
         {c ? (
           <>
             <div className="canales-sis">
-              <Canal nombre="Telegram" activo={c.telegram.activo} cambiar={(a) => set('telegram', { activo: a })} ayuda={<>1) @BotFather → /newbot, copia el token. 2) Abre <b>tu</b> bot y escríbele «hola». 3) Buscar mi chat ID.</>}>
+              <Canal nombre="Telegram" activo={c.telegram.activo} cambiar={(a) => set('telegram', { activo: a })}>
                 <Campo et="Token del bot" tipo="password" valor={c.telegram.token} cambiar={(x) => set('telegram', { token: x })} pista="123456:ABC…" />
                 <Campo et="Chat ID" valor={c.telegram.chatId} cambiar={(x) => set('telegram', { chatId: x })} pista="123456789" />
                 <button className="boton" onClick={() => void buscarChat()} disabled={!c.telegram.token}><Search size={12} /> Buscar mi chat ID</button>
               </Canal>
-              <Canal nombre="Discord" activo={c.discord.activo} cambiar={(a) => set('discord', { activo: a })} ayuda="Tu canal → Editar canal → Integraciones → Webhooks → Nuevo webhook → Copiar URL.">
+              <Canal nombre="Discord" activo={c.discord.activo} cambiar={(a) => set('discord', { activo: a })}>
                 <Campo et="URL del webhook" tipo="password" valor={c.discord.webhook} cambiar={(x) => set('discord', { webhook: x })} pista="https://discord.com/api/webhooks/…" />
               </Canal>
-              <Canal nombre="WhatsApp (CallMeBot)" activo={c.whatsapp.activo} cambiar={(a) => set('whatsapp', { activo: a })} ayuda={<>Servicio externo gratis (los avisos pasan por él). En <a href="https://www.callmebot.com/blog/free-api-whatsapp-messages/" target="_blank" rel="noreferrer">callmebot.com</a> está su número: mándale «I allow callmebot to send me messages» y te responde con tu apikey.</>}>
+              <Canal nombre="WhatsApp (CallMeBot)" activo={c.whatsapp.activo} cambiar={(a) => set('whatsapp', { activo: a })}>
                 <Campo et="Tu número (+código de país)" valor={c.whatsapp.telefono} cambiar={(x) => set('whatsapp', { telefono: x })} pista="+58 412 1234567" />
                 <Campo et="Apikey" tipo="password" valor={c.whatsapp.apikey} cambiar={(x) => set('whatsapp', { apikey: x })} pista="123456" />
               </Canal>
-              <Canal nombre="ntfy (push)" activo={c.ntfy.activo} cambiar={(a) => set('ntfy', { activo: a })} ayuda="App ntfy en el teléfono, suscrita al mismo tema. El tema es público: usa un nombre difícil.">
+              <Canal nombre="ntfy (push)" activo={c.ntfy.activo} cambiar={(a) => set('ntfy', { activo: a })}>
                 <Campo et="Tema" tipo="password" valor={c.ntfy.tema} cambiar={(x) => set('ntfy', { tema: x })} pista="athenai-tu-nombre-7f3k" />
               </Canal>
             </div>

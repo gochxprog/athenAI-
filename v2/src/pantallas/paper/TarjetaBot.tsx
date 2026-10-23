@@ -42,7 +42,7 @@ export default function TarjetaBot({ b, reglas, accion }: { b: Bot; reglas: Regl
       {b.motivo && <p className="motivo">{b.motivo}</p>}
       <div className="cifras">
         <div><span className="et">Capital</span><b className="cifra">{num(e)}</b><small className={e >= b.capitalInicial ? 'sube' : 'baja'}>{pct(e / b.capitalInicial - 1)}</small></div>
-        <div><span className="et">Hoy</span><b className="cifra">{pct(b.dia.pico > 0 ? e / b.dia.pico - 1 : 0)}</b><small>desde el máximo del día</small></div>
+        <div><span className="et">Hoy</span><b className="cifra">{pct(b.dia.pico > 0 ? e / b.dia.pico - 1 : 0)}</b><small>vs. máx. del día</small></div>
         <div><span className="et">Operaciones</span><b className="cifra">{b.operaciones}</b><small>{b.perdidasSeguidas} pérdidas seguidas</small></div>
       </div>
       <Curva puntos={b.curva} />
@@ -58,13 +58,13 @@ export default function TarjetaBot({ b, reglas, accion }: { b: Bot; reglas: Regl
         )}
       </div>
       <p className="banda">
-        <span className="et">¿Cumple lo que prometió el Juez?</span>
+        <span className="et">Banda del Juez</span>
         {!banda ? (
-          ' Aún sin operaciones cerradas para comparar.'
+          ' —'
         ) : (
           <>
-            {' '}Tras {b.operaciones} operaciones va <b>{pct(b.retornoUnidadAcum)}</b>. El Juez esperaba entre <b>{pct(banda.p5)}</b> y <b>{pct(banda.p95)}</b>.{' '}
-            {b.operaciones < minimo ? `Se juzga desde ${minimo} operaciones.` : b.retornoUnidadAcum < banda.p5 ? <b className="baja">Por debajo de lo esperado.</b> : <b className="sube">Dentro de lo esperado.</b>}
+            {' '}<b>{pct(b.retornoUnidadAcum)}</b> · P5 <b>{pct(banda.p5)}</b> · P95 <b>{pct(banda.p95)}</b>{' '}
+            {b.operaciones < minimo ? `· desde ${minimo} ops` : b.retornoUnidadAcum < banda.p5 ? <b className="baja">· fuera</b> : <b className="sube">· dentro</b>}
           </>
         )}
       </p>

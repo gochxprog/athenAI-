@@ -70,8 +70,8 @@ export default function Diario() {
   return (
     <div className="diario-v2">
       <div>
-        <div className="et">Diario · cada operación cerrada de Paper, en tu hora</div>
-        <h1>{x.operaciones ? <>Vas <span className={signo(x.pnlNeto)}>{dinero(x.pnlNeto)} USD</span> en {x.operaciones} operaciones.</> : 'Aún no hay operaciones cerradas.'}</h1>
+        <div className="et">Diario</div>
+        <h1>{x.operaciones ? <><span className={signo(x.pnlNeto)}>{dinero(x.pnlNeto)} USD</span> · {x.operaciones} operaciones</> : 'Sin operaciones'}</h1>
       </div>
       <div className="seg">{['todos', ...quienes].map((q) => <button key={q} className={q === quien ? 'sel' : ''} onClick={() => setQuien(q)}>{q === 'todos' ? 'Todos' : q}</button>)}</div>
       <div className="kpis-d">
@@ -97,7 +97,7 @@ export default function Diario() {
       </div>
       <span className="et">{dia ? `Operaciones del ${dia}` : 'Últimas operaciones'}</span>
       <div className="fichas-d">{lista.map((f) => <Ficha key={f.id} f={f} />)}</div>
-      {!lista.length && <p className="vacio">Nada en {dia ? 'ese día' : 'el Diario todavía'}.</p>}
+      {!lista.length && <p className="vacio">—</p>}
     </div>
   );
 }

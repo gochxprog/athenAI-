@@ -29,8 +29,8 @@ export default function Calendario() {
   return (
     <div className="calendario-v2">
       <div>
-        <div className="et">Calendario · eventos fuertes y su ventana de no operar</div>
-        <h1>{enCurso ? `Ahora: ${enCurso.nombre}. No operar.` : proximos[0] ? `Próximo: ${proximos[0].nombre}, en ${falta(proximos[0].t - ahora)}.` : 'Sin eventos próximos cargados.'}</h1>
+        <div className="et">Calendario</div>
+        <h1>{enCurso ? `Ahora: ${enCurso.nombre} · no operar` : proximos[0] ? `${proximos[0].nombre} · en ${falta(proximos[0].t - ahora)}` : 'Sin eventos próximos'}</h1>
       </div>
       <section className="caja bloque-c">
         <span className="et">Próximos</span>
@@ -43,12 +43,11 @@ export default function Calendario() {
               <div className="mono">{dentro ? 'dentro de la ventana' : `en ${falta(e.t - ahora)}`}<small>sin operar de {new Date(abre).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} a {new Date(e.t + e.despuesMin * 60_000).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</small></div>
             </div>
           );
-        }) : <p className="nota-c">No hay eventos próximos cargados.</p>}
+        }) : <p className="nota-c">—</p>}
       </section>
       <section className="caja bloque-c">
-        <span className="et">Cómo se usa</span>
-        <p className="nota-c">Cada barra que cae entre {EVENTOS_PREDEFINIDOS[0]?.antesMin ?? 30} min antes y {EVENTOS_PREDEFINIDOS[0]?.despuesMin ?? 90} min después de un evento lleva <span className="mono">ventana_evento = 1</span>. Tus estrategias pueden leerla en el Laboratorio para no abrir ahí. En la última media hora: {marcadas} barras marcadas.</p>
-        <p className="nota-c">Por ahora están cargadas las decisiones de tipos de la Fed (fechas oficiales del FOMC). Otros (IPC, nóminas) se agregan solo con su fecha confirmada: un evento con fecha inventada metería ruido en las Features.</p>
+        <span className="et">Ventana</span>
+        <p className="nota-c mono">−{EVENTOS_PREDEFINIDOS[0]?.antesMin ?? 30} min / +{EVENTOS_PREDEFINIDOS[0]?.despuesMin ?? 90} min · {marcadas} barras marcadas (30 min)</p>
       </section>
       {pasados.length > 0 && (
         <section className="caja bloque-c">

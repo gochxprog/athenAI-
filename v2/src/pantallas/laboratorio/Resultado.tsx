@@ -96,7 +96,7 @@ export default function Resultado({ t }: { t: Trabajo }) {
           </>
         )}
         {pestana === 'Walk-Forward' && <WalkForwardJuez r={resp} />}
-        {pestana === 'Monte Carlo' && (j.monteCarlo ? <MonteCarlo mc={j.monteCarlo} /> : <p className="vacio">Hacen falta al menos 5 operaciones fuera de muestra para el Monte Carlo.</p>)}
+        {pestana === 'Monte Carlo' && (j.monteCarlo ? <MonteCarlo mc={j.monteCarlo} /> : <p className="vacio">Menos de 5 operaciones fuera de muestra</p>)}
         {pestana === 'Suerte' && <LuckTestJuez r={resp} />}
         {pestana === 'Robustez' && (
           <div className="datos">

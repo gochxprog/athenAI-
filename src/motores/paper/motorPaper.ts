@@ -475,7 +475,7 @@ export class MotorPaper {
     if (b.hueco) {
       b.hueco = false;
       if (b.posicion) {
-        this.anotar(b, 'Hubo un corte de datos con la posición abierta: se cierra ahora (nunca se mantiene a través de un hueco).', true);
+        this.anotar(b, 'Corte de datos con posición abierta: cerrada.', true);
         await this.cerrarYRegistrar(b, 'hueco', m, true);
       }
     }

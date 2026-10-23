@@ -49,7 +49,7 @@ export default function Mercado() {
   return (
     <div className="mercado-v2">
       <div>
-        <div className="et">Mercado y Terminal · velas, tu ticket (Paper) y lo que leen los motores ahora</div>
+        <div className="et">Terminal</div>
         <h1>{corto(sel.simbolo)} {precio ? num(precio, precio < 100 ? 4 : 1) : '—'} {cambio !== null && <small className={cambio >= 0 ? 'sube' : 'baja'}>{cambio >= 0 ? '▲' : '▼'} {num(Math.abs(cambio) * 100)} % · 24 h</small>}</h1>
       </div>
       <div className="terminal-cuerpo">
@@ -57,7 +57,6 @@ export default function Mercado() {
           <div className="barra-graf">
             <div className="seg">{(mercados.length ? mercados : ['BTCUSDT']).map((s) => <button key={s} className={s === sel.simbolo ? 'sel' : ''} onClick={() => setSel({ ...sel, simbolo: s })}>{corto(s)}</button>)}</div>
             <div className="seg">{SERIES_G.map((s) => <button key={s} className={s === sel.serie ? 'sel' : ''} onClick={() => setSel({ ...sel, serie: s })}>{s}</button>)}</div>
-            <span className="pista-g mono">rueda o dos dedos: zoom · arrastra: moverte · ▲▼ bots</span>
           </div>
           <Velas velas={velas} vivas={vivas} marcas={marcas} lineas={lineas} clave={clave} simbolo={sel.simbolo} ms={ms} />
           {error && <pre className="error-lab">{error}</pre>}
@@ -81,7 +80,6 @@ export default function Mercado() {
             })}
             {abierto === m.id && (
               <div className="explica">
-                <p>{m.explica}</p>
                 {mercados.flatMap((s) => eventos(m, v.filas[s] ?? []).map((f) => (
                   <div key={`${s}-${f.cierre}`} className="mono ev">{hora(f.cierre)} · {corto(s)} · {m.clave.filter((k) => f.valores[k]).map((k) => `${k.replace(/_/g, ' ')} ${num(f.valores[k] ?? 0, 0)}`).join(' · ')}</div>
                 )))}
