@@ -20,6 +20,7 @@ import { monteCarlo, RUINA_MAXIMA, type ConfigMc, type ResultadoMc } from './mon
 import { elegirVariante, walkForward, type ClaseWfe, type ConfigWfo, type ObjetivoWfo, type VentanaResultado } from './walkForward';
 import type { MercadoId } from '@/motores/mercado/mercadoId';
 import { aplicarHuecos, backtest, COSTOS_POR_DEFECTO, metricas, sharpeBarras, type Costos, type Metricas, type OpcionesBacktest, type Operacion } from './backtest';
+import type { ReglasSalida } from './salidas';
 
 export type Combo = Record<string, number | string | boolean>;
 
@@ -38,6 +39,8 @@ export interface EntradaJuez {
   costos?: Costos;
   /** Stop/objetivo/gestión declarados por la estrategia (GESTION) y las velas para vigilarlos. */
   salidas?: OpcionesBacktest['salidas'];
+  /** GESTION de cada variante cuando la estrategia prueba varias (p. ej. "rr": [2, 3]): una por combo. */
+  salidasPorCombo?: ReglasSalida[];
   /** Variantes probadas en total (todas las ejecuciones de esta idea): alimenta el Deflated Sharpe. */
   ensayos?: number;
   /** Resultado de la prueba anti-futuro (la estrategia no usa datos de barras posteriores). */
@@ -129,15 +132,19 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
   const posiciones = e.posiciones.map((p) => aplicarHuecos(p, e.huecos));
   const r = crearAleatorio(e.semilla ?? 12_345);
   const fx: OpcionesBacktest = { ...(e.funding ? { funding: { tiempos: e.tiempos, tasas: e.funding } } : {}), ...(e.salidas ? { salidas: e.salidas } : {}) };
+  // Cada variante con su propia GESTION (si la estrategia prueba varios RR o stops); si no, todas con la misma.
+  const porCombo = e.salidas && e.salidasPorCombo?.length === e.posiciones.length ? e.salidasPorCombo : null;
+  const fxDe = porCombo ? (i: number): OpcionesBacktest => ({ ...fx, salidas: { ...e.salidas!, reglas: porCombo[i] } }) : undefined;
+  const fxCombo = (i: number) => fxDe?.(i) ?? fx;
 
   // Referencia dentro de muestra (optimista): cada variante sobre toda la serie.
-  const completos = posiciones.map((p) => backtest(e.cierres, p, costos, 0, n, fx));
+  const completos = posiciones.map((p, i) => backtest(e.cierres, p, costos, 0, n, fxCombo(i)));
   const metCompletas = completos.map((b) => metricas(b, e.tiempos));
   const srCompletos = completos.map((b) => sharpeBarras(b.retornos) ?? -Infinity);
   const mejor = srCompletos.indexOf(Math.max(...srCompletos));
 
   // Motor 3 · Walk-Forward (ventanas rolling IS → OOS con embargo).
-  const wfo = walkForward({ cierres: e.cierres, tiempos: e.tiempos, posiciones, costos, opciones: fx, config: e.wfo });
+  const wfo = walkForward({ cierres: e.cierres, tiempos: e.tiempos, posiciones, costos, opciones: fx, opcionesDe: fxDe, config: e.wfo });
   const inicioOos = wfo.inicioOos;
   const retOos = wfo.retornos;
   const posOos = wfo.posiciones;
@@ -153,18 +160,18 @@ export function juzgar(e: EntradaJuez): ResultadoJuez {
 
   // Motor 5 · Luck test sobre lo hecho fuera de muestra.
   const largoOos = n - inicioOos;
-  const suerte = opsOos.length >= 5 && largoOos > 50 ? luckTest({ cierres: e.cierres, posiciones: posOos, operaciones: opsOos, desde: inicioOos, hasta: n, costos, opciones: { ...fx, huecos: e.huecos }, azar: r, config: e.luck }) : null;
+  const suerte = opsOos.length >= 5 && largoOos > 50 ? luckTest({ cierres: e.cierres, posiciones: posOos, operaciones: opsOos, desde: inicioOos, hasta: n, costos, opciones: { ...fxCombo(wfo.ventanas.at(-1)?.combo ?? mejor), huecos: e.huecos }, azar: r, config: e.luck }) : null;
 
   // Variante para los vecinos: elegida SOLO con barras anteriores al primer OOS; θ* y vecinos se miden en el OOS.
   const objetivo = wfo.objetivo;
-  const seleccionPrevia = elegirVariante({ cierres: e.cierres, tiempos: e.tiempos, posiciones, costos, opciones: fx }, 0, Math.max(0, inicioOos - wfo.embargo), objetivo).combo;
-  const metOos = posiciones.map((p) => metricas(backtest(e.cierres, p, costos, inicioOos, n, fx), e.tiempos, inicioOos, n));
-  const retornosIs = posiciones[seleccionPrevia] ? backtest(e.cierres, posiciones[seleccionPrevia], costos, 0, Math.max(0, inicioOos - wfo.embargo), fx).operaciones.map((o) => o.retorno) : [];
+  const seleccionPrevia = elegirVariante({ cierres: e.cierres, tiempos: e.tiempos, posiciones, costos, opciones: fx, opcionesDe: fxDe }, 0, Math.max(0, inicioOos - wfo.embargo), objetivo).combo;
+  const metOos = posiciones.map((p, i) => metricas(backtest(e.cierres, p, costos, inicioOos, n, fxCombo(i)), e.tiempos, inicioOos, n));
+  const retornosIs = posiciones[seleccionPrevia] ? backtest(e.cierres, posiciones[seleccionPrevia], costos, 0, Math.max(0, inicioOos - wfo.embargo), fxCombo(seleccionPrevia)).operaciones.map((o) => o.retorno) : [];
   // Variante que se lleva a vivo: la que el Walk-Forward elegiría HOY (mismo objetivo, últimas L_IS barras).
-  const comboVivo = wfo.ventanas.length ? elegirVariante({ cierres: e.cierres, tiempos: e.tiempos, posiciones, costos, opciones: fx }, Math.max(0, n - wfo.lIs), n, objetivo).combo : mejor;
+  const comboVivo = wfo.ventanas.length ? elegirVariante({ cierres: e.cierres, tiempos: e.tiempos, posiciones, costos, opciones: fx, opcionesDe: fxDe }, Math.max(0, n - wfo.lIs), n, objetivo).combo : mejor;
 
   // Motor 6 · Robustez (costos ×2, vecinos, estabilidad por regímenes), solo con este mercado.
-  const rob = robustez({ cierres: e.cierres, tiempos: e.tiempos, posiciones, combos: e.combos, mejor: seleccionPrevia, metOos, ventanas: wfo.ventanas, inicioOos, retornosOos: retOos, costos, opciones: fx });
+  const rob = robustez({ cierres: e.cierres, tiempos: e.tiempos, posiciones, combos: e.combos, mejor: seleccionPrevia, metOos, ventanas: wfo.ventanas, inicioOos, retornosOos: retOos, costos, opciones: fx, opcionesDe: fxDe });
 
   // Motores 7 y 8 · Sobreajuste: Deflated Sharpe (fuera de muestra) y PBO (CSCV con todas las variantes).
   const ensayos = Math.max(e.ensayos ?? 1, e.combos.length);

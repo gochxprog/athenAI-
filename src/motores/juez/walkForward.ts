@@ -69,10 +69,13 @@ export function valorObjetivo(b: ResultadoBacktest, tiempos: readonly number[], 
  * θ* = argmax del objetivo usando SOLO las barras [desde, hasta). Es la única regla de elección de variante:
  * la usan las ventanas del Walk-Forward y la elección de la variante que se lleva a vivo.
  */
-export function elegirVariante(e: { cierres: readonly number[]; tiempos: readonly number[]; posiciones: readonly (readonly number[])[]; costos: Costos; opciones?: OpcionesBacktest }, desde: number, hasta: number, objetivo: ObjetivoWfo): { combo: number; valor: number; b: ResultadoBacktest } {
+/** Opciones del backtest de una variante: las suyas si cada variante tiene su GESTION (RR, stop…), si no, las comunes. */
+export const opcionesDe = (e: { opciones?: OpcionesBacktest; opcionesDe?: (combo: number) => OpcionesBacktest }, combo: number) => e.opcionesDe?.(combo) ?? e.opciones;
+
+export function elegirVariante(e: { cierres: readonly number[]; tiempos: readonly number[]; posiciones: readonly (readonly number[])[]; costos: Costos; opciones?: OpcionesBacktest; opcionesDe?: (combo: number) => OpcionesBacktest }, desde: number, hasta: number, objetivo: ObjetivoWfo): { combo: number; valor: number; b: ResultadoBacktest } {
   let mejor: { combo: number; valor: number; b: ResultadoBacktest } | null = null;
   e.posiciones.forEach((p, combo) => {
-    const b = backtest(e.cierres, p, e.costos, desde, hasta, e.opciones);
+    const b = backtest(e.cierres, p, e.costos, desde, hasta, opcionesDe(e, combo));
     const valor = valorObjetivo(b, e.tiempos, desde, hasta, objetivo);
     if (!mejor || valor > mejor.valor) mejor = { combo, valor, b };
   });
@@ -122,7 +125,7 @@ export interface ResultadoWfo {
   clase: ClaseWfe | null;
 }
 
-export function walkForward(e: { cierres: readonly number[]; tiempos: readonly number[]; posiciones: readonly (readonly number[])[]; costos: Costos; opciones?: OpcionesBacktest; config?: ConfigWfo }): ResultadoWfo {
+export function walkForward(e: { cierres: readonly number[]; tiempos: readonly number[]; posiciones: readonly (readonly number[])[]; costos: Costos; opciones?: OpcionesBacktest; opcionesDe?: (combo: number) => OpcionesBacktest; config?: ConfigWfo }): ResultadoWfo {
   const n = e.cierres.length;
   const objetivo = e.config?.objetivo ?? 'sharpe';
   const vs = ventanasWfo(n, e.config);
@@ -134,7 +137,7 @@ export function walkForward(e: { cierres: readonly number[]; tiempos: readonly n
     // A. IS: θ* = argmax del objetivo, solo con barras del IS (antes del embargo; nunca el OOS).
     const { combo, valor: mejor, b: bIs } = elegirVariante(e, v.isDesde, v.isHasta, objetivo);
     // B. OOS: θ* congelado.
-    const b = backtest(e.cierres, e.posiciones[combo], e.costos, v.oosDesde, v.oosHasta, e.opciones);
+    const b = backtest(e.cierres, e.posiciones[combo], e.costos, v.oosDesde, v.oosHasta, opcionesDe(e, combo));
     for (let i = v.oosDesde; i < v.oosHasta; i += 1) {
       retornos[i] = b.retornos[i];
       posiciones[i] = i < v.oosHasta - 1 ? e.posiciones[combo][i] ?? 0 : 0;

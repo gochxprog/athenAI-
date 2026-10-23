@@ -6,6 +6,7 @@
 //   PARAMETROS = {"umbral": [40, 60, 80]}      # opcional: rejilla que el Juez usa en el Walk-Forward
 //
 //   GESTION = {"stopAtr": 1.5, "rr": 2, "gestion": "be1R"}   # opcional: stop, objetivo y manejo (salidas.ts)
+//   GESTION = {"stopAtr": 1.5, "rr": [2, 3]}                 # con listas: el Juez prueba cada una como otra variante
 //
 //   def estrategia(filas, p):
 //       # filas: lista de dicts, una por vela (inicio, cierre, open, high, low, close, volumen, delta y las Features)
@@ -48,6 +49,8 @@ export interface ResultadoEjecucion {
   combos: Combo[];
   /** Stop, objetivo y manejo que declaró la estrategia (GESTION), o null si opera solo con su señal. */
   gestion: ReglasSalida | null;
+  /** Si GESTION trae listas («"rr": [2, 3]»): la GESTION de cada combo (los combos ya incluyen esas claves). */
+  gestiones?: ReglasSalida[];
   posiciones: number[][];
   antiFuturo: ResultadoAntiFuturo;
 }
@@ -69,6 +72,24 @@ export function leerGestion(g: unknown): ReglasSalida | null {
   const gestion = x.gestion ?? 'fija';
   if (!(Number(x.stopAtr) > 0) || !(Number(x.rr) > 0) || !MODOS_GESTION.includes(gestion)) throw new Error(`GESTION no válida: usa {"stopAtr": 1.5, "rr": 2, "gestion": "fija" | "be1R" | "escalonada"}`);
   return { stopAtr: Number(x.stopAtr), rr: Number(x.rr), gestion, ...(Number(x.maxBarras) > 0 ? { maxBarras: Number(x.maxBarras) } : {}) };
+}
+
+const CLAVES_GESTION = ['stopAtr', 'rr', 'gestion'] as const;
+
+/** GESTION con listas = una variante por combinación (máx. MAX_COMBOS junto a PARAMETROS). Null sin GESTION. */
+export function variantesGestion(g: unknown): ReglasSalida[] | null {
+  if (g === null || g === undefined) return null;
+  const x = g as Record<string, unknown>;
+  const lista = (v: unknown) => (Array.isArray(v) ? (v as unknown[]) : [v]);
+  return CLAVES_GESTION.reduce<Record<string, unknown>[]>((acc, k) => acc.flatMap((o) => lista(x[k]).map((v) => ({ ...o, [k]: v }))), [{ ...x }]).map((v) => leerGestion(v)!);
+}
+
+/** Cada combo × cada variante de GESTION. La señal no depende del stop ni del objetivo: sus posiciones se repiten. */
+function conVariantesGestion(r: ResultadoEjecucion, gestiones: ReglasSalida[] | null): ResultadoEjecucion {
+  if (!gestiones || gestiones.length < 2) return r;
+  const varian = CLAVES_GESTION.filter((k) => new Set(gestiones.map((g) => g[k])).size > 1);
+  const pares = r.combos.flatMap((c, i) => gestiones.map((g) => ({ combo: { ...c, ...Object.fromEntries(varian.map((k) => [k, g[k]])) }, pos: r.posiciones[i], g })));
+  return { ...r, combos: pares.map((p) => p.combo), posiciones: pares.map((p) => p.pos), gestiones: pares.map((p) => p.g) };
 }
 
 /** Traduce un error de Python a un mensaje legible (solo la parte del código del usuario). */
@@ -100,8 +121,10 @@ export function ejecutarEstrategia(py: PyodideMinimo, codigo: string, filas: rea
   py.globals.set('_athenai_filas', '');
   aviso?.(`El motor reconoció tu código como: ${FORMAS[cargado.forma] ?? cargado.forma}.`);
   const { combos } = cargado;
-  const gestion = leerGestion(cargado.gestion);
-  if (combos.length > MAX_COMBOS) throw new Error(`PARAMETROS genera ${combos.length} combinaciones; el máximo es ${MAX_COMBOS} (más variantes = más riesgo de sobreajuste)`);
+  const gestiones = variantesGestion(cargado.gestion);
+  const gestion = gestiones?.[0] ?? null;
+  const total = combos.length * (gestiones?.length ?? 1);
+  if (total > MAX_COMBOS) throw new Error(`PARAMETROS${(gestiones?.length ?? 1) > 1 ? ' × las listas de GESTION' : ''} generan ${total} combinaciones; el máximo es ${MAX_COMBOS} (más variantes = más riesgo de sobreajuste)`);
   const correr = (p: Combo, hasta: number, alterada?: readonly FilaFeatures[]) => {
     py.globals.set('_athenai_p', JSON.stringify(p));
     if (alterada) py.globals.set('_athenai_alt', JSON.stringify(columnasParaPython(alterada.slice(hasta), claves)));
@@ -129,10 +152,10 @@ export function ejecutarEstrategia(py: PyodideMinimo, codigo: string, filas: rea
     return correr(c, -1);
   });
   const estatico = analizarCodigo(codigo);
-  if (!prueba) return { combos, gestion, posiciones, antiFuturo: { ok: true, detalle: 'ya probado en el Juez', estatico, dinamico: { cortes: 0, recorte: true, alteracion: true, fila: null, prueba: null } } };
+  if (!prueba) return conVariantesGestion({ combos, gestion, posiciones, antiFuturo: { ok: true, detalle: 'ya probado en el Juez', estatico, dinamico: { cortes: 0, recorte: true, alteracion: true, fila: null, prueba: null } } }, gestiones);
   const falla = pruebas.map((x) => ({ ...x, fila: primeraDiferencia(x.pos, posiciones[x.k], x.hasta) })).find((x) => x.fila >= 0);
   const dinamico: ResultadoAntiFuturo['dinamico'] = { cortes: CORTES_ANTIFUTURO.length, recorte: falla?.tipo !== 'recorte', alteracion: falla?.tipo !== 'alteración', fila: falla?.fila ?? null, prueba: falla?.tipo ?? null };
   const variante = falla && combos.length > 1 ? ` (variante ${JSON.stringify(combos[falla.k])})` : '';
   const detalle = falla ? `la posición de la vela ${falla.fila}${variante} cambia al ${falla.tipo === 'recorte' ? 'quitar' : 'alterar'} velas posteriores` : `posiciones idénticas con los datos recortados y alterados en ${CORTES_ANTIFUTURO.length} puntos, en las ${combos.length} variantes`;
-  return { combos, gestion, posiciones, antiFuturo: { ok: !falla, detalle, estatico, dinamico } };
+  return conVariantesGestion({ combos, gestion, posiciones, antiFuturo: { ok: !falla, detalle, estatico, dinamico } }, gestiones);
 }

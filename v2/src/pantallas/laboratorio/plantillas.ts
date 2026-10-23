@@ -9,7 +9,7 @@ export const PLANTILLAS: { nombre: string; codigo: string }[] = [
     nombre: 'Ruptura de 20 velas',
     codigo: `${AYUDA}
 
-GESTION = {"stopAtr": 1.5, "rr": 2, "gestion": "be1R"}
+GESTION = {"stopAtr": 1.5, "rr": [2, 3], "gestion": "be1R"}  # el Juez prueba RR 1:2 y 1:3
 PARAMETROS = {"n": [20, 40]}
 
 def estrategia(velas, p):

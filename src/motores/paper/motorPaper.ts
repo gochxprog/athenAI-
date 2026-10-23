@@ -17,7 +17,7 @@ import type { Proveedor } from '../almacen/almacen';
 import { anotarCurva, anotarOperacion, aplicarFunding, cerrar, equity, precioMedio, rebalancear, type Bot, type MercadoVivo, type MotivoCierre, type OperacionPaper } from './ejecutor';
 import { exposicionMaxima, fechaUtc, REGLAS_POR_DEFECTO, revisar, revisarOperacion, type ReglasGuardian } from './guardian';
 import type { LibroPaper } from './almacenPaper';
-import { abrirManual, cerrarGestionada, vigilarGestion, type OrdenManual } from './manual';
+import { abrirManual, cerrarGestionada, MAX_POSICIONES, vigilarGestion, type OrdenManual } from './manual';
 import { COSTOS_POR_DEFECTO } from '../juez/costos';
 
 export interface DepsPaper {
@@ -139,10 +139,18 @@ export class MotorPaper {
     return this.feeds.find((f) => claveMercado(f.proveedor, f.simbolo) === b.mercado) ?? null;
   }
 
-  private anotar(b: Bot, texto: string, grave = false, avisar = true): void {
+  private anotar(b: Bot, texto: string, grave = false, avisar = true, grafico?: Aviso['grafico']): void {
     const t = this.deps.reloj();
     this.bitacora = [{ t, botId: b.id, nombre: b.nombre, texto, grave }, ...this.bitacora].slice(0, 200);
-    if (avisar) this.deps.avisar({ tipo: 'bot', clave: `bot:${b.id}:${texto.slice(0, 60)}:${t}`, titulo: `Bot «${b.nombre}» · ${b.simbolo}`, texto, prioridad: grave ? 'alta' : 'normal' });
+    const titulo = b.origen === 'manual' ? `${b.nombre} (tú) · ${b.simbolo}` : `Bot «${b.nombre}» · ${b.simbolo}`;
+    if (avisar) this.deps.avisar({ tipo: 'bot', clave: `bot:${b.id}:${texto.slice(0, 60)}:${t}`, titulo, texto, prioridad: grave ? 'alta' : 'normal', ...(grafico ? { grafico } : {}) });
+  }
+
+  /** Lo que necesita la captura del aviso de una apertura: lado, entrada, stop y objetivo. */
+  private grafico(b: Bot): Aviso['grafico'] {
+    const p = b.posicion!;
+    const g = b.gestion?.posicion;
+    return { simbolo: b.simbolo, lado: p.lado, entrada: p.precioEntrada, stop: g?.stop ?? null, objetivo: g && Math.abs(g.objetivo) < 1e300 ? g.objetivo : null };
   }
 
   private async guardar(b: Bot, forzar = true): Promise<void> {
@@ -243,36 +251,66 @@ export class MotorPaper {
     const g = r ? abrirGestionada(p.lado, 0, p.precioEntrada, atr, r) : null;
     if (r && g) b.gestion = { posicion: g, reglas: r };
     const extra = g ? ` · stop ${precioTxt(g.stop)} · objetivo ${precioTxt(g.objetivo)}` : r ? ' · sin ATR para el stop: sale con la señal' : '';
-    this.anotar(b, `Abre ${p.lado > 0 ? 'largo' : 'corto'} a ${precioTxt(p.precioEntrada)} · ${(p.cantidad * p.precioEntrada).toLocaleString('es-ES', { maximumFractionDigits: 0 })} USD${extra}.`);
+    this.anotar(b, `Abre ${p.lado > 0 ? 'largo' : 'corto'} a ${precioTxt(p.precioEntrada)} · ${(p.cantidad * p.precioEntrada).toLocaleString('es-ES', { maximumFractionDigits: 0 })} USD${extra}.`, false, true, this.grafico(b));
   }
 
-  /** Orden a mano desde la Terminal (Paper). Tu cuenta de ese mercado se crea la primera vez con CAPITAL_MANUAL. */
+  /**
+   * Orden a mano desde la Terminal (Paper). Tu cuenta de ese mercado se crea la primera vez con CAPITAL_MANUAL. Con
+   * una posición ya abierta, la siguiente va en una posición extra de la misma cuenta (hasta MAX_POSICIONES).
+   */
   async ordenManual(d: OrdenManual & { proveedor: Proveedor; simbolo: string }): Promise<Bot> {
     if (this.apagado) throw new Error('El apagado de emergencia está activo: rearma el sistema primero.');
     const mercado = mercadoIdSeguro(d.proveedor, d.simbolo);
     if (!mercado) throw new Error(`Mercado no válido: ${d.proveedor}:${d.simbolo}.`);
     const t = this.deps.reloj();
-    let b = this.bots.find((x) => x.id === idManual(mercado));
-    if (!b) {
-      b = {
-        id: idManual(mercado), nombre: 'Manual', estrategiaId: 'manual', codigo: '', combo: {}, proveedor: d.proveedor, simbolo: d.simbolo, mercado, creado: t,
-        veredicto: 'MANUAL', score: null, exposicion: 1, capitalInicial: CAPITAL_MANUAL, capital: CAPITAL_MANUAL, posicion: null, estado: 'activo', motivo: '',
-        costos: COSTOS_POR_DEFECTO, retornosJuez: [], dia: { fecha: fechaUtc(t), pico: CAPITAL_MANUAL }, pausadoDia: null, perdidasSeguidas: 0, operaciones: 0,
-        retornoUnidadAcum: 0, ultimoFundingT: t, ultimaSenalT: null, ultimaSenal: null, ultimoPrecio: null, hueco: false, ultimaActualizacion: t, curva: [{ t, e: CAPITAL_MANUAL }], origen: 'manual', gestion: null,
-      };
-      this.bots.push(b);
-    }
-    if (b.estado !== 'activo') throw new Error(b.motivo || 'Tu cuenta a mano está detenida por el Guardián.');
-    const m = this.mercado(b);
+    const nueva = (id: string, nombre: string, capital: number, cuenta?: string): Bot => ({
+      id, nombre, estrategiaId: 'manual', codigo: '', combo: {}, proveedor: d.proveedor, simbolo: d.simbolo, mercado, creado: t,
+      veredicto: 'MANUAL', score: null, exposicion: 1, capitalInicial: capital, capital, posicion: null, estado: 'activo', motivo: '',
+      costos: COSTOS_POR_DEFECTO, retornosJuez: [], dia: { fecha: fechaUtc(t), pico: capital }, pausadoDia: null, perdidasSeguidas: 0, operaciones: 0,
+      retornoUnidadAcum: 0, ultimoFundingT: t, ultimaSenalT: null, ultimaSenal: null, ultimoPrecio: null, hueco: false, ultimaActualizacion: t, curva: capital ? [{ t, e: capital }] : [], origen: 'manual', gestion: null,
+      ...(cuenta ? { cuenta } : {}),
+    });
+    let cuenta = this.bots.find((x) => x.id === idManual(mercado));
+    if (!cuenta) this.bots.push((cuenta = nueva(idManual(mercado), 'Manual', CAPITAL_MANUAL)));
+    if (cuenta.estado !== 'activo') throw new Error(cuenta.motivo || 'Tu cuenta a mano está detenida por el Guardián.');
+    const m = this.mercado(cuenta);
     if (!m?.enVivo) throw new Error('Este mercado no está en vivo ahora: no se puede operar.');
-    const error = abrirManual(b, m, d);
+    const todas = [cuenta, ...this.extras(cuenta)];
+    const abiertas = todas.filter((x) => x.posicion);
+    if (abiertas.length >= MAX_POSICIONES) throw new Error(`Ya tienes ${MAX_POSICIONES} posiciones abiertas en este mercado: cierra alguna primero.`);
+    let b = todas.find((x) => !x.posicion);
+    if (!b) this.bots.push((b = nueva(`${cuenta.id}#${todas.length + 1}`, `Manual ${todas.length + 1}`, 0, cuenta.id)));
+    const error = abrirManual(b, m, d, { capital: cuenta.capital, abierto: abiertas.reduce((s, x) => s + x.posicion!.cantidad * x.posicion!.precioEntrada, 0) });
     if (error) throw new Error(error);
+    this.trasladar();
     const p = b.posicion!;
     const g = b.gestion!.posicion;
-    this.anotar(b, `Abre ${p.lado > 0 ? 'largo' : 'corto'} a mano a ${precioTxt(p.precioEntrada)} · stop ${precioTxt(g.stop)}${Math.abs(g.objetivo) < 1e300 ? ` · objetivo ${precioTxt(g.objetivo)}` : ''} · riesgo ${precioTxt(p.cantidad * g.riesgo)} USD.`, false, false);
+    this.anotar(b, `Abre ${p.lado > 0 ? 'largo' : 'corto'} a mano a ${precioTxt(p.precioEntrada)}${(d.apalancamiento ?? 1) > 1 ? ` (${d.apalancamiento}×)` : ''} · stop ${precioTxt(g.stop)}${Math.abs(g.objetivo) < 1e300 ? ` · objetivo ${precioTxt(g.objetivo)}` : ''} · riesgo ${precioTxt(p.cantidad * g.riesgo)} USD.`, false, true, this.grafico(b));
     await this.guardar(b);
+    await this.guardar(cuenta);
     this.avisarOyentes();
     return b;
+  }
+
+  /** Las posiciones a mano extra (2.ª, 3.ª…) de una cuenta. */
+  private extras(cuenta: Bot): Bot[] {
+    return this.bots.filter((x) => x.cuenta === cuenta.id);
+  }
+
+  /** Lo que ganaron o pagaron las posiciones extra (comisión, funding, cierre) pasa a su cuenta: su capital vuelve a 0. */
+  private trasladar(): void {
+    for (const x of this.bots) {
+      if (!x.cuenta || x.capital === 0) continue;
+      const c = this.bots.find((y) => y.id === x.cuenta);
+      if (!c) continue;
+      c.capital += x.capital;
+      x.capital = 0;
+    }
+  }
+
+  /** Capital en vivo de una cuenta con sus posiciones extra (lo que vigila el Guardián). */
+  private equityCuenta(b: Bot, m: MercadoVivo | null): number {
+    return equity(b, m) + this.extras(b).reduce((s, x) => s + equity(x, m), 0);
   }
 
   /** Cierra a mercado tu posición a mano. */
@@ -280,6 +318,7 @@ export class MotorPaper {
     const b = this.bots.find((x) => x.id === id && x.origen === 'manual');
     if (!b?.posicion) return;
     await this.cerrarYRegistrar(b, 'manual', this.mercado(b), false);
+    this.trasladar();
     await this.guardar(b);
     this.avisarOyentes();
   }
@@ -371,6 +410,7 @@ export class MotorPaper {
       if (!op) continue;
       cerro = true;
       await this.registrar(b, op, b.origen !== 'manual');
+      this.trasladar();
       await this.guardar(b);
     }
     if (cerro) this.avisarOyentes();
@@ -379,6 +419,7 @@ export class MotorPaper {
   private async revisarTodos(ahora: number): Promise<void> {
     if (!this.cargado) return;
     for (const b of this.bots) await this.revisarBot(b, ahora);
+    this.trasladar();
     if (this.pendientes.size && !this.pidiendo) {
       const claves = new Set(this.pendientes);
       this.pendientes.clear();
@@ -412,11 +453,13 @@ export class MotorPaper {
       await this.guardar(b, false);
       return;
     }
-    const acc = revisar(b, m, equity(b, vivo ? m : null), this.reglas);
+    // Las posiciones extra no tienen Guardián propio: las vigila el de su cuenta (con todas dentro).
+    const acc = b.cuenta ? null : revisar(b, m, this.equityCuenta(b, vivo ? m : null), this.reglas);
     if (acc?.tipo === 'sin-datos') {
       b.estado = 'sin-datos';
       b.motivo = acc.texto;
-      if (b.posicion) b.hueco = true;
+      // Ninguna posición (tampoco las extra de la cuenta) se mantiene a través de un corte: se cierran al volver.
+      for (const x of [b, ...this.extras(b)]) if (x.posicion) x.hueco = true;
       this.anotar(b, acc.texto, !!b.posicion);
       await this.guardar(b);
       return;
@@ -444,10 +487,11 @@ export class MotorPaper {
       const op = vigilarGestion(b, m!);
       if (op) await this.registrar(b, op, b.origen !== 'manual');
     }
-    const e = equity(b, m);
+    const e = b.cuenta ? equity(b, m) : this.equityCuenta(b, m);
     anotarCurva(b, ahora, e);
     if (acc?.tipo === 'caida-dia') {
-      await this.cerrarYRegistrar(b, 'guardian', m, false);
+      for (const x of [b, ...this.extras(b)]) await this.cerrarYRegistrar(x, 'guardian', m, false);
+      this.trasladar();
       b.estado = 'pausado-dia';
       b.pausadoDia = fechaUtc(m!.t);
       b.motivo = acc.texto;

@@ -11,6 +11,8 @@ export interface ResultadoPrueba {
   juez: ResultadoJuez;
   combos: Combo[];
   gestion: ReglasSalida | null;
+  /** GESTION de cada combo si la estrategia probó varias (la del bot es la de juez.comboVivo). */
+  gestiones?: ReglasSalida[];
   velas: { total: number; desde: number; hasta: number; serie: Serie; fuente: Fuente };
   /** Hora de cierre de cada vela (para poner fechas a los tramos y operaciones). */
   tiempos: number[];

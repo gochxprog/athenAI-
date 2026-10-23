@@ -72,7 +72,7 @@ export function correrPrueba(p: PedidoPrueba, datos: string, py: PyodideMinimo, 
   }
   paso('El Juez está probando: Walk-Forward, Monte Carlo, Luck test, robustez…');
   const juez = juzgar(entradaJuez(velas, mercadoId('binance', p.simbolo), ejec));
-  return { juez, combos: ejec.combos, gestion: ejec.gestion, velas: { total: velas.length, desde: velas[0].inicio, hasta: velas[velas.length - 1].cierre, serie: p.serie, fuente: p.fuente }, tiempos: velas.map((v) => v.cierre) };
+  return { juez, combos: ejec.combos, gestion: ejec.gestion, ...(ejec.gestiones ? { gestiones: ejec.gestiones } : {}), velas: { total: velas.length, desde: velas[0].inicio, hasta: velas[velas.length - 1].cierre, serie: p.serie, fuente: p.fuente }, tiempos: velas.map((v) => v.cierre) };
 }
 
 /** Proceso hijo (`node grabadora.mjs --juez`): recibe un pedido, lo corre y contesta. */

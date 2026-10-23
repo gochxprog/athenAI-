@@ -24,6 +24,19 @@ describe('Motor de código libre: reconoce cualquier forma de estrategia', () =>
     expect(r.antiFuturo.ok).toBe(true);
   });
 
+  it('GESTION con listas: cada RR es otra variante (misma señal, Python no corre de más) y respeta el máximo', () => {
+    const codigo = `PARAMETROS = {"umbral": [3, 5]}\nGESTION = {"stopAtr": 1.5, "rr": [2, 3], "gestion": "be1R"}\ndef signals(velas, umbral=3):\n    return [1 if v["absorcion_bid"] >= umbral else 0 for v in velas]\n`;
+    const r = ejecutarEstrategia(py, codigo, filas);
+    expect(r.combos).toEqual([{ umbral: 3, rr: 2 }, { umbral: 3, rr: 3 }, { umbral: 5, rr: 2 }, { umbral: 5, rr: 3 }]);
+    expect(r.gestiones?.map((g) => [g.stopAtr, g.rr, g.gestion])).toEqual([[1.5, 2, 'be1R'], [1.5, 3, 'be1R'], [1.5, 2, 'be1R'], [1.5, 3, 'be1R']]);
+    expect(r.posiciones[1]).toEqual(r.posiciones[0]);
+    expect(r.posiciones[2]).not.toEqual(r.posiciones[0]);
+    expect(r.antiFuturo.ok).toBe(true);
+    // Sin listas: una sola GESTION, sin gestiones por combo (como antes).
+    expect(ejecutarEstrategia(py, codigo.replace('[2, 3]', '2'), filas).gestiones).toBeUndefined();
+    expect(() => ejecutarEstrategia(py, codigo.replace('[3, 5]', 'list(range(25))'), filas)).toThrow(/× las listas de GESTION/);
+  });
+
   it('función por vela con la historia (solo el pasado)', () => {
     const r = ejecutarEstrategia(py, `def on_bar(vela, historia):\n    if len(historia) < 2: return 0\n    return 1 if vela["close"] > historia[-2]["close"] else -1\n`, filas);
     expect(r.posiciones[0][5]).toBe(1);

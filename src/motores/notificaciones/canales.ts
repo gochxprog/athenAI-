@@ -40,6 +40,10 @@ export interface Aviso {
   texto: string;
   /** Prioridad: alta (fallos, riesgo) suena en el teléfono. */
   prioridad: 'alta' | 'normal';
+  /** Posición recién abierta: con esto el VPS dibuja la captura del gráfico (entrada, stop, objetivo). */
+  grafico?: { simbolo: string; lado: 1 | -1; entrada: number; stop: number | null; objetivo: number | null };
+  /** Imagen PNG adjunta (la captura que pone el VPS). Discord, Telegram y ntfy la muestran; WhatsApp va sin ella. */
+  imagen?: { nombre: string; png: Uint8Array };
 }
 
 export type Canal = 'discord' | 'telegram' | 'ntfy' | 'whatsapp';
@@ -52,6 +56,7 @@ const ICONO: Record<TipoAviso, string> = { fallo: '⚠️', riesgo: '🚨', regi
  * permiso previo (CORS preflight) y funcionan desde la app.
  */
 export function peticion(canal: Canal, c: ConfigNotificaciones, a: Aviso): { url: string; init: RequestInit } {
+  if (a.imagen && canal !== 'whatsapp') return peticionImagen(canal, c, a, a.imagen);
   switch (canal) {
     case 'discord': {
       const form = new FormData();
@@ -80,6 +85,29 @@ export function peticion(canal: Canal, c: ConfigNotificaciones, a: Aviso): { url
     case 'whatsapp':
       return whatsapp(c, `${ICONO[a.tipo]} *${a.titulo}*\n${a.texto}`);
   }
+}
+
+/** El aviso con su imagen: Discord (adjunto dentro del mensaje), Telegram (foto con pie) y ntfy (adjunto). */
+function peticionImagen(canal: Exclude<Canal, 'whatsapp'>, c: ConfigNotificaciones, a: Aviso, img: NonNullable<Aviso['imagen']>): { url: string; init: RequestInit } {
+  const foto = new Blob([img.png as BlobPart], { type: 'image/png' });
+  const titulo = `${ICONO[a.tipo]} ${a.titulo}`;
+  if (canal === 'discord') {
+    const form = new FormData();
+    form.append('payload_json', JSON.stringify({ username: 'athenAI', embeds: [{ title: titulo.slice(0, 256), description: a.texto.slice(0, 4000), color: a.prioridad === 'alta' ? 0xffffff : 0x8e929a, image: { url: `attachment://${img.nombre}` }, timestamp: new Date().toISOString() }] }));
+    form.append('files[0]', foto, img.nombre);
+    return { url: c.discord.webhook.trim(), init: { method: 'POST', body: form } };
+  }
+  if (canal === 'telegram') {
+    const form = new FormData();
+    form.append('chat_id', c.telegram.chatId.trim());
+    form.append('caption', `${titulo}\n\n${a.texto}`.slice(0, 1024));
+    form.append('disable_notification', String(a.prioridad !== 'alta'));
+    form.append('photo', foto, img.nombre);
+    return { url: `https://api.telegram.org/bot${c.telegram.token.trim()}/sendPhoto`, init: { method: 'POST', body: form } };
+  }
+  const base = `${(c.ntfy.servidor.trim() || 'https://ntfy.sh').replace(/\/+$/, '')}/${encodeURIComponent(c.ntfy.tema.trim())}`;
+  const q = new URLSearchParams({ title: `athenAI · ${a.titulo}`, message: a.texto.slice(0, 900), filename: img.nombre, priority: a.prioridad === 'alta' ? 'high' : 'default', tags: a.tipo });
+  return { url: `${base}?${q}`, init: { method: 'POST', body: foto } };
 }
 
 /**

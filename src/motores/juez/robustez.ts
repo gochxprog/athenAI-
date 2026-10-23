@@ -15,6 +15,7 @@
 // Veredicto del módulo: se cuentan A, B y C. 0 fallos → aprobado; 1 → alerta; ≥ 2 → rechazado.
 import { backtest, metricas, type Costos, type Metricas, type OpcionesBacktest, type Operacion } from './backtest';
 import type { Combo } from './juez';
+import { opcionesDe } from './walkForward';
 
 export const PF_MINIMO_COSTOS = 1.2;
 export const VECINOS_MINIMO = 0.7;
@@ -108,6 +109,7 @@ export function robustez(e: {
   retornosOos: readonly number[];
   costos: Costos;
   opciones?: OpcionesBacktest;
+  opcionesDe?: (combo: number) => OpcionesBacktest;
 }): ResultadoRobustez {
   const n = e.cierres.length;
   // A. Costos ×2.
@@ -115,7 +117,7 @@ export function robustez(e: {
   const ret2 = new Array(n).fill(0);
   const ops2: Operacion[] = [];
   for (const v of e.ventanas) {
-    const b = backtest(e.cierres, e.posiciones[v.combo], dobles, v.oosDesde, v.oosHasta, e.opciones);
+    const b = backtest(e.cierres, e.posiciones[v.combo], dobles, v.oosDesde, v.oosHasta, opcionesDe(e, v.combo));
     for (let i = v.oosDesde; i < v.oosHasta; i += 1) ret2[i] = b.retornos[i];
     ops2.push(...b.operaciones);
   }

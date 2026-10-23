@@ -30,10 +30,12 @@ export default function Riesgo() {
     setError('');
     return pedir(`/api/paper/${nombre}`, cuerpo).then(refrescar, (e: Error) => setError(e.message));
   };
-  const cuentas = [...v.bots, ...v.manuales];
-  const total = cuentas.reduce((s, b) => s + equity(b, null), 0);
+  // Las posiciones a mano extra no son cuentas: cuentan en el capital y la exposición, no en la lista.
+  const todas = [...v.bots, ...v.manuales];
+  const cuentas = todas.filter((b) => !b.cuenta);
+  const total = todas.reduce((s, b) => s + equity(b, null), 0);
   const expuesto = Object.entries(
-    cuentas.filter((b) => b.posicion).reduce<Record<string, number>>((m, b) => ({ ...m, [b.simbolo]: (m[b.simbolo] ?? 0) + b.posicion!.lado * b.posicion!.cantidad * (b.ultimoPrecio ?? b.posicion!.precioEntrada) }), {}),
+    todas.filter((b) => b.posicion).reduce<Record<string, number>>((m, b) => ({ ...m, [b.simbolo]: (m[b.simbolo] ?? 0) + b.posicion!.lado * b.posicion!.cantidad * (b.ultimoPrecio ?? b.posicion!.precioEntrada) }), {}),
   );
   const r = v.agentes?.recursos;
   const graves = v.bitacora.filter((e) => e.grave).slice(0, 12);

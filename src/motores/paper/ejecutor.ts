@@ -112,6 +112,9 @@ export interface Bot {
   curva: { t: number; e: number }[];
   /** 'manual' = tu cuenta de la Terminal (sin estrategia: no pide señales). Sin campo = bot de estrategia. */
   origen?: 'bot' | 'manual';
+  /** Posición a mano extra (2.ª, 3.ª…): id de la cuenta a la que pertenece. Su capital es 0 y lo que gana o paga
+   *  pasa a esa cuenta (motorPaper.trasladar); comparte su capital, su apalancamiento y su Guardián. */
+  cuenta?: string;
   /** Stop, objetivo y gestión de la posición abierta (juez/salidas.ts). */
   gestion?: { posicion: PosicionGestionada; reglas: ReglasSalida } | null;
   /** Velas con las que el Juez aprobó la estrategia: la señal en vivo se calcula sobre las mismas (sin campo = filas). */

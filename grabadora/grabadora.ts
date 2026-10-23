@@ -30,6 +30,8 @@ import { almacenLocalDisco, cargadorPython, crearApiPaper, feedDe, LibroPaperDis
 import { MotorPaper } from '../src/motores/paper/motorPaper';
 import { mercadoIdSeguro } from '../src/motores/mercado/mercadoId';
 import { crearVivo } from './vivoVps';
+import { capturaPng } from './captura';
+import type { Aviso } from '../src/motores/notificaciones/canales';
 
 export const VERSION = '1.0.0';
 
@@ -224,7 +226,7 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
       senales: senalesDisco(almacen, cargadorPython(o.pyodide ?? null), (s, serie, desde) => cargarVelas(o.datos, s, serie, 'todo', desde)),
       avisar: (a) => {
         log(`Bots · ${a.titulo}: ${a.texto}`);
-        void avisos.enviar(a);
+        void avisos.enviar(conCaptura(a));
       },
       reloj: () => Date.now(),
       almacen: libro,
@@ -278,6 +280,17 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
     const velas = m.length && m[0].cierre <= desde ? armarVelas(crecientes(m.filter((f) => f.cierre > desde)), serie) : cargarVelas(o.datos, s, serie, 'todo', Date.now() - 3 * (n + 2) * ms);
     return velas.slice(-n);
   }, 20_000);
+  // Aviso de una apertura: con la captura de las últimas 72 velas de 5 m y la entrada, el stop y el objetivo.
+  function conCaptura(a: Aviso): Aviso {
+    if (!a.grafico) return a;
+    try {
+      const velas = velasDisco(a.grafico.simbolo, '5m', 72);
+      return velas.length ? { ...a, imagen: { nombre: 'captura.png', png: capturaPng(velas, a.grafico) } } : a;
+    } catch (e) {
+      log(`Captura del aviso: ${e instanceof Error ? e.message : e}`);
+      return a;
+    }
+  }
   // Trabajos propios de los agentes (A2), en proceso aparte. Esperan a que el Juez termine: un trabajo pesado a la vez.
   const mercadosTrabajo = () => [...new Set([...o.simbolos, ...historiaDisco().map((h) => h.carpeta.replace(/^binance_/, '').toUpperCase())])];
   const turno = async () => {

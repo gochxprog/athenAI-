@@ -55,10 +55,10 @@ export default function Ticket() {
   const ficha = mercado ? fichaDe(mercado) : null;
   const sinTamano: OrdenManual = { lado, riesgoPct: riesgo, gestion, ...(modoStop === 'atr' ? { stopAtr: k } : { stopPrecio: Number(stopPrecio) || undefined }), ...(rr ? { rr } : {}) };
   // Siempre se opera en contratos enteros: por riesgo % se calculan (redondeando hacia abajo) o se ponen directo.
-  const preRiesgo = previaOrden(capital, m, sinTamano);
+  const preRiesgo = previaOrden({ capital, abierto: 0 }, m, sinTamano);
   const contratos = !ficha ? 0 : modoTam === 'riesgo' ? (preRiesgo ? contratosDe(ficha, preRiesgo.cantidad) : 0) : Math.max(0, Math.floor(Number(contratosTxt.replace(',', '.')) || 0));
   const orden: OrdenManual = { ...sinTamano, cantidad: ficha ? unidadesDe(ficha, contratos) : 0 };
-  const pre = contratos > 0 ? previaOrden(capital, m, orden) : null;
+  const pre = contratos > 0 ? previaOrden({ capital, abierto: 0 }, m, orden) : null;
   const abierta = !!cuenta?.posicion;
   const porContrato = ficha && pre ? riesgoPorContrato(ficha, pre.entrada, pre.stop) : null;
   const nocional = pre ? pre.cantidad * pre.entrada : 0;

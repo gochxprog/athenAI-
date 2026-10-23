@@ -54,7 +54,8 @@ export function crearBiblioteca(o: { datos: string; paper?: () => MotorPaper | n
         fuente: p.fuente,
         codigo: p.codigo,
         combo: r.combos[j.comboVivo] ?? {},
-        gestion: r.gestion,
+        // La GESTION de la variante que el Juez lleva a vivo (si probó varios RR o stops, la que ganó).
+        gestion: r.gestiones?.[j.comboVivo] ?? r.gestion,
         veredicto: j.veredicto,
         resumen: j.resumen,
         score: j.score?.total ?? null,

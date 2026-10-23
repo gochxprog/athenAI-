@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { abrirManual, previaOrden, tamanoPorRiesgo, tieneObjetivo, vigilarGestion } from './manual';
+import { abrirManual, MAX_POSICIONES, previaOrden, tamanoPorRiesgo, tieneObjetivo, vigilarGestion } from './manual';
 import { AlmacenPaper } from './almacenPaper';
 import { MotorPaper, idManual } from './motorPaper';
 import type { Bot, MercadoVivo } from './ejecutor';
@@ -24,13 +24,13 @@ describe('Órdenes a mano (Terminal)', () => {
   });
 
   it('vista previa: stop por ATR y objetivo por RR desde el lado del libro', () => {
-    const p = previaOrden(10_000, mercado(99, 100), { lado: 1, riesgoPct: 0.01, stopAtr: 2, rr: 3, gestion: 'fija' })!;
+    const p = previaOrden({ capital: 10_000, abierto: 0 }, mercado(99, 100), { lado: 1, riesgoPct: 0.01, stopAtr: 2, rr: 3, gestion: 'fija' })!;
     expect(p.entrada).toBe(100);
     expect(p.stop).toBe(80);
     expect(p.objetivo).toBe(160);
     expect(p.rr).toBe(3);
     expect(p.riesgoUsd).toBeCloseTo(100, 9);
-    expect(previaOrden(10_000, mercado(99, 100, null), { lado: 1, riesgoPct: 0.01, stopAtr: 2, gestion: 'fija' })).toBeNull();
+    expect(previaOrden({ capital: 10_000, abierto: 0 }, mercado(99, 100, null), { lado: 1, riesgoPct: 0.01, stopAtr: 2, gestion: 'fija' })).toBeNull();
   });
 
   it('largo con objetivo: sale por el bid al tocarlo; R y P&L cuadran', () => {
@@ -68,7 +68,7 @@ describe('Órdenes a mano (Terminal)', () => {
   });
 
   it('lotaje fijo: usa la cantidad dada; el riesgo sale de cantidad × distancia; no abre si no cabe o arriesga > 5 %', () => {
-    const p = previaOrden(10_000, mercado(99, 100, null), { lado: 1, riesgoPct: 0.01, cantidad: 20, stopPrecio: 98, rr: 2, gestion: 'fija' })!;
+    const p = previaOrden({ capital: 10_000, abierto: 0 }, mercado(99, 100, null), { lado: 1, riesgoPct: 0.01, cantidad: 20, stopPrecio: 98, rr: 2, gestion: 'fija' })!;
     expect(p.cantidad).toBe(20);
     expect(p.riesgoUsd).toBe(40);
     const b = cuenta();
@@ -95,7 +95,7 @@ describe('Órdenes a mano (Terminal)', () => {
     await motor.alFeeds([feed(100_000, 1)]);
     const b = await motor.ordenManual({ proveedor: 'binance', simbolo: 'BTCUSDT', lado: 1, riesgoPct: 0.01, stopAtr: 2, rr: 2, gestion: 'fija' });
     expect(b.id).toBe(idManual('binance:BTCUSDT'));
-    await expect(motor.ordenManual({ proveedor: 'binance', simbolo: 'BTCUSDT', lado: 1, riesgoPct: 0.01, stopAtr: 2, gestion: 'fija' })).rejects.toThrow(/Ya hay/);
+    await expect(motor.ordenManual({ proveedor: 'binance', simbolo: 'BTCUSDT', lado: 1, riesgoPct: 0.01, stopAtr: 2, gestion: 'fija' })).rejects.toThrow(/Sin margen libre/); // 1×: la 1.ª ya usa toda la cuenta
     ahora += 1_000;
     await motor.alFeeds([feed(99_890, 2)]); // cae por debajo del stop (≈ 99.900)
     await motor.esperarSenales();
@@ -126,5 +126,42 @@ describe('Órdenes a mano (Terminal)', () => {
     expect(op.motivo).toBe('stop');
     expect(op.precioSalida).toBeLessThan(stop);
     expect(op.precioSalida).toBeGreaterThan(stop - 1 - 0.01 * stop);
+  });
+
+  it('apalancamiento: deja abrir hasta capital × A, pero no con el stop más allá de la liquidación', () => {
+    const b = cuenta();
+    // 1 % de riesgo con stop a 1 punto de 100: pediría 100 unidades = 10.000 USD; con 2× cabe entero.
+    expect(abrirManual(b, mercado(99.9, 100, null), { lado: 1, riesgoPct: 0.01, stopPrecio: 99, gestion: 'fija', apalancamiento: 2 })).toBeNull();
+    expect(b.posicion!.cantidad * b.posicion!.precioEntrada).toBeGreaterThan(9_900);
+    // Con 10× se liquida a ≈ 10 % en contra: un stop a 9 % queda pasado el 80 % de eso.
+    expect(abrirManual(cuenta(), mercado(99.9, 100, null), { lado: 1, riesgoPct: 0.01, stopPrecio: 91, gestion: 'fija', apalancamiento: 10 })).toMatch(/liquidar/);
+    expect(abrirManual(cuenta(), mercado(99.9, 100, null), { lado: 1, riesgoPct: 0.01, stopPrecio: 91, gestion: 'fija', apalancamiento: 20 })).toMatch(/1× a 10×/);
+    // Lo ya abierto en la cuenta resta de lo libre.
+    expect(abrirManual(cuenta(), mercado(99.9, 100, null), { lado: 1, riesgoPct: 0.01, cantidad: 30, stopPrecio: 99, gestion: 'fija' }, { capital: 10_000, abierto: 8_000 })).toMatch(/libres 2\.?000/);
+  });
+
+  it('en el motor: varias posiciones a la vez en un mercado, con la misma cuenta, y lo ganado vuelve a la cuenta', async () => {
+    const ahora = T0;
+    const motor = new MotorPaper({ senales: async () => [], avisar: () => {}, reloj: () => ahora, almacen: new AlmacenPaper(), local: null });
+    await motor.cargar();
+    const feed = (bid: number) => ({ simbolo: 'ETHUSDT', proveedor: 'binance', conexion: 'en-vivo', precio: bid, filas: 1, guardando: true, resumen: { bid, ask: bid + 0.01, precio: bid, atr: 5, libro10: null, fundingTasa: null } }) as unknown as EstadoFeed;
+    await motor.alFeeds([feed(3_000)]);
+    const orden = { proveedor: 'binance' as const, simbolo: 'ETHUSDT', lado: 1 as const, riesgoPct: 0.002, stopAtr: 2, rr: 2, gestion: 'fija' as const, apalancamiento: 5 };
+    const uno = await motor.ordenManual(orden);
+    const dos = await motor.ordenManual({ ...orden, lado: -1 });
+    expect(uno.id).toBe(idManual('binance:ETHUSDT'));
+    expect(dos.id).toBe(`${uno.id}#2`);
+    expect(dos.cuenta).toBe(uno.id);
+    expect([uno.posicion?.lado, dos.posicion?.lado]).toEqual([1, -1]);
+    // La comisión de la 2.ª ya se descontó de la cuenta: su capital propio es 0.
+    expect(dos.capital).toBe(0);
+    const antes = uno.capital;
+    await motor.cerrarManual(dos.id);
+    const op = (await motor.operaciones(dos.id)).at(-1)!;
+    expect(dos.capital).toBe(0);
+    // La cuenta recibe el cierre (P&L de precio − comisión de salida); la de entrada ya la había pagado al abrir.
+    expect(uno.capital).toBeCloseTo(antes + op.pnl + (op.nocional * 5) / 10_000, 6);
+    for (let i = 0; i < MAX_POSICIONES - 1; i += 1) await motor.ordenManual(orden);
+    await expect(motor.ordenManual(orden)).rejects.toThrow(/posiciones abiertas/);
   });
 });

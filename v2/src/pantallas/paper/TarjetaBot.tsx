@@ -35,7 +35,7 @@ export default function TarjetaBot({ b, reglas, accion }: { b: Bot; reglas: Regl
       <header>
         <div>
           <b>{b.nombre}</b>
-          <span className="mono sub">{b.simbolo} · {b.serie ? `velas de ${b.serie}` : 'filas'} · {b.exposicion}× · {b.veredicto}</span>
+          <span className="mono sub">{b.simbolo} · {b.serie ? `velas de ${b.serie}` : 'filas'} · {b.exposicion}× · {b.veredicto}{b.reglasSalida ? ` · stop ${b.reglasSalida.stopAtr} ATR · 1:${b.reglasSalida.rr} · ${b.reglasSalida.gestion}` : ''}</span>
         </div>
         <span className={`estado mono ${activo ? 'on' : ''}`}><i />{NOMBRE_ESTADO[b.estado]}</span>
       </header>

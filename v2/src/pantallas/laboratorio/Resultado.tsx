@@ -36,6 +36,7 @@ const Dato = ({ k, v, sub }: { k: string; v: ReactNode; sub?: string }) => (
 export default function Resultado({ t }: { t: Trabajo }) {
   const [pestana, setPestana] = useState<(typeof PESTANAS)[number]>('Resumen');
   const r = t.resultado!;
+  const gestion = r.gestiones?.[r.juez.comboVivo] ?? r.gestion;
   const j = r.juez;
   const oos = j.oos;
   // Lo que las vistas de la primera plataforma leen (los costos no los usan).
@@ -56,7 +57,7 @@ export default function Resultado({ t }: { t: Trabajo }) {
             <span>{num(r.velas.total, 0)} velas</span>
             <span>{fecha(r.velas.desde)} → {fecha(r.velas.hasta)}</span>
             <span>{r.combos.length} variantes</span>
-            <span>{r.gestion ? `stop ${r.gestion.stopAtr} ATR · 1:${r.gestion.rr} · ${r.gestion.gestion}` : 'sin GESTION (sale con la señal)'}</span>
+            <span>{gestion ? `stop ${gestion.stopAtr} ATR · 1:${gestion.rr} · ${gestion.gestion}${r.gestiones ? ' (la elegida por el Juez)' : ''}` : 'sin GESTION (sale con la señal)'}</span>
             <span className={j.antiFuturo?.ok ? '' : 'mal'}>anti-futuro {j.antiFuturo?.ok ? 'OK' : 'FALLA'}</span>
           </div>
         </div>

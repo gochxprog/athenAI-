@@ -111,7 +111,7 @@ export default function Laboratorio() {
           <p>Pega tu estrategia <b>como la tengas</b>: una función con todas las velas, una función por vela, una clase de <b className="mono">backtesting.py</b> o un script con pandas. El motor la reconoce y la corre sobre los datos del VPS (si tu código lee un CSV o yfinance, recibe esos datos).</p>
           <p>Las señales pueden ser <b>1 / -1 / 0</b>, True/False o <span className="mono">buy · sell · exit</span>.</p>
           <div className="campos mono">{['open', 'high', 'low', 'close', 'volumen', 'delta', 'flujo_5_ratio', 'absorcion_bid', 'stoprun_bajo', 'oi_delta_pct', '+ 30 Features'].map((c) => <span key={c}>{c}</span>)}</div>
-          <p><b className="mono">GESTION</b> (opcional): stop en ATR, objetivo en R y manejo <span className="mono">fija · be1R · escalonada</span>. El Juez lo prueba con el mismo motor de la Terminal.</p>
+          <p><b className="mono">GESTION</b> (opcional): stop en ATR, objetivo en R y manejo <span className="mono">fija · be1R · escalonada</span>. El Juez lo prueba con el mismo motor de la Terminal. Con listas (<span className="mono">"rr": [2, 3]</span>) prueba cada una como otra variante y el bot usa la que gane.</p>
           <p><b className="mono">PARAMETROS</b> (opcional): variantes para el Walk-Forward. Cada una cuenta como un intento.</p>
           {(corriendo || error || t?.estado === 'error') && (
             <div className="progreso">

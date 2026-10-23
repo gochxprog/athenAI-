@@ -22,6 +22,7 @@ export function entradaJuez(velas: readonly (VelaLab & { sesion?: number })[], m
     ensayos: ejec.combos.length,
     antiFuturo: ejec.antiFuturo,
     salidas: ejec.gestion ? { reglas: ejec.gestion, velas } : undefined,
+    ...(ejec.gestiones ? { salidasPorCombo: ejec.gestiones } : {}),
     ...extra,
   };
 }

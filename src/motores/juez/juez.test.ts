@@ -99,3 +99,20 @@ describe('Auditoría: entradas que el Juez no acepta', () => {
     expect(() => juzgar({ cierres: rotos, tiempos, combos: [{}], posiciones: [cierres.map(() => 1)] })).toThrow(/precio no válido/);
   });
 });
+
+describe('Juez · varias GESTION (RR) como variantes', () => {
+  it('cada variante se mide con su RR, cuentan como ensayos y el RR que gana es el de la variante elegida', () => {
+    const { cierres, tiempos } = mercado(3_000, 0.25, 7);
+    const velas = cierres.map((c, i) => ({ high: c * 1.001, low: c * 0.999, close: c, i }));
+    const pos = momentum(cierres, 5);
+    const reglas = [2, 5].map((rr) => ({ stopAtr: 1, rr, gestion: 'fija' as const }));
+    const base = { cierres, tiempos, combos: reglas.map((g) => ({ rr: g.rr })), posiciones: [pos, pos], salidas: { reglas: reglas[0], velas } };
+    const varias = juzgar({ ...base, salidasPorCombo: reglas });
+    // Cada RR solo: lo que da esa variante sobre toda la serie con su propia GESTION.
+    const solo = reglas.map((g) => juzgar({ cierres, tiempos, combos: [{ rr: g.rr }], posiciones: [pos], salidas: { reglas: g, velas } }).dentroMuestra.retornoTotal);
+    expect(solo[0]).not.toBeCloseTo(solo[1], 6);
+    expect(varias.ensayos).toBe(2);
+    expect(varias.dentroMuestra.retornoTotal).toBeCloseTo(solo[varias.dentroMuestra.combo], 10);
+    expect([0, 1]).toContain(varias.comboVivo);
+  });
+});
