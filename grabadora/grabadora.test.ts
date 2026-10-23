@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AlmacenDisco, leerLineas } from './almacenDisco';
 import { BLOQUEO_MS, COOKIE, crearServidor, LIMITE_FILAS, MAX_FALLOS } from './servidor';
+import { crearVivo } from './vivoVps';
 import { baseSesion, leerOCrearClave } from './grabadora';
 import { MotorMercado } from '../src/motores/nucleo/motorMercado';
 import { parametrosPorDefecto } from '../src/motores/nucleo/parametros';
@@ -138,6 +139,36 @@ describe('API de la grabadora', () => {
       srv.close();
     }
   });
+
+  it('precio en vivo (/api/vivo): con clave, el último al conectar y luego cada cambio, juntado cada 100 ms', async () => {
+    const vivo = crearVivo();
+    const srv = crearServidor({ almacen: new AlmacenDisco(temporal()), clave: 'secreta', estado: () => ({ inicio: 1, version: 't', simbolos: [] }), vivo });
+    await new Promise<void>((ok) => srv.listen(0, ok));
+    const base = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
+    const corte = new AbortController();
+    try {
+      expect((await fetch(`${base}/api/vivo?simbolo=BTCUSDT`)).status).toBe(401);
+      vivo.actualizar('BTCUSDT', { t: 1, p: 100, b: 99.9, a: 100.1 });
+      const r = await fetch(`${base}/api/vivo?simbolo=BTCUSDT`, { headers: { Authorization: 'Bearer secreta' }, signal: corte.signal });
+      expect(r.headers.get('content-type')).toBe('text/event-stream');
+      const lector = r.body!.getReader();
+      let texto = '';
+      const leerHasta = async (n: number) => {
+        while ((texto.match(/^data: /gm) ?? []).length < n) texto += new TextDecoder().decode((await lector.read()).value);
+      };
+      await leerHasta(1);
+      // Varios cambios en menos de 100 ms: llega solo el último.
+      vivo.actualizar('BTCUSDT', { t: 2, p: 101, b: 100.9, a: 101.1 });
+      vivo.actualizar('BTCUSDT', { t: 3, p: 102, b: 101.9, a: 102.1 });
+      await leerHasta(2);
+      const datos = texto.match(/^data: (.*)$/gm)!.map((l) => JSON.parse(l.slice(6)) as { p: number });
+      expect(datos.map((d) => d.p)).toEqual([100, 102]);
+    } finally {
+      corte.abort();
+      vivo.detener();
+      srv.close();
+    }
+  });
 });
 
 describe('Entrada con contraseña a la plataforma', () => {
@@ -259,7 +290,7 @@ describe('CVD de la sesión y VWAP del día tras un reinicio', () => {
     a.vaciar();
     return a;
   };
-  const filas = (n: number, desde: number) => Array.from({ length: n }, (_, i): FilaFeatures => ({ n: i, inicio: desde + i * 60_000, cierre: desde + i * 60_000 + 59_000, open: 100, close: i < 420 ? 100 : 110, volumen: 2, delta: i % 2 ? -0.5 : 1, valores: { hueco: 0 } }));
+  const filas = (n: number, desde: number) => Array.from({ length: n }, (_, i): FilaFeatures => ({ n: i, inicio: desde + i * 60_000, cierre: desde + i * 60_000 + 59_000, open: 100, close: i < 420 ? 100 : 110, volumen: 2, delta: i % 2 ? -0.5 : 1, valores: { hueco: 0, cvd_sesion_ratio: 0.1 } }));
   const trade = (m: MotorMercado, t: number) => m.trade({ symbol: 'BTCUSDT', price: 110, quantity: 1, timestamp: t, aggTradeId: 1, buyerIsMaker: false });
 
   it('suma lo grabado desde el inicio y el motor lo usa en el primer trade', () => {
@@ -281,13 +312,37 @@ describe('CVD de la sesión y VWAP del día tras un reinicio', () => {
   it('no inventa: si lo grabado empieza tarde, tiene un corte o el reinicio fue largo, espera', () => {
     const tarde = baseSesion(grabar(filas(60, londres + 30 * 60_000)), 'BTCUSDT', londres + 95 * 60_000)!;
     expect([tarde.cvd, tarde.dia]).toEqual([null, null]);
-    const conHueco = filas(510, dia);
-    conHueco[480].valores.hueco = 1;
+    // Faltó un trade a las 08:00 (el motor dejó el CVD vacío desde ahí): ni CVD ni VWAP.
+    const conHueco = filas(510, dia).map((f, i) => (i >= 480 ? { ...f, valores: { hueco: i === 480 ? 1 : 0, cvd_sesion_ratio: null } } : f));
     expect(baseSesion(grabar(conHueco), 'BTCUSDT', dia + 515 * 60_000)!.cvd).toBeNull();
+    // Una resincronización del libro (hueco = 1 pero el CVD siguió completo) no corta nada.
+    const libro = filas(510, dia);
+    libro[480].valores.hueco = 1;
+    expect(baseSesion(grabar(libro), 'BTCUSDT', dia + 510 * 60_000 + 20_000)!.cvd?.volumen).toBe(180);
     const b = baseSesion(grabar(filas(510, dia)), 'BTCUSDT', dia + 515 * 60_000)!;
     const m = new MotorMercado('BTCUSDT', 0.1);
     m.sembrar(b);
     trade(m, b.hasta + 5 * 60_000);
     expect([m.cvdCompleto, m.vwapCompleto]).toEqual([false, false]);
+  });
+
+  it('varios reinicios cortos seguidos (instalar dos veces) siguen sumando; uno que no pudo seguir corta la cadena', () => {
+    // Corrida 1 hasta las 07:59; corrida 2 arranca 1 s después (su primera fila marca hueco), hasta las 08:30.
+    const dosCorridas = (siguio: boolean) => {
+      const a = new AlmacenDisco(temporal());
+      const xs = filas(510, dia);
+      const otra = xs.slice(480).map((f, i) => ({ ...f, inicio: f.inicio + 1_000, cierre: f.cierre + 1_000, valores: { hueco: i === 0 ? 1 : 0, cvd_sesion_ratio: siguio ? 0.1 : null } }));
+      a.nuevaSesion('BTCUSDT', parametrosPorDefecto('BTCUSDT'), dia, 1);
+      a.guardar('BTCUSDT', 1, xs.slice(0, 480));
+      a.nuevaSesion('BTCUSDT', parametrosPorDefecto('BTCUSDT'), otra[0].inicio, 2_000_000);
+      a.guardar('BTCUSDT', 2_000_000, otra);
+      a.vaciar();
+      return baseSesion(a, 'BTCUSDT', otra.at(-1)!.cierre + 5_000)!;
+    };
+    const corta = dosCorridas(true);
+    expect(corta.cvd?.volumen).toBe(180);
+    expect(corta.dia?.volumen).toBe(1_020);
+    const larga = dosCorridas(false);
+    expect([larga.cvd, larga.dia]).toEqual([null, null]);
   });
 });

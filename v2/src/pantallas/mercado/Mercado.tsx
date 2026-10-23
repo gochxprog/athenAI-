@@ -1,12 +1,15 @@
-// Mercado (v2): velas del VPS (historia + grabado) con las entradas y salidas de los bots, y debajo lo que lee cada
-// motor ahora mismo, un mercado al lado del otro. Ligero: sin footprint ni heatmap.
+// Mercado y Terminal (v2), una sola pantalla: velas del VPS (historia + grabado + cada tick) con las entradas y
+// salidas de los bots y las tuyas, el ticket para operar a mano al lado, debajo lo que lee cada motor ahora mismo
+// (un mercado al lado del otro) y tus posiciones. Ligero: sin footprint ni heatmap.
 import { useEffect, useMemo, useState } from 'react';
 import { MS_SERIE } from '@/motores/laboratorio/velas';
 import { num } from '../../formato';
 import { useVps } from '../../vps';
+import { useVivo } from '../../vivo';
 import Velas from './Velas';
 import { marcasYLineas, SERIES_G, useVelasVps, type SerieG } from './grafico';
 import { eventos, MOTORES } from './motores';
+import { Manuales, Ticket } from '../terminal/Operar';
 import '../laboratorio/lab.css';
 import './mercado.css';
 
@@ -35,28 +38,32 @@ export default function Mercado() {
     }
   }, [sel]);
   // Bots en este mercado: entradas/salidas cerradas y la posición abierta (entrada, stop y objetivo).
-  const { marcas, lineas } = useMemo(() => marcasYLineas(v.ops, v.bots, sel.simbolo, ms), [v.ops, v.bots, sel.simbolo, ms]);
+  const { marcas, lineas } = useMemo(() => marcasYLineas(v.ops, [...v.bots, ...v.manuales], sel.simbolo, ms), [v.ops, v.bots, v.manuales, sel.simbolo, ms]);
 
-  const ultima = vivas.at(-1) ?? velas.at(-1);
+  const tick = useVivo(sel.simbolo);
+  const precio = tick?.p ?? (vivas.at(-1) ?? velas.at(-1))?.[4] ?? null;
   const primera = velas.at(-Math.round(86_400_000 / ms)) ?? velas[0];
-  const cambio = ultima && primera ? ultima[4] / primera[1] - 1 : null;
+  const cambio = precio && primera ? precio / primera[1] - 1 : null;
   const mercados = v.mercados.map((m) => m.simbolo);
 
   return (
     <div className="mercado-v2">
       <div>
-        <div className="et">Mercado · velas y lo que leen los motores ahora</div>
-        <h1>{corto(sel.simbolo)} {ultima ? num(ultima[4], ultima[4] < 100 ? 4 : 1) : '—'} {cambio !== null && <small className={cambio >= 0 ? 'sube' : 'baja'}>{cambio >= 0 ? '▲' : '▼'} {num(Math.abs(cambio) * 100)} % · 24 h</small>}</h1>
+        <div className="et">Mercado y Terminal · velas, tu ticket (Paper) y lo que leen los motores ahora</div>
+        <h1>{corto(sel.simbolo)} {precio ? num(precio, precio < 100 ? 4 : 1) : '—'} {cambio !== null && <small className={cambio >= 0 ? 'sube' : 'baja'}>{cambio >= 0 ? '▲' : '▼'} {num(Math.abs(cambio) * 100)} % · 24 h</small>}</h1>
       </div>
-      <section className="caja grafico-caja">
-        <div className="barra-graf">
-          <div className="seg">{(mercados.length ? mercados : ['BTCUSDT']).map((s) => <button key={s} className={s === sel.simbolo ? 'sel' : ''} onClick={() => setSel({ ...sel, simbolo: s })}>{corto(s)}</button>)}</div>
-          <div className="seg">{SERIES_G.map((s) => <button key={s} className={s === sel.serie ? 'sel' : ''} onClick={() => setSel({ ...sel, serie: s })}>{s}</button>)}</div>
-          <span className="pista-g mono">rueda o dos dedos: zoom · arrastra: moverte · ▲▼ bots</span>
-        </div>
-        <Velas velas={velas} vivas={vivas} marcas={marcas} lineas={lineas} clave={clave} />
-        {error && <pre className="error-lab">{error}</pre>}
-      </section>
+      <div className="terminal-cuerpo">
+        <section className="caja grafico-caja">
+          <div className="barra-graf">
+            <div className="seg">{(mercados.length ? mercados : ['BTCUSDT']).map((s) => <button key={s} className={s === sel.simbolo ? 'sel' : ''} onClick={() => setSel({ ...sel, simbolo: s })}>{corto(s)}</button>)}</div>
+            <div className="seg">{SERIES_G.map((s) => <button key={s} className={s === sel.serie ? 'sel' : ''} onClick={() => setSel({ ...sel, serie: s })}>{s}</button>)}</div>
+            <span className="pista-g mono">rueda o dos dedos: zoom · arrastra: moverte · ▲▼ bots</span>
+          </div>
+          <Velas velas={velas} vivas={vivas} marcas={marcas} lineas={lineas} clave={clave} simbolo={sel.simbolo} ms={ms} />
+          {error && <pre className="error-lab">{error}</pre>}
+        </section>
+        <Ticket simbolo={sel.simbolo} serie={sel.serie} velas={velas} />
+      </div>
 
       <div className="motores-v2">
         {MOTORES.map((m) => (
@@ -83,6 +90,7 @@ export default function Mercado() {
           </article>
         ))}
       </div>
+      <Manuales />
     </div>
   );
 }

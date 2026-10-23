@@ -105,4 +105,26 @@ describe('Órdenes a mano (Terminal)', () => {
     expect(ops.at(-1)?.motivo).toBe('stop');
     expect(ops.at(-1)?.gestion?.r).toBeLessThan(-0.9);
   });
+
+  it('precio vivo (100 ms): el stop sale en el tick que lo toca, sin esperar al segundo, y con ese precio', async () => {
+    const ahora = T0;
+    const motor = new MotorPaper({ senales: async () => [], avisar: () => {}, reloj: () => ahora, almacen: new AlmacenPaper(), local: null });
+    await motor.cargar();
+    const feed = { simbolo: 'XAUUSDT', proveedor: 'binance', conexion: 'en-vivo', precio: 100_000, filas: 1, guardando: true, resumen: { bid: 100_000, ask: 100_000.1, precio: 100_000, atr: 50, libro10: null, fundingTasa: null } } as unknown as EstadoFeed;
+    await motor.alFeeds([feed]);
+    const b = await motor.ordenManual({ proveedor: 'binance', simbolo: 'XAUUSDT', lado: 1, riesgoPct: 0.01, stopAtr: 2, rr: 2, gestion: 'fija' });
+    const stop = b.gestion!.posicion.stop;
+    // (XAU: el libro de pruebas es compartido y el caso anterior dejó su cuenta de BTC guardada.)
+    // Ticks por encima del stop: nada. Otro mercado: nada.
+    await motor.alPrecio('binance:XAUUSDT', { b: stop + 5, a: stop + 5.1, p: stop + 5 });
+    await motor.alPrecio('binance:BTCUSDT', { b: 1, a: 1, p: 1 });
+    expect(b.posicion).not.toBeNull();
+    // El tick que toca el stop la cierra ahí mismo (bid del largo), con el deslizamiento de un stop a mercado.
+    await motor.alPrecio('binance:XAUUSDT', { b: stop - 1, a: stop - 0.9, p: stop - 1 });
+    expect(b.posicion).toBeNull();
+    const op = (await motor.operaciones(b.id)).at(-1)!;
+    expect(op.motivo).toBe('stop');
+    expect(op.precioSalida).toBeLessThan(stop);
+    expect(op.precioSalida).toBeGreaterThan(stop - 1 - 0.01 * stop);
+  });
 });

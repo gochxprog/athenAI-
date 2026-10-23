@@ -28,6 +28,8 @@ import { armarVelas, MS_SERIE, type Serie } from '../src/motores/laboratorio/vel
 import { crearServidor, type EstadoSimbolo } from './servidor';
 import { almacenLocalDisco, cargadorPython, crearApiPaper, feedDe, LibroPaperDisco, senalesDisco } from './botsVps';
 import { MotorPaper } from '../src/motores/paper/motorPaper';
+import { mercadoIdSeguro } from '../src/motores/mercado/mercadoId';
+import { crearVivo } from './vivoVps';
 
 export const VERSION = '1.0.0';
 
@@ -83,8 +85,8 @@ export function leerOCrearClave(datos: string): string {
 
 /**
  * Lo que ya se grabó de la sesión del CVD y del día del VWAP antes de un reinicio (o de recalibrar): las sumas de
- * las filas desde su inicio. Cada parte solo si esas filas la cubren desde el inicio, sin cortes y en una misma
- * corrida de la grabadora (sus ids de sesión son consecutivos); si no, esa medida espera a la próxima sesión o día.
+ * las filas desde su inicio. Cada parte solo si esas filas la cubren desde el inicio sin que faltara ningún trade
+ * (reinicios de menos de 1 min incluidos: ya siguieron con lo grabado); si no, espera a la próxima sesión o día.
  * El VWAP usa el cierre de cada barra como su precio (las barras duran segundos: la diferencia es mínima).
  */
 export function baseSesion(almacen: AlmacenDisco, simbolo: string, ahora: number): BaseSesion | null {
@@ -92,11 +94,15 @@ export function baseSesion(almacen: AlmacenDisco, simbolo: string, ahora: number
   const sesion = pickAutoSession(ahora).startMs;
   const todas = almacen.leer(simbolo, Math.min(dia, sesion) - 60_000, 1_000_000).filas;
   if (!todas.length) return null;
+  // Seguido y sin trades perdidos: el motor deja cvd_sesion_ratio vacío en cada barra en la que su sesión no estaba
+  // completa (empezó a medias, faltó un trade o un reinicio no pudo seguir). Fuera de sesión (21–22 UTC) siempre está
+  // vacío. Así una cadena de reinicios cortos que sí siguieron vale, y nada que faltara se cuela.
+  const completa = (f: FilaDisco) => f.valores.cvd_sesion_ratio != null || !pickAutoSession(f.cierre).active;
   const desde = (inicio: number) => {
-    const xs = todas.filter((f) => f.cierre >= inicio);
-    if (!xs.length || xs[0].inicio > inicio + 60_000 || xs.some((f) => f.valores.hueco === 1)) return null;
-    const [a, b] = xs.reduce(([x, y], f) => [Math.min(x, f.sesion), Math.max(y, f.sesion)], [Infinity, -Infinity]);
-    return b - a > 1_000 ? null : xs;
+    const i0 = todas.findIndex((f) => f.cierre >= inicio);
+    if (i0 < 0 || todas[i0].inicio > inicio + 60_000) return null;
+    const xs = todas.slice(i0);
+    return xs.every(completa) ? xs : null;
   };
   const suma = (xs: FilaDisco[], f: (x: FilaDisco) => number) => xs.reduce((s, x) => s + f(x), 0);
   const [c, d] = [desde(sesion), desde(dia)];
@@ -132,6 +138,18 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
     return a;
   };
   for (const s of o.simbolos) crear(s, parametrosPorDefecto(s), false);
+  let motorBots: MotorPaper | null = null;
+  // Precio en vivo cada 100 ms: a la web (/api/vivo) y a los stops de los bots, sin esperar al latido de 1 s.
+  let vigilando = false;
+  const vivo = crearVivo((s, t) => {
+    const id = mercadoIdSeguro('binance', s);
+    if (!motorBots || !id || vigilando) return;
+    vigilando = true;
+    motorBots
+      .alPrecio(id, t)
+      .catch((e) => log(`Bots (precio vivo): ${e instanceof Error ? e.message : e}`))
+      .finally(() => (vigilando = false));
+  });
 
   const procesar = (simbolo: string, m: MensajeMercado) => {
     let a = activos.get(simbolo);
@@ -145,6 +163,10 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
       if ((m.estado === 'reconectando' || m.estado === 'error') && a.pipeline.conexion === 'en-vivo') a.cortes += 1;
     }
     const nuevas = a.pipeline.procesar(m);
+    if (m.tipo === 'trades' || m.tipo === 'libro') {
+      const mm = a.pipeline.mercado;
+      vivo.actualizar(simbolo, { t: mm.ahora, p: mm.ultimoPrecio, b: mm.libro?.bestBid ?? null, a: mm.libro?.bestAsk ?? null });
+    }
     if (nuevas.length && a.calibrado) {
       almacen.guardar(simbolo, a.sesion, nuevas);
       a.filas += nuevas.length;
@@ -193,7 +215,6 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
   const avisos = crearAvisos({ datos: o.datos, log });
   // Avisos 24/7 de fallos (un mercado sin datos más de 60 s, y cuando vuelve) y de eventos fuertes.
   const vigilaAvisos = setInterval(() => avisos.revisar([...activos].map(([s, a]) => feedDe(s, a.pipeline, a.filas, a.calibrado, a.cortes))), 5_000);
-  let motorBots: MotorPaper | null = null;
   const biblioteca = crearBiblioteca({ datos: o.datos, paper: () => motorBots });
   let latido: ReturnType<typeof setInterval> | null = null;
   if (o.bots !== false) {
@@ -279,7 +300,7 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
       log(`Agentes: ${e instanceof Error ? e.message : e}`);
     }
   }, 5_000);
-  const servidor = crearServidor({ almacen, clave, estado, web: o.web, paper: motorBots ? crearApiPaper(motorBots) : null, historia: historiaDisco, laboratorio, avisos, biblioteca, agentes: sala, velas: velasDisco });
+  const servidor = crearServidor({ almacen, clave, estado, web: o.web, paper: motorBots ? crearApiPaper(motorBots) : null, historia: historiaDisco, laboratorio, avisos, biblioteca, agentes: sala, velas: velasDisco, vivo });
   const alEscuchar = () => log(`Grabadora ${VERSION} escuchando en ${o.host ?? 'todas las interfaces'}, puerto ${o.puerto} · símbolos: ${o.simbolos.join(', ')} · datos en ${o.datos}`);
   if (o.host) servidor.listen(o.puerto, o.host, alEscuchar);
   else servidor.listen(o.puerto, alEscuchar);
@@ -287,6 +308,7 @@ export function iniciarGrabadora(o: OpcionesGrabadora) {
 
   const detener = () => {
     if (latido) clearInterval(latido);
+    vivo.detener();
     clearInterval(escritura);
     clearInterval(resumen);
     clearInterval(vigilaAvisos);

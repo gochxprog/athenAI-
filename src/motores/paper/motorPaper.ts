@@ -353,6 +353,29 @@ export class MotorPaper {
     return this.revisarTodos(ahora);
   }
 
+  /**
+   * Precio vivo de un mercado (cada 100 ms en el VPS): refresca bid/ask/precio y vigila SOLO el stop y el objetivo
+   * de las posiciones con gestión. Así un stop sale en el tick que lo toca, no hasta 1 s después (con el precio
+   * ya más lejos). El Guardián, el funding y las señales siguen en alFeeds, cada segundo.
+   */
+  async alPrecio(mercado: string, x: { b: number | null; a: number | null; p: number | null }): Promise<void> {
+    const m = this.mercados.get(mercado);
+    if (!this.cargado || !m?.enVivo) return;
+    const vivo: MercadoVivo = { ...m, t: this.deps.reloj(), bid: x.b ?? m.bid, ask: x.a ?? m.ask, precio: x.p ?? m.precio };
+    this.mercados.set(mercado, vivo);
+    let cerro = false;
+    for (const b of this.bots) {
+      if (b.mercado !== mercado || !b.gestion || !b.posicion || b.hueco || b.estado === 'sin-datos') continue;
+      b.ultimoPrecio = precioMedio(vivo);
+      const op = vigilarGestion(b, vivo);
+      if (!op) continue;
+      cerro = true;
+      await this.registrar(b, op, b.origen !== 'manual');
+      await this.guardar(b);
+    }
+    if (cerro) this.avisarOyentes();
+  }
+
   private async revisarTodos(ahora: number): Promise<void> {
     if (!this.cargado) return;
     for (const b of this.bots) await this.revisarBot(b, ahora);

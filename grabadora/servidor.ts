@@ -10,6 +10,7 @@
 //   GET  /api/avisos                   → canales activos de los avisos 24/7 (sin credenciales)  (con clave)
 //   POST /api/avisos/{guardar|probar}  configuración de Discord/Telegram/ntfy en el VPS        (con clave)
 //   GET  /api/velas?simbolo=&serie=5m&n=500 → velas [inicio, o, h, l, c, vol] (historia + grabado) (con clave)
+//   GET  /api/vivo?simbolo=            → precio en vivo (Server-Sent Events, cada 100 ms) {t,p,b,a}  (con clave)
 //   GET  /api/biblioteca               → pruebas guardadas e intentos totales                   (con clave)
 //   GET  /api/biblioteca/resultado?id= → resultado completo de una prueba                      (con clave)
 //   POST /api/biblioteca/{paper|borrar} cuerpo { id, capital?, exposicion? }                   (con clave)
@@ -31,6 +32,7 @@ import type { ApiLaboratorio } from './laboratorioVps';
 import type { ApiAvisos } from './avisosVps';
 import type { ApiBiblioteca } from './bibliotecaVps';
 import type { ApiAgentes } from './agentesVps';
+import type { ApiVivo, Tick } from './vivoVps';
 import { SERIES, type Serie, type VelaLab } from '../src/motores/laboratorio/velas';
 import { esMercadoId, partesMercado } from '../src/motores/mercado/mercadoId';
 
@@ -64,6 +66,8 @@ export interface OpcionesServidor {
   agentes?: ApiAgentes | null;
   /** Últimas `n` velas de una serie (historia + grabado) para el gráfico. */
   velas?: (simbolo: string, serie: Serie, n: number) => VelaLab[];
+  /** Precio en vivo cada 100 ms (vivoVps.ts). */
+  vivo?: ApiVivo | null;
   /** Reloj (pruebas). */
   reloj?: () => number;
 }
@@ -201,6 +205,22 @@ export function crearServidor(o: OpcionesServidor): http.Server {
     if (url.pathname.startsWith('/api/')) {
       const bearer = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
       if (!conSesion && !claveCorrecta(bearer, o.clave)) return json(401, { error: 'Clave incorrecta' });
+      // Precio en vivo (Server-Sent Events): un mensaje cada vez que cambia, como mucho cada 100 ms.
+      if (url.pathname === '/api/vivo') {
+        const simbolo = simboloPedido(url) ?? '';
+        if (!o.vivo || !/^[A-Z0-9]{2,20}$/.test(simbolo)) return json(400, { error: 'Pide simbolo (y que la grabadora tenga el precio en vivo).' });
+        const enviar = (t: Tick) => res.write(`data: ${JSON.stringify(t)}\n\n`);
+        const dejar = o.vivo.escuchar(simbolo, enviar);
+        if (!dejar) return json(503, { error: 'Demasiadas conexiones en vivo abiertas.' });
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+        res.write('retry: 2000\n\n');
+        const u = o.vivo.ultimo(simbolo);
+        if (u) enviar(u);
+        // Un comentario cada 15 s: ningún proxy corta la conexión por silencio.
+        const latido = setInterval(() => res.write(': \n\n'), 15_000);
+        req.on('close', () => (dejar(), clearInterval(latido)));
+        return;
+      }
       try {
         if (url.pathname === '/api/estado') {
           const e = o.estado();

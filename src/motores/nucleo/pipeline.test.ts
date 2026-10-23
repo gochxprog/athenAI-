@@ -427,6 +427,22 @@ describe('Pipeline · calidad de datos, liquidaciones y resumen', () => {
     expect(despues.slice(1).every((f) => f.valores.hueco === 0)).toBe(true);
   });
 
+  it('CVD y VWAP: una reconexión o resincronizar el libro no los rompe si no faltó ningún trade; un id que falta, sí', () => {
+    const p = new Pipeline();
+    const t0 = Date.UTC(2026, 9, 21, 0, 0, 5); // 5 s después de las 00:00 UTC (Tokio y el día): se ven desde su inicio
+    const tr = (id: number) => ({ symbol: 'BTCUSDT', price: 1_000_000, quantity: 2, timestamp: t0 + id * 1_000, aggTradeId: id, buyerIsMaker: false });
+    const lote = (ids: number[]) => p.procesar({ tipo: 'trades', trades: ids.map(tr) });
+    p.procesar({ tipo: 'conexion', estado: 'en-vivo' });
+    lote([1, 2, 3, 4, 5]);
+    expect(p.mercado.cvdCompleto).toBe(true);
+    p.procesar({ tipo: 'conexion', estado: 'reconectando', detalle: 'Resincronizando libro: salto de ids' });
+    p.procesar({ tipo: 'conexion', estado: 'en-vivo' });
+    lote([6, 7, 8, 9, 10]);
+    expect([p.mercado.cvdCompleto, p.mercado.vwapCompleto]).toEqual([true, true]);
+    lote([14, 15]);
+    expect([p.mercado.cvdCompleto, p.mercado.vwapCompleto]).toEqual([false, false]);
+  });
+
   it('Vigía: si faltan trades (ids no consecutivos) la fila siguiente lleva hueco = 1; los repetidos se ignoran', () => {
     const p = new Pipeline();
     const t0 = Date.UTC(2026, 9, 21, 10, 0, 0);

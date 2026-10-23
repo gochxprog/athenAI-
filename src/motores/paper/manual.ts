@@ -8,7 +8,7 @@
 //     largo → bid      corto → ask          (toca stop y objetivo a la vez → stop)
 //     sale a mercado con deslizamiento (como un stop real); si no, mueve el stop según la gestión.
 import { actualizarGestion, abrirGestionada, revisarSalida, type ModoGestion, type MotivoSalida, type ReglasSalida, type Vela } from '../juez/salidas';
-import { comisionUsd } from '../juez/costos';
+import { comisionUsd, type Costos } from '../juez/costos';
 import { cerrar, precioLlenado, precioMedio, type Bot, type MercadoVivo, type MotivoCierre, type OperacionPaper } from './ejecutor';
 
 export interface OrdenManual {
@@ -19,6 +19,8 @@ export interface OrdenManual {
   cantidad?: number;
   /** Stop: k × ATR o un precio. */
   stopAtr?: number;
+  /** ATR con el que se mide el stop (p. ej. el de las velas del gráfico). Sin él: el ATR del motor (dollar bars). */
+  atr?: number;
   stopPrecio?: number;
   /** Objetivo en R (1:RR) o un precio. */
   rr?: number;
@@ -30,6 +32,9 @@ export const RIESGO_MAXIMO = 0.05;
 
 /** ¿La posición tiene objetivo? (sin objetivo se guarda ±Number.MAX_VALUE). */
 export const tieneObjetivo = (objetivo: number) => Math.abs(objetivo) < 1e300;
+
+/** Lo mínimo que cuesta entrar y salir a mercado (comisión + deslizamiento base, los dos lados), en USD. */
+export const costosIdaVuelta = (c: Costos, nocional: number) => (2 * Math.abs(nocional) * (c.comisionPb + c.deslizamientoPb)) / 10_000;
 
 /** Cantidad para arriesgar riesgoUsd con esa distancia de stop, sin pasar del capital (sin apalancamiento). */
 export function tamanoPorRiesgo(capital: number, riesgoPct: number, distancia: number, precio: number): { cantidad: number; riesgoUsd: number; recortada: boolean } {
@@ -47,7 +52,8 @@ export function tamanoPorRiesgo(capital: number, riesgoPct: number, distancia: n
 export function previaOrden(capital: number, m: MercadoVivo | null, o: OrdenManual): { entrada: number; stop: number; objetivo: number | null; cantidad: number; riesgoUsd: number; objetivoUsd: number | null; rr: number | null; recortada: boolean } | null {
   const ref = m ? (o.lado === 1 ? m.ask : m.bid) ?? precioMedio(m) : null;
   if (!ref || !(ref > 0)) return null;
-  const distancia = o.stopPrecio !== undefined ? Math.abs(ref - o.stopPrecio) : o.stopAtr !== undefined && m?.atr ? o.stopAtr * m.atr : 0;
+  const atr = o.atr ?? m?.atr ?? null;
+  const distancia = o.stopPrecio !== undefined ? Math.abs(ref - o.stopPrecio) : o.stopAtr !== undefined && atr ? o.stopAtr * atr : 0;
   if (!(distancia > 0)) return null;
   const stop = ref - o.lado * distancia;
   const objetivo = o.objetivoPrecio ?? (o.rr ? ref + o.lado * o.rr * distancia : null);

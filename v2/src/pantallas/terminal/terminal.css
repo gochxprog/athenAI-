@@ -1,13 +1,14 @@
-/* Terminal v2 · gráfico a la izquierda y el ticket a la derecha (debajo en el celular). */
-.terminal-v2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; animation: entrar .35s ease; }
-.terminal-v2 h1 { font-weight: 300; font-size: 24px; letter-spacing: -.01em; margin-top: 4px; font-family: var(--mono); }
-.terminal-v2 h1 small { font-size: 11px; color: var(--apagado); margin-left: 8px; }
-.terminal-v2 .sube { color: var(--vivo); } .terminal-v2 .baja { color: var(--baja); }
+/* Terminal (dentro de Mercado) · gráfico a la izquierda y el ticket a la derecha (debajo en el celular). */
 .terminal-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
 .ticket { padding: 14px; display: flex; flex-direction: column; gap: 7px; }
 .ticket label { font-size: 10.5px; color: var(--apagado); margin-top: 4px; }
 .ticket .seg { flex-wrap: wrap; } .ticket .seg button { flex: 1; }
 .ticket input { background: #000; border: 1px solid var(--borde2); border-radius: 7px; padding: 6px 9px; font-size: 11.5px; color: var(--txt); }
+.bidask { display: flex; justify-content: space-between; font-size: 11px; color: var(--apagado); }
+.bidask b { font-weight: 500; margin-left: 4px; }
+.previa { display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; color: var(--tenue); border-top: 1px solid var(--borde); padding-top: 8px; margin-top: 4px; }
+.previa .alerta-c { color: var(--baja); }
+.previa small { color: var(--baja); font-family: var(--sans, inherit); line-height: 1.5; }
 .nota-t { font-size: 10.5px; color: var(--apagado); line-height: 1.5; }
 .lados { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
 .lados button { border-radius: 8px; padding: 10px; font-weight: 600; font-size: 13px; border: 1px solid; }

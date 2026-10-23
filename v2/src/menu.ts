@@ -1,5 +1,5 @@
 // Menú de la versión 2 (docs/CROQUIS.md §8). `fase`: en qué fase llega la pantalla; sin fase = ya está.
-import { Activity, BookMarked, Bot, Brain, CalendarClock, CalendarDays, CandlestickChart, Database, DollarSign, FlaskConical, LayoutGrid, ListOrdered, Server, Shield, Sparkles, Wallet, type LucideIcon } from 'lucide-react';
+import { Activity, BookMarked, Bot, Brain, CalendarClock, CalendarDays, CandlestickChart, Database, DollarSign, FlaskConical, LayoutGrid, Server, Shield, Sparkles, Wallet, type LucideIcon } from 'lucide-react';
 
 export type IdPantalla = 'panel' | 'laboratorio' | 'biblioteca' | 'investigacion' | 'red' | 'agentes' | 'paper' | 'real' | 'terminal' | 'mercado' | 'riesgo' | 'diario' | 'datos' | 'calendario' | 'sistema';
 export interface Item { id: IdPantalla; nombre: string; icono: LucideIcon; fase?: number }
@@ -21,8 +21,7 @@ export const MENU: { seccion: string; items: Item[] }[] = [
     items: [
       { id: 'paper', nombre: 'Paper', icono: Wallet },
       { id: 'real', nombre: 'Real', icono: DollarSign, fase: 9 },
-      { id: 'terminal', nombre: 'Terminal', icono: ListOrdered },
-      { id: 'mercado', nombre: 'Mercado', icono: CandlestickChart },
+      { id: 'terminal', nombre: 'Terminal', icono: CandlestickChart },
       { id: 'riesgo', nombre: 'Riesgo', icono: Shield },
       { id: 'diario', nombre: 'Diario', icono: CalendarDays },
     ],

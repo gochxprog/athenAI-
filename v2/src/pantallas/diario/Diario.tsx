@@ -36,7 +36,9 @@ function Ficha({ f }: { f: FichaOperacion }) {
       <div className="chips-d mono">
         <span className={signo(puntos)}>{puntos >= 0 ? '+' : ''}{num(puntos)} puntos</span>
         <span className={signo(neto)}>{pct(resultadoPct(f) ?? 0)}</span>
-        {r !== null && <span className={signo(r)}>{r >= 0 ? '+' : ''}{num(r)} R</span>}
+        {r !== null && <span className={signo(r)}>{r >= 0 ? '+' : ''}{num(r)} R de precio</span>}
+        {/* El precio pudo ir a favor y aun así perder: lo que se llevaron comisión y funding, a la vista. */}
+        <span>precio {dinero(f.pnlPrecio)} · costos −{num(f.comisiones + f.funding)} USD</span>
         {f.riesgoUsd > 0 && <span>a favor máx. +{num(f.mfe)} R · en contra {num(-Math.abs(f.mae))} R</span>}
         <span>{duracion(f.salida!.t - f.entrada.t)}</span>
         <span>salió por {MOTIVO[f.salida!.motivo] ?? f.salida!.motivo}</span>

@@ -240,10 +240,10 @@ export class Pipeline {
         this.mercado.funding(m.tasa, m.t);
         break;
       case 'conexion':
-        if (this.conexion === 'en-vivo' && m.estado !== 'en-vivo') {
-          this.huecoPendiente = true;
-          this.mercado.marcarHueco();
-        }
+        // La fila siguiente se marca (el libro, el OI o los trades pudieron cortarse). El CVD y el VWAP NO se dan por
+        // rotos aquí: solo dependen de los trades, y un trade perdido se ve por su id (los recuperados por REST llegan
+        // en orden); resincronizar el libro, que pasa a menudo, no les quita nada.
+        if (this.conexion === 'en-vivo' && m.estado !== 'en-vivo') this.huecoPendiente = true;
         this.conexion = m.estado;
         this.detalleConexion = m.detalle ?? '';
         break;
