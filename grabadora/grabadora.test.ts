@@ -141,11 +141,13 @@ describe('API de la grabadora', () => {
 });
 
 describe('Entrada con contraseña a la plataforma', () => {
+  const WEB_ACTUAL = { dir: '' };
   async function montar() {
     const a = new AlmacenDisco(temporal());
     a.guardar('BTCUSDT', 1, [fila(1, DIA + 1_000)]);
     a.vaciar();
     const web = temporal();
+    WEB_ACTUAL.dir = web;
     fs.writeFileSync(path.join(web, 'index.html'), '<html>PLATAFORMA-SECRETA</html>');
     fs.writeFileSync(path.join(web, 'app.js'), 'console.log("codigo")');
     let t = DIA;
@@ -156,6 +158,25 @@ describe('Entrada con contraseña a la plataforma', () => {
       fetch(`${base}/entrar`, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...extra }, body: new URLSearchParams({ clave }).toString() });
     return { srv, base, entrar, avanzar: (ms: number) => (t += ms) };
   }
+
+  it('con la versión 2 instalada, la dirección principal (y cualquier otra) lleva a /v2/', async () => {
+    const { srv, base, entrar } = await montar();
+    try {
+      const sesion = { headers: { Cookie: (((await entrar('clave-larga-de-prueba')).headers.get('set-cookie')) ?? '').split(';')[0] }, redirect: 'manual' as const };
+      // Sin v2 instalada, la raíz sigue sirviendo lo que haya.
+      expect((await fetch(`${base}/`, sesion)).status).toBe(200);
+      fs.mkdirSync(path.join(WEB_ACTUAL.dir, 'v2'), { recursive: true });
+      fs.writeFileSync(path.join(WEB_ACTUAL.dir, 'v2', 'index.html'), '<html>V2</html>');
+      for (const ruta of ['/', '/orderflow', '/app.js']) {
+        const r = await fetch(`${base}${ruta}`, sesion);
+        expect([r.status, r.headers.get('location')]).toEqual([302, '/v2/']);
+      }
+      expect(await (await fetch(`${base}/v2/`, sesion)).text()).toContain('V2');
+      expect((await fetch(`${base}/api/estado`, sesion)).status).toBe(200);
+    } finally {
+      srv.close();
+    }
+  });
 
   it('sin sesión no se ve nada de la plataforma ni los datos; con la clave entra y la API responde sin Bearer', async () => {
     const { srv, base, entrar } = await montar();

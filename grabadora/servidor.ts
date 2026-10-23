@@ -254,6 +254,8 @@ export function crearServidor(o: OpcionesServidor): http.Server {
     if (o.web && !conSesion) return html(200, paginaEntrar());
     if (o.web) {
       const rel = path.normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, '');
+      // Con la versión 2 instalada, todo lo que no es /v2/… lleva ahí (la versión vieja ya no se instala).
+      if (!/^[/\\]v2([/\\]|$)/.test(rel) && fs.existsSync(path.join(o.web, 'v2', 'index.html'))) return html(302, '', { Location: '/v2/' });
       let archivo = path.resolve(o.web, `.${rel === '/' || rel === '\\' ? '/index.html' : rel}`);
       // Carpeta con su propio index.html (p. ej. /v2/, la versión nueva): se sirve ese.
       if (archivo.startsWith(path.resolve(o.web)) && fs.existsSync(archivo) && fs.statSync(archivo).isDirectory()) archivo = path.join(archivo, 'index.html');

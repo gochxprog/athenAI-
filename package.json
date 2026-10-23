@@ -14,7 +14,7 @@
     "test": "vitest run",
     "grabadora:build": "node grabadora/build.mjs",
     "grabadora": "node grabadora/build.mjs && node grabadora/dist/grabadora.mjs",
-    "grabadora:paquete": "vite build && vite build --config v2/vite.config.ts && node grabadora/build.mjs && bash grabadora/empaquetar.sh"
+    "grabadora:paquete": "vite build --config v2/vite.config.ts && node grabadora/build.mjs && bash grabadora/empaquetar.sh"
   },
   "dependencies": {
     "@codemirror/lang-python": "^6.2.1",
