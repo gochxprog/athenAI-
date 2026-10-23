@@ -33,9 +33,9 @@ export interface Vps {
   agentes: EstadoSala | null;
 }
 
-const CADA_MS = 5_000;
-/** Lo que cambia poco (historia importada, operaciones cerradas) se pide 1 de cada 6 vueltas (cada 30 s). */
-const LENTO = 6;
+const CADA_MS = 1_000;
+/** Lo que cambia poco (historia importada, operaciones cerradas) se pide 1 de cada 30 vueltas (cada 30 s). */
+const LENTO = 30;
 const VENTANA_MS = 1_800_000;
 let vuelta = 0;
 let forzar = true;
